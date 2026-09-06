@@ -3372,31 +3372,35 @@ public static class FigmaUINavTest
         // ⭐ S32's rule on a second page: a dimmed button cannot act, a live one cannot look
         // unavailable. Probed at each button's own centre, computed the way Build places them.
         float sx = VW / 3427f, sy = VH / 2112f;
-        float by = 1598f * sy + 70f * sy;
-        Check("AUX minus is live", SettingsAudioPage.HitTest(1219f * sx, by, VW, VH, live)
+        // ⚠ S134e: the probe points come from the page's OWN slot geometry, not from copies of the
+        // literals it used to hold - the grid snap moved six of these eight by up to 46 design px, and
+        // a test carrying its own stale copy would have gone on passing at the wrong place. That is
+        // not circular: what is asserted here is the GATE (live / inert), never the position.
+        float by = SettingsAudioPage.BtnCy * sy;
+        Check("AUX minus is live", SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(1) * sx, by, VW, VH, live)
               == SettingsAudioPage.AudioAct.AuxMinus, "");
-        Check("AUX plus is live", SettingsAudioPage.HitTest(1371f * sx, by, VW, VH, live)
+        Check("AUX plus is live", SettingsAudioPage.HitTest(SettingsAudioPage.PlusCx(1) * sx, by, VW, VH, live)
               == SettingsAudioPage.AudioAct.AuxPlus, "");
-        Check("ALERTS minus is live", SettingsAudioPage.HitTest(2678f * sx, by, VW, VH, live)
+        Check("ALERTS minus is live", SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(3) * sx, by, VW, VH, live)
               == SettingsAudioPage.AudioAct.AlertsMinus, "");
-        Check("ALERTS plus is live", SettingsAudioPage.HitTest(2830f * sx, by, VW, VH, live)
+        Check("ALERTS plus is live", SettingsAudioPage.HitTest(SettingsAudioPage.PlusCx(3) * sx, by, VW, VH, live)
               == SettingsAudioPage.AudioAct.AlertsPlus, "");
         Check("GROUND's pair takes no touch",
-              SettingsAudioPage.HitTest(717f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
-              && SettingsAudioPage.HitTest(869f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
+              SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(0) * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(SettingsAudioPage.PlusCx(0) * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
         Check("INTERCOM's pair takes no touch",
-              SettingsAudioPage.HitTest(2181f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
-              && SettingsAudioPage.HitTest(2333f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
+              SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(2) * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(SettingsAudioPage.PlusCx(2) * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
         Check("the two signal plates take no touch either",
-              SettingsAudioPage.HitTest(565f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
-              && SettingsAudioPage.HitTest(1067f * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
+              SettingsAudioPage.HitTest(SettingsAudioPage.SignalCx(0) * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(SettingsAudioPage.SignalCx(1) * sx, by, VW, VH, live) == SettingsAudioPage.AudioAct.None, "");
         Check("a touch above the button row misses",
-              SettingsAudioPage.HitTest(1219f * sx, 1500f * sy, VW, VH, live)
+              SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(1) * sx, 1500f * sy, VW, VH, live)
               == SettingsAudioPage.AudioAct.None, "");
         // ⛔ AND WITH THE SETTINGS UNREADABLE, NOTHING IS LIVE - the paint and the touch fail together.
         Check("unreadable settings make every button inert",
-              SettingsAudioPage.HitTest(1219f * sx, by, VW, VH, dead) == SettingsAudioPage.AudioAct.None
-              && SettingsAudioPage.HitTest(2678f * sx, by, VW, VH, dead) == SettingsAudioPage.AudioAct.None, "");
+              SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(1) * sx, by, VW, VH, dead) == SettingsAudioPage.AudioAct.None
+              && SettingsAudioPage.HitTest(SettingsAudioPage.MinusCx(3) * sx, by, VW, VH, dead) == SettingsAudioPage.AudioAct.None, "");
     }
 
     static DisplayList Audio(PageState s, int w, int h)

@@ -16819,6 +16819,27 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
 - **DONE when:** the census covers each page's meaningful states, or its header records precisely which
   states it does and does not see so the count is not read as complete.
 
+### S166 [S] The audio page's three PANEL-WIDE positions are each a few px off the centre they look centred on — **TODO** — [noticed by [[S134e]]; TIER 4: layout]
+- ⚠ **LOGGED, NOT DONE (C1.1).** QC `A-03` enumerates exactly thirteen positions — five labels, five
+  values, and the button clusters — and [[S134e]] moved those onto the dividers' grid. These three are
+  **not** among them, so touching them would have been scope creep on a line that was already editing
+  measured source geometry.
+- Measured off `SettingsAudioPage.cs` as [[S134e]] left it, at 2026-09-06:
+  - the panel heading (`CABIN AUDIO` / `SEAT n AUDIO`) and [[S134c]]'s caveat line are both anchored at
+    design **1721**; the panel they sit over runs 468–2957, centre **1712.5** — **+8.5**;
+  - the page title `AUDIO SETTINGS` is at **1692**; the design frame is 3427 wide, centre **1713.5** —
+    **−21.5**;
+  - the two Cabin speaker rings are at **1696**; the Cabin seat illustration they sit in runs 1387–1995,
+    centre **1691** — **+5**.
+- ⚠ **§1.4 FIRST, and it may be the whole answer.** All three are Figma-export positions, and the export
+  is authoritative for this page. Three possibilities and they are not equally likely: the frame's own
+  layout really is asymmetric there; the numbers are transcription slips like `A-03`'s three; or a
+  heading is deliberately optically centred against something other than the box below it. ⭐ [[S134e]]'s
+  evidence for snapping was that **ten of thirteen positions already agreed with the grid** — there is
+  no comparable majority here, only three isolated numbers, so the same argument does NOT carry over.
+- **DONE when:** each of the three is either shown to match the export (and left alone, with the finding
+  recorded) or corrected against a stated centre, with a 2560 preview and a render-read check.
+
 ### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **DONE 2026-09-06 — rebuilt over the baked one, which takes all four art faults with it** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
   `ModuleColorChanger`. [[S135]] already draws the honest version of this on the CABIN settings tab (*"the
@@ -16874,13 +16895,84 @@ branch, which is a separate line rather than a silent addition.
   from its top (which read as truncated, the very impression the baked caption already gave).
 - comment-loss **0** · no `install`, no glass, no `git push`.
 
-### S134e [S] The audio page's dividers and its signal glyph — **DOING** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
+### S134e [S] The audio page's dividers and its signal glyph — **DONE 2026-09-06 — thirteen positions derived from the dividers' own grid, and the fan sized to its siblings** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
 - `A-03`: the dividers' five equal cells do not contain AUX's value or two of the four button clusters.
 - `A-04`: the signal glyph is drawn below its own button and too small to read as one.
 - ⚠ Both are layout on a page [[S135]] and [[S121c]] have both touched since QC measured them — re-measure
   before moving anything.
 - **DONE when:** the cells contain what they divide, the glyph reads as part of its button, and a 2560
   preview shows both.
+
+#### ⭐ DONE 2026-09-06 — re-measured first, and QC's figures held to the pixel
+
+⚠ The line's own warning was to re-measure, because [[S135]] and [[S121c]] have both touched this page
+since QC filed `A-03`/`A-04`. **Re-measured against the file as it stands, and every filed number is
+unchanged**: AUX's label and value +42 design px, INTERCOM's pair +46, ALERTS' pair +45.5, ten of
+thirteen positions exact, the glyph at design y 1690 inside a plate centred on 1668. Both edits touched
+CONTENT (what the channels read, which scope is selected) and neither touched geometry.
+
+#### `A-03` — the grid is read from the dividers, not asserted alongside them
+
+`CellCx(i)` is now the **midpoint of the two lines that BOUND cell `i`** — the panel's own edges and the
+four dividers — and every one of the thirteen positions is derived from it: labels and values on the
+cell centre, and each ± cluster centred on it by one `SlotCx(cell, n, j)` rule that gives `cx±152` for a
+three-plate row and `cx±76` for a two-plate row.
+
+⚠ **THE FIVE CELLS ARE NOT ALL EQUAL, and QC's own fix formula does not survive that.** The panel is
+**2489** design px wide, not 2490, so the cells are 498, 498, 498, 498 and **497**, and ALERTS' centre is
+**2708.5**. QC proposed `CellCx(i) = 468 + 498 * (i + 0.5)`, which is exact for four cells and **half a
+pixel out on the fifth**. Reading the edges is exact for all five and stays exact if a divider is ever
+re-measured. ⭐ Mutation Y3 is that formula, and the suite kills it.
+
+⛔ **§1.4, RECORDED AS OURS.** QC's own note: these came from *"the exact layer geometry from the Figma
+MCP"*, so snapping them **edits measured source geometry**. Written into the file's header as this
+project's decision — taken on the evidence that ten of thirteen already agree with the grid, and on the
+owner's standing preference for balance (R-2/R-4) — and **not** presented as re-measurement. The
+dividers themselves are untouched; they are what the grid is read FROM, which is QC's must-not-break.
+
+#### `A-04` — the fan, on its siblings' line and at their width
+
+- **Centred by derivation**, not by a constant of its own: the plate's `BtnY`/`BtnD` now produce `BtnCy`,
+  which the −, the + and the fan all use. ⚠ Q6 gated this and [[S135]] cleared it: the ruling **kept**
+  the signal plates (drawn inert), so the fix is not wasted.
+- ⭐ **THE INK IS CENTRED, NOT THE ORIGIN — and QC's two statements disagree here.** Its fix plan says
+  `PY(1668)`; its verify criterion says the three glyphs must *"share a centre line"*. The ± are
+  symmetric about their anchor, so those are the same thing for them. **The fan is one-sided** — arcs
+  above the origin, only the dot below — so anchoring it at `BtnCy` hangs the whole mark **15.6 design
+  px above** the line its siblings sit on (measured, by mutation Y4). The criterion describes what the
+  crew sees, so the **ink box** is what gets centred. Stated in the code, not silently chosen.
+- **Sized to its siblings by derivation:** a band swept ±55° is widest at its ends, `2·r·sin55°` across,
+  so `SignalOuter = 28 / sin55° = 34.18` makes the fan exactly as wide as the ±'s 56 px span. QC filed
+  this as a width complaint — *"under a third of the width its siblings use"* — so width is what it is
+  matched on.
+- **Three arcs and a dot, at the ± strokes' own weight** (`Strokes.Px(5, sc)`, the same call the − and +
+  make), spaced outward from the dot's edge so the innermost cannot merge into it. The old glyph was ONE
+  band 14 design px thick, which QC re-validated at the shipped width as *"a ~13 px mark inside a 47 px
+  box … a speck"*.
+
+#### Verified
+
+- **New suite `AudioGridTest`, 85 checks**, at **2560 and 4416** from the start (S134a and S134b each had
+  a projection bug survive a single-aspect suite) and on both a CABIN and a SEAT scope.
+- ⭐ **NOTHING IN IT READS A LAYOUT CONSTANT.** The grid is recovered from the RENDER: the panel rect
+  gives the outer edges, the four divider LINES the inner ones, and text anchors, plate centres, glyph
+  radii, sweep angles and stroke widths all come out of the same DisplayList. Move a cluster and the
+  cell it is measured against does not move with it. ⚠ That is the specific failure this run has now
+  found five times by mutation, and it is why the harness was written this way first.
+- **Tolerance set at 0.25 design px, eight times tighter than QC's 2 px** — deliberately, because every
+  position is derived and the error is zero, and a 2 px window could not tell the derivation from QC's
+  own half-pixel-out formula.
+- ⭐ **Draw-vs-touch agreement (QC `H-04`) is now measured against the plate AS DRAWN**: wherever
+  `HitTest` says yes at a rendered plate's centre it must say yes across that plate and no past its edge.
+  Mutation Y8 (hit rect at 70% of the plate) dies on it.
+- **10 mutations, 10 killed, none survived** — Y1 AUX back +42, Y2 the pairs back +46, Y3 QC's formula,
+  Y4 the fan on the origin, Y5 the radius back to 20, Y6 one arc, Y7 double weight, Y8 the narrow hit
+  rect, Y9 the panel edge moved, Y10 the dot swollen into the innermost arc.
+- **Preview: 3 pages changed and 0 new** — `settings_audio.png`, `settings_audio_nosettings.png`,
+  `settings_audio_seat2.png`, which is exactly the three renders of this page and nothing else.
+  Inspected at 2560: the fan reads as a signal fan, carries the ± strokes' weight, and the three glyphs
+  in a row read as one set.
+- `build.py test` green · comment-loss **0** · no `install`, no glass, no `git push`.
 
 ### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **DONE 2026-09-06 — four channels are the GAME's own audio layers and four buttons really move them; A-05 and A-06 answered from the export** — [QC `A-02` `A-05` `A-06`]
 - 🟢 **Owner answered Q6, verbatim:** *"make the volume controls control the game sound levels. Music,

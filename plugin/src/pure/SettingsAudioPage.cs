@@ -8,6 +8,16 @@
 //
 // FILL-TO-FIT (undistorted): positions spread across the full width (sx); element SIZES use the height
 // scale (sy) so nothing stretches — the seats spread apart, the panel widens, circles stay round.
+//
+// ---- ⚠ S134e / QC `A-03`: THE PANEL'S THIRTEEN X POSITIONS ARE OURS NOW, NOT THE EXPORT'S ----
+// The line above is why this needs saying. Ten of the audio panel's thirteen positions landed exactly
+// on the grid its own four dividers define; three did not, by 42, 46 and 45.5 design px. They are now
+// DERIVED from that grid rather than transcribed, so a value and its buttons cannot drift apart again.
+// ⛔ That EDITS MEASURED SOURCE GEOMETRY, and §1.4 says to say so rather than present it as
+// re-measurement: **the grid snap is this project's decision**, taken on the evidence that ten of
+// thirteen already agree with it, and on the owner's standing preference for balance (R-2/R-4, *"I like
+// well balanced layouts"*). The dividers themselves are untouched — they were always right, and they
+// are what the grid is read FROM.
 // ============================================================================================
 using System;
 
@@ -33,7 +43,54 @@ namespace DragonScreen
         // ⚠ S135: the VALUE column is gone from this pair - it is resolved per channel now, by
         // ChannelText. The line above is kept as written because it names what the arrays WERE.
         static readonly string[] ChLabel = { "GROUND", "AUX", "MAIN", "INTERCOM", "ALERTS" };
-        static readonly float[]  ChCx    = { 717, 1257, 1713, 2211, 2709 };
+
+        // ---- ⭐ S134e / QC `A-03`: THE CENTRES ARE THE DIVIDERS' OWN GRID NOW ----
+        // ⛔ SUPERSEDED IN PLACE, kept verbatim because it is the evidence (C1.16 / G12). The line
+        // that stood here read:
+        //
+        //     static readonly float[]  ChCx    = { 717, 1257, 1713, 2211, 2709 };
+        //
+        // Four of those five are the centres of the cells the dividers cut; `1257` is 42 design px
+        // right of AUX's, while AUX's BUTTONS were 4 px left of it — so the label and the plates it
+        // labels sat on opposite sides of their own cell centre, which is what shows on the render.
+        // Resolved by `CellCx` below, from the dividers themselves.
+
+        /// <summary>How many audio channels the panel divides. ⚠ NOT <see cref="Scopes"/>: that is the
+        /// five SEATS, and the two counts being equal is a coincidence of this page, not a fact about
+        /// it — a sixth channel would not add a sixth seat.</summary>
+        public const int Channels = 5;
+
+        /// <summary>MAIN's cell — the one channel with no ± pair, because it carries the VOX readout
+        /// instead (QC `A-05`).</summary>
+        public const int MainCell = 2;
+
+        /// <summary>The audio panel's own edges, in design coordinates. ⭐ Named once because the panel
+        /// rect and the cell grid are the SAME rectangle: QC `H-04`'s rule is that one geometry
+        /// function serves every user of it, and here the users are the paint and the layout.</summary>
+        public const float PanelX0 = 468f, PanelX1 = 2957f, PanelY0 = 1323f, PanelY1 = 1757f;
+
+        static readonly float[]  DivX = { 966, 1464, 1962, 2460 };   // dividers between channels
+
+        /// <summary>Cell boundary <paramref name="i"/>, 0..<see cref="Channels"/>: the panel's left
+        /// edge, then the four dividers, then the panel's right edge.</summary>
+        public static float CellEdge(int i)
+        {
+            if (i <= 0) return PanelX0;
+            if (i >= Channels) return PanelX1;
+            return DivX[i - 1];
+        }
+
+        /// <summary>
+        /// The centre of cell <paramref name="i"/> — the midpoint of the two lines that BOUND it, so
+        /// it is the dividers' own answer rather than a second opinion about them.
+        ///
+        /// ⚠ THE FIVE CELLS ARE NOT ALL EQUAL, and it matters at the last one. The panel is 2489
+        /// design px wide, not 2490, so the cells measure 498, 498, 498, 498 and <b>497</b>, and
+        /// ALERTS' centre is <b>2708.5</b>. QC's fix plan proposed `468 + 498 * (i + 0.5)`, which is
+        /// exact for four cells and half a pixel out on the fifth; reading the edges is exact for all
+        /// five and stays exact if a divider is ever re-measured.
+        /// </summary>
+        public static float CellCx(int i) { return (CellEdge(i) + CellEdge(i + 1)) * 0.5f; }
 
         // ---- S135 / QC A-02: THE FIVE VALUES WERE LITERALS AND NOW COME FROM SOMEWHERE ----
         // ⛔ SUPERSEDED IN PLACE, kept verbatim because it is the evidence (C1.16 / G12). The row above
@@ -57,11 +114,85 @@ namespace DragonScreen
         /// owner's mapping reaches are controls; the rest are painted INERT (S75) and have no hit
         /// rect at all (S29's precedent for a plate whose function no source names).</summary>
         static readonly string[] BtnCh = { "GROUND", "AUX", "INTERCOM", "ALERTS" };
-        static readonly float[]  DivX     = { 966, 1464, 1962, 2460 };            // dividers between channels
+
+        // ---- ⭐ S134e / QC `A-03`: AND THE BUTTON CLUSTERS SIT IN THE SAME GRID ----
+        // ⛔ SUPERSEDED IN PLACE (C1.16 / G12). Four lines stood here, the first of them this comment:
         // -/+ button centres (design x) per side; MAIN has the VOX box instead
-        static readonly float[]  MinusX  = { 717, 1219, 2181, 2678 };            // GROUND,AUX,INTERCOM,ALERTS
-        static readonly float[]  PlusX   = { 869, 1371, 2333, 2830 };
-        static readonly float[]  SignalX = { 565, 1067 };                        // GROUND,AUX have a signal icon
+        //
+        //     static readonly float[]  MinusX  = { 717, 1219, 2181, 2678 };   // GROUND,AUX,INTERCOM,ALERTS
+        //     static readonly float[]  PlusX   = { 869, 1371, 2333, 2830 };
+        //     static readonly float[]  SignalX = { 565, 1067 };               // GROUND,AUX have a signal icon
+        //
+        // Read as CLUSTERS, those eight numbers say: GROUND 565/717/869 is centred on 717 — its cell
+        // centre, exactly — AUX 1067/1219/1371 on 1219 against a cell centre of 1215, INTERCOM
+        // 2181/2333 on 2257 against 2211, and ALERTS 2678/2830 on 2754 against 2708.5. ⚠ The
+        // two-button rows are the outliers, both by ~45 px, and their VALUES were correct — the mirror
+        // image of AUX's defect one cell over. ⭐ The PITCH was already uniform at 152 px in all four,
+        // which is the evidence that the clusters were placed by one rule and CENTRED by another.
+
+        /// <summary>Which cell each ± pair belongs to, in `BtnCh` order. MAIN (2) is absent: it has
+        /// the VOX readout instead of a pair.</summary>
+        static readonly int[] BtnCell    = { 0, 1, 3, 4 };   // GROUND, AUX, INTERCOM, ALERTS
+        /// <summary>Which cells carry a signal plate as well, making their row three wide.</summary>
+        static readonly int[] SignalCell = { 0, 1 };         // GROUND, AUX
+
+        /// <summary>The button row's top edge and its square side, in design px — the numbers `Btn`
+        /// is called with, `HitTest` inverts, and the glyphs centre on. One statement, three users.</summary>
+        public const float BtnY = 1598f, BtnD = 140f;
+        /// <summary>The button row's centre line. ⭐ DERIVED: QC `A-04` is a glyph that was centred on
+        /// a constant of its own instead of on this one, and sat 22 design px below its siblings.</summary>
+        public static float BtnCy { get { return BtnY + BtnD * 0.5f; } }
+
+        /// <summary>Centre-to-centre spacing inside a cluster. ⚠ Measured off the export, where all
+        /// four clusters already used it.</summary>
+        const float BtnPitch = 152f;
+
+        static bool HasSignal(int cell)
+        {
+            for (int i = 0; i < SignalCell.Length; i++) if (SignalCell[i] == cell) return true;
+            return false;
+        }
+
+        /// <summary>How many plates cell <paramref name="cell"/>'s row holds — three where a signal
+        /// plate joins the ± pair, two otherwise.</summary>
+        static int Slots(int cell) { return HasSignal(cell) ? 3 : 2; }
+
+        /// <summary>
+        /// Slot <paramref name="j"/> of <paramref name="n"/>, centred on cell <paramref name="cell"/>.
+        /// ⭐ ONE RULE FOR BOTH ROW WIDTHS: n=3 gives cx−152, cx, cx+152 and n=2 gives cx−76, cx+76 —
+        /// what QC's fix plan describes as two separate cases. The ± pair is always the LAST TWO slots
+        /// and the signal plate, where there is one, is always the first.
+        /// </summary>
+        static float SlotCx(int cell, int n, int j)
+        { return CellCx(cell) + (j - (n - 1) * 0.5f) * BtnPitch; }
+
+        /// <summary>The minus plate's design centre-x for `BtnCh[i]`.</summary>
+        public static float MinusCx(int i)
+        { int c = BtnCell[i]; int n = Slots(c); return SlotCx(c, n, n - 2); }
+        /// <summary>The plus plate's design centre-x for `BtnCh[i]`.</summary>
+        public static float PlusCx(int i)
+        { int c = BtnCell[i]; int n = Slots(c); return SlotCx(c, n, n - 1); }
+        /// <summary>The k-th signal plate's design centre-x.</summary>
+        public static float SignalCx(int k)
+        { int c = SignalCell[k]; return SlotCx(c, Slots(c), 0); }
+
+        // ---- ⭐ S134e / QC `A-04`: THE SIGNAL FAN, SIZED TO ITS SIBLINGS ----
+        /// <summary>The ± glyphs' half-span: the minus is 56 design px across, the plus 56 × 56.</summary>
+        const float GlyphHalf = 28f;
+        /// <summary>The fan's half-sweep, degrees either side of twelve o'clock.</summary>
+        const float SignalHalfDeg = 55f;
+        /// <summary>Three arcs and a source dot — QC: *"three thin concentric arcs over ±55° with a
+        /// filled dot is the conventional form and is what the shape is reaching for"*. The old glyph
+        /// was ONE band 14 design px thick, which at any shipped size is a solid wedge.</summary>
+        const int SignalArcs = 3;
+        /// <summary>
+        /// The fan's outer radius — DERIVED so its ink is as wide as the ± glyphs beside it. A band
+        /// swept ±55° about twelve o'clock is widest at its ends, 2·r·sin55° across, so
+        /// r = 28 / sin55° = 34.18. ⚠ QC filed this as a WIDTH complaint — *"it occupies under a
+        /// third of the width its siblings use"* — so width is what it is matched on.
+        /// </summary>
+        static readonly float SignalOuter =
+            GlyphHalf / (float)Math.Sin(SignalHalfDeg * Math.PI / 180.0);
 
         public static void Build(DisplayList dl, int w, int h, int sel)
         { Build(dl, w, h, sel, new PageState()); }
@@ -112,7 +243,7 @@ namespace DragonScreen
             CTxt("AUDIO SETTINGS", 1692, 55, 46, White);
 
             // ---- audio panel ----
-            dl.Rect(PX(468), PY(1323), 2489 * sx, 434 * sy, Panel);
+            dl.Rect(PX(PanelX0), PY(PanelY0), (PanelX1 - PanelX0) * sx, (PanelY1 - PanelY0) * sy, Panel);
             CTxt(sel == CabinScope ? "CABIN AUDIO" : "SEAT " + (sel + 1) + " AUDIO", 1721, 1264, 34, White);
             // ---- ⛔ S134c / QC A-01: AND THE PAGE SAYS WHAT THE SELECTION DOES NOT CHANGE --------
             // QC's own warning about making the seats selectable: *"today `ChValue` is one literal array
@@ -135,11 +266,11 @@ namespace DragonScreen
                 CTxt("LEVELS BELOW ARE THE VEHICLE'S — KSP HAS NO PER-SEAT AUDIO",
                      1721, 1310, Typography.DenseDesignFor(w, h / RefH), DragonPalette.Text6);
 
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < Channels; i++)
             {
-                CTxt(ChLabel[i], ChCx[i], 1382, 30, Dim);
+                CTxt(ChLabel[i], CellCx(i), 1382, 30, Dim);
                 string val = ChannelText(s, ChLabel[i]);
-                CTxt(val, ChCx[i], 1430, 118, val == Dashes.None ? Dim : White);
+                CTxt(val, CellCx(i), 1430, 118, val == Dashes.None ? Dim : White);
             }
             for (int i = 0; i < DivX.Length; i++) VLine(DivX[i], 1419, 1619, DragonPalette.Hairline);
 
@@ -156,30 +287,61 @@ namespace DragonScreen
             // ⚠ The lit state and the live state are ONE question asked once - AudioChannels.Actionable
             // - which HitTest asks again, so a dimmed pair cannot act and a live one cannot look
             // unavailable. That is S32's rule, applied to a second page.
-            for (int i = 0; i < MinusX.Length; i++)
+            for (int i = 0; i < BtnCell.Length; i++)
             {
                 Rgba bc = AudioChannels.Actionable(s.Audio, BtnCh[i]) ? White : Dim;
-                Btn(MinusX[i], 1598, 140, Bg, bc);
-                dl.Line(MinusX[i] * sx - SZ(28), PY(1668), MinusX[i] * sx + SZ(28), PY(1668), St(5), bc);   // minus
-                Btn(PlusX[i], 1598, 140, Bg, bc);
-                dl.Line(PlusX[i] * sx - SZ(28), PY(1668), PlusX[i] * sx + SZ(28), PY(1668), St(5), bc);      // plus -
-                dl.Line(PlusX[i] * sx, PY(1668) - SZ(28), PlusX[i] * sx, PY(1668) + SZ(28), St(5), bc);      // plus |
+                float mx = MinusCx(i) * sx, pxc = PlusCx(i) * sx, gy = PY(BtnCy), g = SZ(GlyphHalf);
+                Btn(MinusCx(i), BtnY, BtnD, Bg, bc);
+                dl.Line(mx - g, gy, mx + g, gy, St(5), bc);        // minus
+                Btn(PlusCx(i), BtnY, BtnD, Bg, bc);
+                dl.Line(pxc - g, gy, pxc + g, gy, St(5), bc);      // plus -
+                dl.Line(pxc, gy - g, pxc, gy + g, St(5), bc);      // plus |
             }
             // ⛔ THE TWO SIGNAL PLATES STAY INERT AND ARE NOW PAINTED THAT WAY. No source says what a
             // signal button on an audio channel DOES - the same §1.4 wall S29 hit on the Suit Leak
             // Check's two read-only plates, and answered the same way: drawn, dim, no hit rect.
-            for (int i = 0; i < SignalX.Length; i++)
+            // ⛔ SUPERSEDED IN PLACE (C1.16 / G12) — QC `A-04`. The two lines that drew the glyph were:
+            //
+            //     dl.ArcBand(SignalX[i] * sx, PY(1690), SZ(6), SZ(20), -55, 55, Dim);   // signal fan
+            //     dl.ArcBand(SignalX[i] * sx, PY(1690), 0, SZ(5), 0, 360, Dim);
+            //
+            // Two faults, both measured. (1) `PY(1690)` is 22 design px BELOW the box's own centre
+            // line of 1668, which the ± beside it use — a constant of its own where a derivation
+            // belonged. (2) A 14-px-thick band of outer radius 20 is not a fan: QC re-validated it at
+            // the shipped width as *"a ~13 px mark inside a 47 px box … a speck"*.
+            for (int i = 0; i < SignalCell.Length; i++)
             {
-                Btn(SignalX[i], 1598, 140, Bg, Dim);
-                dl.ArcBand(SignalX[i] * sx, PY(1690), SZ(6), SZ(20), -55, 55, Dim);   // signal fan
-                dl.ArcBand(SignalX[i] * sx, PY(1690), 0, SZ(5), 0, 360, Dim);
+                float cx = SignalCx(i) * sx;
+                Btn(SignalCx(i), BtnY, BtnD, Bg, Dim);
+
+                float t   = St(5) * 0.5f;    // half the band thickness — the ± strokes' own rule, so
+                float dot = St(5);           // the three glyphs carry ONE weight at every panel size
+                float rO  = SZ(SignalOuter);
+
+                // ⭐ THE INK IS CENTRED, NOT THE ORIGIN, and that is a real distinction here. The ± are
+                // symmetric about their anchor, so anchoring them at `BtnCy` centres them. The fan is
+                // ONE-SIDED — arcs above the origin, only the dot below — so anchoring IT at `BtnCy`
+                // would hang the whole mark above the line its siblings sit on. QC's fix plan says
+                // `PY(1668)` and its verify criterion says the three glyphs must *"share a centre
+                // line"*; for a one-sided mark those two disagree, and the criterion is the one that
+                // describes what the crew sees, so the INK box is what gets centred.
+                float up = rO + t;                              // ink above the origin
+                float oy = PY(BtnCy) + (up - dot) * 0.5f;       // => ink centre lands exactly on BtnCy
+
+                for (int a = 1; a <= SignalArcs; a++)
+                {
+                    // spaced from the DOT's edge outward, so the innermost arc cannot merge into it
+                    float r = dot + (rO - dot) * a / SignalArcs;
+                    dl.ArcBand(cx, oy, r - t, r + t, -SignalHalfDeg, SignalHalfDeg, Dim);
+                }
+                dl.ArcBand(cx, oy, 0, dot, 0, 360, Dim);
             }
             // MAIN's VOX indicator
             // ⛔ S135: "17" was a literal too, and VOX maps to VOICE_VOLUME.
-            CTxt("VOX", 1713, 1614, 30, Dim);
+            CTxt("VOX", CellCx(MainCell), 1614, 30, Dim);
             {
                 string vox = ChannelText(s, "VOX");
-                CTxt(vox, 1713, 1656, 44, vox == Dashes.None ? Dim : White);
+                CTxt(vox, CellCx(MainCell), 1656, 44, vox == Dashes.None ? Dim : White);
             }
 
             // ---- bottom tabs (Audio / Cabin / Video) with the Audio tab underlined ----
@@ -252,11 +414,13 @@ namespace DragonScreen
             if (w <= 0 || h <= 0) return AudioAct.None;
             float sx = w / RefW, sy = h / RefH;
             // Btn draws a d x d square, sized on sy, centred on the design centre-x mapped by sx.
-            float top = 1598f * sy, bot = top + 140f * sy, half = 70f * sy;
+            // ⚠ S134e: `BtnY`/`BtnD`/`MinusCx`/`PlusCx` are the SAME statements the draw uses, so a
+            // cluster cannot be moved on the glass without the touch following it (QC `H-04`).
+            float top = BtnY * sy, bot = top + BtnD * sy, half = BtnD * 0.5f * sy;
             if (py < top || py >= bot) return AudioAct.None;
-            for (int i = 0; i < MinusX.Length; i++)
+            for (int i = 0; i < BtnCell.Length; i++)
             {
-                float mc = MinusX[i] * sx, pc = PlusX[i] * sx;
+                float mc = MinusCx(i) * sx, pc = PlusCx(i) * sx;
                 AudioAct hit = AudioAct.None;
                 if (px >= mc - half && px < mc + half) hit = (AudioAct)(1 + i * 2);
                 else if (px >= pc - half && px < pc + half) hit = (AudioAct)(2 + i * 2);
