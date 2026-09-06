@@ -21039,3 +21039,19 @@ per §14.2a clause (1) — and it is a **separate line in a fresh chat**, not a 
 line swapped the flattened component for a *cleaner* flattened component; it did not un-flatten anything.
 §14.2a clause (1) is satisfied for the bar only when the icons are sliced from the export. That is **unit 1**
 and belongs to it.
+
+---
+
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuild the shared bar from the export, and close everything open against it — **DOING** — [unit 1 of the owner's per-page rebuild programme, 2026-09-06]
+
+**🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
+completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
+it or as for more edits. Only then do we move onto the next page."* and, closing [[S175]]: *"approved, move
+on to the bottom bar"*. **No other authority is claimed. `install` and glass stay SPENT ([[S171]]);
+preview-only stands.**
+
+**WHY THE BAR IS UNIT 1 AND NOT A PAGE.** It is a shared component drawn on all 35 Figma-era pages
+(`FigmaUI` draws it before the page body; `FigmaUI.HitTest` tests it FIRST). Rebuilding it inside a page
+would rebuild it 34 more times.
+
+*(Step A — the gathered backlog — is written below before any code, per the unit prompt.)*
