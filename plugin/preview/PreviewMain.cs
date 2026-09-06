@@ -414,6 +414,27 @@ public static class PreviewMain
         ps.SolarArrayText  = "DEPLOYED";
         ps.BatteryText     = "2 / 2";
 
+        // ---- S79: THE NUMBERS BEHIND THOSE STRINGS, so the MARGIN column has something to divide ----
+        // ⛔ A FIXTURE THAT SETS THE TEXT AND NOT THE NUMBER PRODUCES A CONTRADICTION ON THE GLASS, and
+        // it did: the first render of this column printed `18 %` in QTY and `0.0 h` in MARGIN on the
+        // same row, because `EcUnits` was left at a struct's default 0 while `NetPwr1W` was negative.
+        // Zero charge and a real draw IS "0.0 h" - the page was right and the fixture was lying. On a
+        // real vessel the two cannot diverge: `VesselData` sets `EcUnits` on the line after `Power01`,
+        // off the same `amt`. Here they have to be kept in step by hand, so they are set together.
+        //
+        // 18 % of a 3000 EC pack, which is what `ps.Power01 = 0.18` above says the vehicle is holding.
+        ps.EcUnits = 3000.0 * ps.Power01;
+        // The same kilograms the two strings above print - one source, two views (C7.1).
+        ps.DeorbitFuelKg = 791.1;
+        ps.DeorbitOxKg   = 1308.0;
+        // ⚠ AND THE FLOWS ARE ZERO, DELIBERATELY. This fixture is COASTING - `ps.PowerFlow` above is
+        // negative (a draining bus) and nothing is burning - so the two deorbit rows dash and the two
+        // power rows read a countdown. That is the shipped state of the column for most of a mission,
+        // and the render is supposed to show it rather than a best case. `MarginColumnTest` is where
+        // the burning case is exercised, because it needs two fixtures to mean anything.
+        ps.DeorbitFuelFlowKgS = 0.0;
+        ps.DeorbitOxFlowKgS   = 0.0;
+
         // ---- THE SIX SUBSYSTEM SUB-TABS' OWN SOURCES (T13b) ----
         // Derived here the SAME way VesselData derives them from a real vessel, so the fixture cannot
         // drift out of agreement with itself: the two gas-store rows are ps.Systems' own fractions (set

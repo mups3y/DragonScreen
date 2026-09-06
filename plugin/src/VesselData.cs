@@ -159,6 +159,10 @@ namespace DragonScreen
                 Resource(v, "ElectricCharge", out amt, out max);
                 state.Power01 = (max > 0.0) ? amt / max : 0.0;
                 state.PowerText = Percent(state.Power01, max);
+                // S79: the ABSOLUTE charge as well as the fraction. The MARGIN column needs energy
+                // over draw, and a percentage cannot supply the numerator. Same `amt` the fraction
+                // above uses, so the two readings cannot disagree about how full the pack is.
+                state.EcUnits = amt;
 
                 // S6: this used to clock itself off Time.realtimeSinceStartup (wall-clock, keeps
                 // ticking while KSP is paused). OnPostRender - and so Refresh() - fires every paused
@@ -1001,6 +1005,42 @@ namespace DragonScreen
             state.DeorbitFuelText = anyFuel ? Kg(fuel) : null;
             state.DeorbitOxText   = anyOx   ? Kg(ox)   : null;
 
+            // ---- S79: THE SAME TWO QUANTITIES AS NUMBERS, AND THE RATE THEY ARE CHANGING AT ----
+            // The MARGIN column is time-to-depletion (owner, S79-Q1, 2026-09-06 — option selected via
+            // the overseer), so it needs kg and kg/s where the QTY column needed a formatted string.
+            // ⭐ Formatted from the SAME `fuel`/`ox` the text above uses, one line apart, so the two
+            // columns of one row can never disagree about how much is in the tank.
+            state.DeorbitFuelKg = fuel * 1000.0;
+            state.DeorbitOxKg   = ox   * 1000.0;
+
+            // ⛔ THE RATE IS MEASURED, NOT MODELLED, and it copies `powerFlow`'s guard exactly - read
+            // that comment before touching this. `v.missionTime` is SIMULATION time: it does not
+            // advance while KSP is paused, whereas `Refresh()` still fires every paused frame. Dividing
+            // a frozen delta by a growing wall-clock dt is how the power dials once reported an exact
+            // 0 W flow in every screenshot taken while paused (S6). Holding the last real reading
+            // instead of overwriting it with a pause artifact is the whole of the guard.
+            //
+            // ⚠ POSITIVE MEANS DRAINING. The tank total FALLS as it burns, so the flow is
+            // (last − now) / dt, which is the opposite sign convention to `powerFlow` above and is
+            // stated here rather than left to be worked out from the subtraction.
+            //
+            // ⚠ AND IT IS ZERO FOR ALL OF A COAST, which is exactly what makes the MARGIN cell on
+            // these two rows dash for most of a mission. That is the accepted consequence of one
+            // currency for the whole column (S79) - the dash is computed from this being zero.
+            double propNow = v.missionTime;
+            if (lastPropAt >= 0.0 && propNow > lastPropAt)
+            {
+                double dt = propNow - lastPropAt;
+                state.DeorbitFuelFlowKgS = (lastFuelKg - state.DeorbitFuelKg) / dt;
+                state.DeorbitOxFlowKgS   = (lastOxKg   - state.DeorbitOxKg)   / dt;
+            }
+            if (propNow > lastPropAt)
+            {
+                lastFuelKg = state.DeorbitFuelKg;
+                lastOxKg   = state.DeorbitOxKg;
+                lastPropAt = propNow;
+            }
+
             // ---- PROP + GNC: the Dragon's own tanks as fractions (T13b) ----
             // Bare text for the gauges, unit-carrying text for the row, one source for all of it. Both
             // tanks together is what "Prop Remaining" and the GNC tab's "RCS FUEL" ask for: the Dracos
@@ -1073,6 +1113,12 @@ namespace DragonScreen
         /// has no defined wattage - but the one pure/CabinEnvironment.cs already picked for the net-power
         /// dials, reused here so two power readouts on one page cannot be in different currencies.</summary>
         private const double EcWatts = 120.0;
+
+        // S79: the previous propellant reading and when it was taken, so the drain rate can be a
+        // measured delta. ⚠ −1 means "no reading yet", which is why the guard above tests it: a first
+        // frame has nothing to subtract from, and inventing a rate for it would put a countdown on a
+        // tank at the exact moment nothing is known about it.
+        private static double lastFuelKg = -1.0, lastOxKg = -1.0, lastPropAt = -1.0;
 
         /// <summary>A 0..1 fraction as a whole percent with NO unit - a headline gauge draws its unit on
         /// its own line beneath the number, so appending one here prints it twice. T13b.</summary>

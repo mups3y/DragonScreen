@@ -203,9 +203,11 @@ namespace DragonScreen
             {
                 float y = 360 + i * 145;
                 string qty = valid ? Qty(i, s) : null;
+                string margin = valid ? Margin(i, s) : null;
                 L(ConsLabel[i], 2760, y, 23, White);
                 R(qty ?? Dash, 3160, y, 25, string.IsNullOrEmpty(qty) ? Dim : White);
-                R(Dash, 3360, y, 25, Dim);
+                R(margin ?? Dash, 3360, y, 25,
+                  string.IsNullOrEmpty(margin) || margin == Dashes.None ? Dim : White);
                 dl.Rect(PX(2760), PY(y + 30), 600 * sx, SZ(2), Faint);
             }
             // ---- S75: "SHOW MARGINS TO" IS NOT A CONTROL, SO IT MUST NOT BE PAINTED AS ONE ----
@@ -246,6 +248,77 @@ namespace DragonScreen
 
         /// <summary>One CONSUMABLES row's quantity, or null where nothing can answer the label.
         /// Row order is <see cref="ConsLabel"/>'s, which is the render's own order (T5).</summary>
+        /// <summary>
+        /// ⭐ S79: THE MARGIN COLUMN, AND IT IS TIME-TO-DEPLETION ON EVERY ROW THAT HAS ONE.
+        ///
+        /// The owner answered S79-Q1 on 2026-09-06 by selecting, from presented options:
+        ///
+        ///     1. Time-to-depletion, one currency for the whole column — hours or days remaining at
+        ///        the current modelled rate.
+        ///
+        /// ⛔ Recorded as a SELECTION, not a verbatim quote (C1.12's evidentiary standard). ONE
+        /// currency for the whole column — not split by row family, which the options explicitly did
+        /// not recommend because one header over two units is what S38/S39 show crews misread.
+        ///
+        /// ---- WHAT THIS REPLACED, AND WHY IT WAS WORSE THAN EMPTY ------------------------------
+        /// `R(Dash, 3360, y, 25, Dim)` — the same literal on all eight rows, on a live feed and a dead
+        /// one alike, under a header that says MARGIN. The page was asking a question it never
+        /// answered. ⛔ NOTHING HERE PRINTS A DASH OF ITS OWN: every cell goes through `Depletion`,
+        /// which produces one only when the inputs say no depletion time exists. That is what lets a
+        /// fixture-A-vs-fixture-B test prove this column is not a constant.
+        ///
+        /// ---- ⛔ AND `LifeSupport.Margins` IS NOT WIRED HERE, DELIBERATELY -----------------------
+        /// `SCREEN_LIVENESS_AUDIT.md` H18 and H39 both name it as "the natural filling for H18's MARGIN
+        /// column". That is true of its SHAPE and false of its CONTENT: `LsMargins` carries
+        /// Food / Water / Oxygen days, and NONE of these eight rows is food, water or oxygen. It fills
+        /// none of them, and a task that takes H39 at its word finds that out after wiring it. The Crew
+        /// tab is the likelier host; that is S57's call, not this column's.
+        /// </summary>
+        static string Margin(int row, PageState s)
+        {
+            switch (row)
+            {
+                // ---- the two power units: stored charge over what the bus is actually drawing ----
+                // ⚠ GATED ON THE QTY TEXT, which is this page's existing single answer to "is there a
+                // source" — so the MARGIN cell can never claim a reading the QTY cell says is absent.
+                // ⛔ AND THE SIGN IS THE POINT. `CabinEnvironment` publishes NET power: negative while
+                // draining, positive while the arrays make more than the load. The draw is therefore
+                // −NetPwr, and a CHARGING bus falls out as a dash through `Depletion`'s rate test
+                // rather than through a branch here. Passing the magnitude would print a countdown for
+                // a pack that is filling up.
+                case 0:
+                    return string.IsNullOrEmpty(s.PowerUnit1Text) ? Dashes.None
+                        : Depletion.BusText(s.EcUnits, Depletion.WattsPerEcPerSecond, -s.Cabin.NetPwr1W);
+                case 1:
+                    return string.IsNullOrEmpty(s.PowerUnit2Text) ? Dashes.None
+                        : Depletion.BusText(s.EcUnits, Depletion.WattsPerEcPerSecond, -s.Cabin.NetPwr2W);
+
+                // ---- the two deorbit tanks: kg left over kg/s being burned ----
+                // ⚠ ACCEPTED CONSEQUENCE OF ONE CURRENCY, RECORDED ON S79 AND NOT A HOLE: these read a
+                // real countdown only WHILE A BURN IS DRAWING THEM DOWN, and dash the rest of the
+                // mission, because at zero rate no depletion time exists. ⛔ That dash is COMPUTED — it
+                // comes out of `DeorbitFuelFlowKgS` being zero — and a printed literal here would fail
+                // this row's own fixture-A-vs-fixture-B check, because a constant cannot start reading
+                // a countdown when a fixture starts burning.
+                case 2:
+                    return string.IsNullOrEmpty(s.DeorbitFuelText) ? Dashes.None
+                        : Depletion.Text(s.DeorbitFuelKg, s.DeorbitFuelFlowKgS);
+                case 3:
+                    return string.IsNullOrEmpty(s.DeorbitOxText) ? Dashes.None
+                        : Depletion.Text(s.DeorbitOxKg, s.DeorbitOxFlowKgS);
+
+                // ---- the four Orbit n Subtank rows: a REASONED dash, and the reason is here ----
+                // Their QTY is already dashed because the real vehicle's tank split has no KSP
+                // counterpart and guessing which litres belong to which subtank would be inventing the
+                // number (docs/TELEMETRY_REGISTRY.md). ⛔ A MARGIN ON A QUANTITY THAT DOES NOT EXIST
+                // DOES NOT EXIST EITHER — this is §14.4(e)'s "a dash ONLY where the quantity truly does
+                // not exist", and it is the one place on this column where that clause applies.
+                // ⚠ It is not a literal escaping the rule above: `Dashes.None` here is the answer to a
+                // question about the VEHICLE, not a placeholder for an answer nobody computed.
+                default: return Dashes.None;
+            }
+        }
+
         static string Qty(int row, PageState s)
         {
             switch (row)

@@ -10255,7 +10255,7 @@ an end state. Neither can be filled without a source: `SCREEN_INVENTORY.md`'s Di
    screen's features are included, and removing paint to avoid deciding what it means is the one thing this
    defect class should not teach.
 
-### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **DOING — UNBLOCKED 2026-09-06: S79-Q1 answered (TIME-TO-DEPLETION), S79-Q2 moot** — [TIER 2: a column that claims a number it never computes]
+### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **DONE 2026-09-06 — time-to-depletion on the four rows that have one, a REASONED dash on the four that do not, and every dash computed** — [TIER 2: a column that claims a number it never computes]
 
 #### ⛔ SESSION DEVIATION FROM C1.1 + C1.7 — RECORDED HERE BECAUSE THIS IS THE FIRST LINE RUN 4 WRITES
 
@@ -10358,6 +10358,91 @@ whose margin genuinely does not exist reads a REASONED dash with the reason in t
 printed regardless of state, and the whole column is pinned by a fixture-A-vs-fixture-B test (the
 `VehicleLiveValues` idiom: a constant cannot pass it). `SHOW MARGINS TO` gains its rect and its Accent tint
 back **in the same change** if and only if S75-Q1 settles what it targets — the two go together (S75).
+
+#### ⭐ DONE 2026-09-06 — what the column reads now, off the shipped preview fixture
+
+| row | QTY | MARGIN | |
+|---|---|---|---|
+| Power Unit 1 Energy | `18 %` | **0.3 h** | live |
+| Power Unit 2 Energy | `18 %` | **0.4 h** | live — ⭐ **and DIFFERENT**, see below |
+| Usable Deorbit Fuel | `791.1 kg` | **—** | computed: nothing is burning |
+| Usable Deorbit Oxidizer | `1308.0 kg` | **—** | computed: nothing is burning |
+| Orbit 1/2 Subtank Fuel/Oxidizer ×4 | — | **—** | reasoned: the quantity itself does not exist |
+
+⭐ **THE TWO BUSES READ DIFFERENT TIMES OFF ONE POOL, AND THAT IS THE CHECK THAT MATTERS.**
+`CabinEnvironment` splits net power 0.55 / 0.45, so bus 1 runs out sooner. A column that printed one
+number on both rows would pass "it is live" and fail this — and it is pinned.
+
+**Verified arithmetic:** 3000 EC × 0.18 = 540 EC → 64 800 J; `NetPwr1W` = −0.9 × 120 × 0.55 = −59.4 W;
+64 800 / 59.4 = 1091 s = **0.303 h**. The render prints `0.3 h`.
+
+#### ⛔ THE DASH IS COMPUTED, AND THAT IS THE WHOLE OF THIS LINE
+
+The defect was `R(Dash, 3360, y, 25, Dim)` — **one literal on eight rows**, on a live feed and a dead one
+alike, under a header saying MARGIN. Replacing it with a different literal in more places would be the
+same defect in a better font. So **nothing in `Margin()` prints a dash of its own**: every cell goes
+through `pure/Depletion.cs`, which produces one only when the inputs say no depletion time exists —
+zero-or-negative rate, absent quantity, or a non-finite input.
+
+⚠ **THE ACCEPTED CONSEQUENCE IS PINNED IN BOTH DIRECTIONS.** The two deorbit rows dash for all of a
+coast and read a countdown during a burn. A suite that only looked for numbers would call the correct
+behaviour a regression; one that only looked for dashes would pass the defect this line removed. ⭐ **The
+same rows are checked both ways, with the same code and two fixtures** — which is what "computed" means
+operationally, and what a literal can never do.
+
+⭐ **And zero is not a dash.** `Depletion.Text(0, rate)` is `0.0 h` — an empty tank something is still
+drawing on. That is the reading a crew most needs to tell apart from "no data", and it is its own check.
+
+#### ⭐ THE W-PER-EC SCALE CANCELS, WHICH IS BETTER THAN GETTING IT RIGHT
+
+A bus's stored energy is `ec × k` and its draw is `flow × k × share`, so **the depletion time does not
+depend on `k` at all**. ⚠ That matters here because **the number 120 exists three times in this tree** —
+`VesselData.EcWatts` (private), a bare literal inside `CabinEnvironment.Compute`, and now
+`Depletion.WattsPerEcPerSecond`. The invariance is pinned by asking the same question at two different
+scales, so a future edit that makes the halves disagree fails a test instead of shifting a readout.
+⚠ Unifying the three copies is **not this line's declared output (C1.11)** and is logged as [[S170]].
+
+#### ⛔ `LifeSupport.Margins` IS STILL NOT WIRED, AND THE LINE'S OWN CORRECTION IS WHY
+
+`SCREEN_LIVENESS_AUDIT.md` H18 and H39 both name it as *"the natural filling for H18's MARGIN column"*.
+**True of its SHAPE, false of its CONTENT:** `LsMargins` carries Food / Water / Oxygen days, and none of
+these eight rows is food, water or oxygen. It fills **none** of them. That correction is now in the
+page's own header as well as here, so the next reader of H39 meets it before the wiring.
+
+#### ⚠ A FIXTURE THAT LIED, CAUGHT ON THE FIRST RENDER
+
+The preview's first pass printed `18 %` in QTY and **`0.0 h`** in MARGIN on the same row. ⛔ **The page
+was right and the fixture was lying**: `PreviewMain` set `PowerUnit1Text` and left `EcUnits` at a
+struct's default 0, and zero charge with a real draw genuinely IS 0.0 h. On a real vessel the two cannot
+diverge — `VesselData` sets `EcUnits` on the line after `Power01`, off the same `amt` — but a fixture has
+to keep them in step by hand. ⭐ **Found by looking at the render**, not by a test, which is what C1.3's
+preview gate is for.
+
+#### What did NOT change
+
+- ⛔ **`SHOW MARGINS TO` keeps neither a rect nor its Accent tint.** This line's DONE-when makes that
+  conditional on **S75-Q1**, which is **still open** — the alt-text capture records the toggle's
+  existence and none of its targets, and inventing them is what §1.4 forbids. Re-checked in the register
+  before deciding, not assumed.
+- **The four Orbit-n Subtank rows stay dashed** under every fixture, and a mutation that makes them
+  claim a margin is killed.
+
+#### Verified
+
+- `python plugin/build.py test` → **ALL SUITES PASSED**. New suite **`MarginColumnTest`, 49 checks**.
+- **8 mutations, 8 killed, every kill attributed to `MarginColumnTest`** — including `W4` (the exact
+  defect this line removed, put back), `W3` (a zero rate printing `0.0 h` — a literal by another name),
+  `W5` (the bus-draw sign flip dropped, so a draining bus reads as charging) and `W6` (the subtank rows
+  claiming a margin).
+- **`previewdiff`: 2 existing pages changed, 0 new, 0 removed, of 124** — `ui_vehicle.png` and
+  `ui_vehicle_alarm.png`, the only two that draw this table. **PNG inspected** and transcribed above.
+- No `install`, no glass, no `git push`. §14.4(a) untouched — nothing here commands anything.
+
+## Open questions for the owner (C1.14) — S79
+
+**NONE.** S79-Q1 is answered and applied; S79-Q2 is moot. ⚠ Two things this line touched are open
+elsewhere and are **not** re-posed here, to avoid one decision being made twice: **S75-Q1** (what
+`SHOW MARGINS TO` targets) and **[[S170]]** (the three copies of the W-per-EC constant, logged not asked).
 
 #### Open questions for the owner (C1.14) — S79
 
@@ -20062,3 +20147,19 @@ build chat does not change it. This is a proposal.
   handles it (QC `F-04`), so the geometry is understood; only the ink is baked.
 - **DONE when:** the three tabs are one size on all three pages, or a measurement shows the baked band
   cannot be patched and that is recorded with the reason.
+
+
+### S170 [S] The W-per-EC currency exists three times, in three files — **TODO** — [logged by [[S79]] per C1.1, 2026-09-06; TIER 3]
+- **The finding.** `120.0` — "one EC per second is 120 watts" — is written in three places:
+  `VesselData.EcWatts` (private const), a **bare literal** inside `CabinEnvironment.Compute`
+  (`double watts = s.PowerFlow * 120.0;`), and now `Depletion.WattsPerEcPerSecond`.
+- ⚠ **Nothing is wrong today** — all three read 120, and [[S79]] pins that its own reading is INVARIANT to
+  the value anyway, so the MARGIN column cannot be broken by a divergence. ⛔ **The POWER tab's kW readout
+  can be**: `arrayKw = arrayFlow * EcWatts / 1000.0` and `NetPwr1W = PowerFlow * 120.0 * 0.55` are two
+  different copies feeding two readouts a crew compares side by side.
+- ⭐ **The pure layer is the right home**, because `CabinEnvironment` is pure and `VesselData` is glue:
+  glue may depend on pure, not the other way round. `Depletion.WattsPerEcPerSecond` is already there.
+- ⚠ **Check the SIGN and the SHARE conventions before merging them** — `CabinEnvironment` publishes NET
+  power (negative while draining) and splits it 0.55 / 0.45, and those are separate facts from the scale.
+- **DONE when:** one named constant, in `src/pure`, with the other two reading it, and a check that fails
+  if a fourth copy appears.

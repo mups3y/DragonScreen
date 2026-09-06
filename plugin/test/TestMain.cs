@@ -337,6 +337,12 @@ public static class TestMain
         // T15b: the embedded MechJeb's HOST rules, checked against the pinned tree itself - the
         // blacklist's substring behaviour (and its collateral), the three [KSPAddon]s staying out
         // of the compile, and the shipped tune. Nothing here loads a core; that needs the game.
+        // S79: the Vehicle Overview's MARGIN column and the pure `Depletion` core under it. The
+        // column was one literal on eight rows; this proves it is computed, and pins the two rows that
+        // dash BY DESIGN for most of a mission in both directions - dash while coasting, countdown
+        // during a burn - which is the only shape that can tell a computed dash from a printed one.
+        bad += Suite(MarginColumnTest.Run);
+
         bad += Suite(MechHostTest.Run);
 
         // S167: a crash is counted and NAMED separately from a failed check. A reader who sees only

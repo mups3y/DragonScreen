@@ -211,6 +211,36 @@ namespace DragonScreen
         /// that are neither booster nor second stage - because the Dracos in those tanks are what flies
         /// the deorbit burn. Null when the vehicle carries no such resource; the page dashes it.</summary>
         public string DeorbitFuelText, DeorbitOxText;
+
+        // ---- S79: THE NUMBERS BEHIND THOSE STRINGS, because a MARGIN cannot be computed from text ----
+        // The four fields above are pre-formatted for the QTY column. The MARGIN column needs the same
+        // quantities as NUMBERS, and a RATE beside each, because the owner's S79-Q1 answer is
+        // time-to-depletion (option selected 2026-09-06, via the overseer).
+        //
+        // ⛔ THESE ARE ZERO IN AN UNFILLED FIXTURE, AND THAT IS HANDLED BY GATING, NOT BY A SENTINEL.
+        // `PageState` is a STRUCT: `new PageState()` zeroes every field, so a "−1 means no source"
+        // convention would be a lie the moment anyone default-constructed one — the value would read 0,
+        // which is a real state. So "is there a source" keeps its EXISTING single answer, the matching
+        // `*Text` field being non-null, and the page gates the MARGIN cell on the same test it already
+        // gates the QTY cell on. One question, one answer, in one place (C7.1).
+        // ⚠ A zero RATE needs no gate: nothing draining is exactly the case `Depletion` dashes for.
+
+        /// <summary>Stored ElectricCharge, in EC. ⚠ The POOL, not a bus: KSP has one, and
+        /// `PowerUnit1Text`/`PowerUnit2Text` above already record why both rows report the same
+        /// charge. Meaningful only when those are non-null.</summary>
+        public double EcUnits;
+
+        /// <summary>The Dragon's own deorbit propellant, in kg — the same tanks
+        /// <see cref="DeorbitFuelText"/> formats, as numbers. Meaningful only when that text is
+        /// non-null.</summary>
+        public double DeorbitFuelKg, DeorbitOxKg;
+
+        /// <summary>How fast that propellant is draining, kg/s, POSITIVE while it drains and zero or
+        /// negative otherwise. ⚠ Measured by the glue as a delta against simulation time, the same way
+        /// `powerFlow` is — so it is zero for all of a coast, which is why the MARGIN cell on these two
+        /// rows dashes for most of a mission. That is the accepted consequence of one currency for the
+        /// whole column (S79), and the dash is COMPUTED from this being zero, never printed.</summary>
+        public double DeorbitFuelFlowKgS, DeorbitOxFlowKgS;
         /// <summary>SYSTEMS TREE, the solar array source node: DEPLOYED / STOWED / PARTIAL / NONE, from
         /// the real ModuleDeployableSolarPanel state. Null before the glue fills it.</summary>
         public string SolarArrayText;
