@@ -22499,3 +22499,69 @@ manifest was written from `(2).zip` and only that twin verifies. Corrected in pl
 
 ⚠ **The EXPOSURE is not closed and is not this line's** — `assets/figma/` is still gitignored and this is
 the second such loss. Logged separately as **[[S183]]**, which is an owner decision, not a build fix.
+
+#### STEP C — the Step A list, walked. Every item closed or explicitly left open
+
+| # | item | outcome | how it was verified / why it is open |
+|---|---|---|---|
+| 1 | [[S180]] | ✅ **CLOSED** | 319/319 exact on name + size + md5; 337 files on disk. Own commit `4d6c98e` |
+| 2 | [[S162]] / `VT-02` | ✅ **CLOSED** | all six of the seven differences that are alignment/layout are laid to `frame59` and **marked tier-2 at their own call sites**; `VrioGeometryTest` pins `no text on this page is centred any more` and that check dies when the title is put back to `Centre` |
+| 3 | QC `F-01` | ✅ **verified still closed** | `FigmaUI.cs:224` and `:242` both call `VrioTestPage.Build`; `previewdiff` renders one page, not two |
+| 4 | [[S160]] | ➡ **2b** | untouched. No `PageState`, no `HitTest`, no LED model — and the file now says so at the plate that moved |
+| 5 | QC `VT-01` | ➡ **2b**, still blocked on **H34** ([[S159]]) | the tint half stays closed; the step-tracking half needs the stranded `StepList` |
+| 6 | **H21** | ➡ **2b** — the SAME item as `VT-01` | §2's duplicate pair, checked. Counted once |
+| 7 | [[S153c]] | ⛔ **stays HELD** on S153c-Q1 | census reads **0 page(s) regressed, 0 improved** and the suite pins 38 text draws |
+| 8 | [[S136]] | ✅ already closed by [[S110]] | not redone |
+| 9 | [[S177]] | ⛔ **not taken** | S177 scopes the frame border to the Cover/Menu units (C1.1) |
+
+#### ⛔ THREE THINGS THE EXPORT SAYS AND THIS UNIT DID **NOT** DO — logged, not smuggled in
+
+Each is a real divergence from `Frame 59`, each was a deliberate refusal, and each is one line of work if the
+owner wants it. **None was left silent, because a divergence nobody wrote down is indistinguishable from an
+oversight to the next reader.**
+
+1. **THE TWO PANEL OUTLINES.** The reference strokes them pure white (raster-sampled, not read off the
+   SVG); this file leaves them `DragonPalette.Panel`. A tint is not geometry, and
+   `dl.Box(PX(48), PY(96), 720, 1700, St(3), Panel)` is shared **verbatim** with `SuitCheckPage`, the
+   sibling procedure page whose template this one is. Whitening one of a matched pair inside a geometry
+   unit would split an idiom on no authority. ⭐ **This is the most visible remaining difference between
+   the render and the reference and it is deliberate** — see Q1 below.
+2. **STEP 5's GLYPH.** The export draws the one incomplete row as `Ellipse 110`, an EMPTY RING; this page
+   draws `ic_check` dimmed. The register already ruled on that exact shape — *"the `White : Dim` pair is
+   `VrioTestPage`'s established idiom and changing the GLYPH would be a new decision, so it was not made
+   here"*. Still not made here.
+3. **NEXT's PLATE STROKE.** The export strokes it `#8489A3`, which IS `Text6` — this page's own `Dim`, and
+   the tint its own comment says it takes *"like its neighbours"*, while the code uses the darker `Hair`.
+   The export and the code's own stated intent agree with each other and disagree with the code. **Not
+   reconciled here** (colour is out of scope and S75 owns these plates); logged so a later chat does not
+   quietly pick one.
+
+⚠ **AND ONE CLAUSE-(2) CALL THAT WENT THE OTHER WAY, RECORDED BECAUSE IT LOOKS LIKE AN OVERSIGHT.** QC filed
+the refresh glyph as `VT-02`'s fourth difference and [[S153c]] said the sibling procedure frame *"has to be
+checked before removing it"*. It did not have to be: **§14.2a clause (2) settles it outright** — *"Absence
+bounds what may be ADDED. It says nothing whatever about what must be REMOVED."* It is absent from the
+export, so it **STAYS**. It keeps its 16 px gap and its centring on the label rather than its absolute x,
+because the label it introduces moved left to the export's column and a glyph frozen at `x=1180` would now
+sit to the *right* of the text it introduces.
+
+#### STEP D — verification
+
+- **`python plugin/build.py test` GREEN.** New suite `VrioGeometryTest`: **96 checks, 0 failed**.
+  R-01 census: **`856 below the floor, 0 page(s) regressed, 0 improved`** — the type did not move, in
+  either direction, which is what [[S153c]] being HELD requires.
+- **MUTATION-PROVED, 9 of 9 killed**, and every kill came from the suite under test rather than from a
+  crash above it (S167): each run reached `VrioGeometryTest`'s own summary line and reported a failure
+  count. `ColX` 982→983 (5 fails) · `InkTopOfLine` .228→.250 (8) · `Rule0` 510→512 (6) · `RulePitch`
+  94→95 (6) · `BtnRight` 2630→2632 (14) · title back to `Centre` (2) · `LeftW` 827→830 (3) · `RailX`
+  2663→2666 (1) · a 39th text draw (1 here **and** the R-01 ratchet, independently).
+  ⭐ **AND THE SUITE READS ITS NUMBERS OFF THE EXPORT, NEVER OFF THE PAGE** — which is the specific
+  failure [[S176]]'s two edits hit twice, where a suite derived from the value under test could not
+  notice that value changing. `VrioTestPage` and `VrioGeometryTest` are two independent transcriptions
+  of one drawing, including a second literal copy of the ink-top ratio.
+- **`previewdiff` against a clean-checkout baseline: `1 CHANGED: ui_vriotest.png`, 126 unchanged, 0 new,
+  0 removed.** Only this page.
+- **Placement residual, measured on the render rather than asserted:** mean **+1.0** design px in x and
+  **−0.8** in y across 16 sampled elements, worst case 2.1 design px — under **1.6 device px** at the
+  shipped 2560x1406. The NEXT plate lands at `x981.2..1254.3, y1590.8..1697.4` against an export box of
+  `x981..1255, y1591..1697`.
+- ⛔ **`install` and glass NOT used** ([[S171]] spent them) — judged on the PNG. **No `git push`.**

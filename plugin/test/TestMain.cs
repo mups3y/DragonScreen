@@ -161,6 +161,11 @@ public static class TestMain
         // can fail.
         bad += Suite(LegibilityFloorTest.Run);
         bad += Suite(SplitReflowTest.Run);
+        // S181 / unit 2a: VrioTestPage is laid out on the Figma export's own coordinates. Every
+        // number in that suite is a literal read off the export, never off the page - see its
+        // header for why (S176's two edits each had the mattering mutation survive a suite that
+        // derived its expectations from the value under test).
+        bad += Suite(VrioGeometryTest.Run);
         bad += Suite(Frame58MapTest.Run);
         bad += Suite(CoverActsTest.Run);
         bad += Suite(BarEventTest.Run);
