@@ -19230,3 +19230,32 @@ items separately"*). Nothing else in that row changed, and no second G11 row was
 **Verified (C1.3).** Governance/docs only — no code changed, so the build/preview gate does not apply
 (C1.3's own carve-out); `build.py test` was run anyway and is **green**. `docs/QC_FINDINGS.md` untouched
 (QC's file). No `install`, no glass. No flight control wired (§14.4(a)).
+
+
+### S168 [S] There is no before/after preview harness in this repo — the one that lied was fixed in PROSE — **DOING** — [opened 2026-09-06 by the continuous build chat, run 3, on the owner's instruction quoted below; TIER 3: harness]
+
+🟢 **AUTHORITY.** Opened on the owner-authorised run-3 prompt, whose instruction is reproduced verbatim
+so a later reader can check it against this line rather than take it on trust:
+
+> **NEW LINE — CODIFY THE BEFORE/AFTER PREVIEW HARNESS IN CODE.** Open it yourself as the next free `S`
+> number, quoting this instruction as its authority. `S130` reported *"0 pages changed"* when the true
+> figure was **74**: the harness reverted MODIFIED files but left the NEW file on disk, the render failed
+> to COMPILE, and it read the unchanged PNGs as "nothing moved" — *"a silent false green produced by the
+> tool meant to prevent one."* **The fix was written into `REGISTER.md` as prose and `8d6880f` changed no
+> code; there is no before/after harness anywhere in this repo.** This is the THIRD verification-instrument
+> failure (S75 tints, H-01 2× width, this). The first two were fixed IN CODE — `S100`'s test parses the cfg
+> itself and cannot drift. **Make this one a `build.py` subcommand that moves ADDED files aside as well as
+> reverting modified ones, and FAILS LOUDLY if either render does not report ok.** A habit does not survive
+> compaction; a subcommand does.
+
+- ⛔ **THE "no harness anywhere" CLAIM WAS CHECKED, NOT ASSUMED** (this run's own rule: `ls` it before
+  citing it). `plugin/tools/` holds exactly `assess_flight.py` and `tuning_db.py`; a grep of `build.py` and
+  both tools for `before.*after` / `worktree` / `stash` returns **nothing**. The only hash comparison in the
+  build is `_same()`, and its sole caller is `install()`. Confirmed: **the harness exists only as a habit.**
+- ⚠ **AND IT IS A HABIT WITH A KNOWN FAILURE MODE**, which is the point. `8d6880f`
+  (*"Correct S130's preview claim: 74 pages changed, not 0 - the harness was lying"*) diagnosed it exactly
+  and changed **no code**: `git show --stat 8d6880f` touches `REGISTER.md` only.
+- **DONE when:** `python plugin/build.py previewdiff` renders a baseline and the working tree, reports the
+  per-page difference by hash, and **cannot report "nothing changed" when a render did not happen** — with
+  that last property proved by a check that runs on every `build.py test`, not by a note asking the next
+  chat to be careful.
