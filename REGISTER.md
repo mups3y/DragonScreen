@@ -16696,12 +16696,65 @@ asked for the previews to show three identical strips — which they do not, and
 rebuild. ⭐ Recorded here rather than quietly dropped: the correctness half is done and the appearance
 half belongs with `F-02`.
 
-### S134b [S] The video page's camera rows draw a selection whose only writer is stranded — **DOING** — [split 2 of 5 of [[S134]]; H12 + QC `VV-02` (part-closed)]
+### S134b [S] The video page's camera rows draw a selection whose only writer is stranded — **DONE 2026-09-06 — the writer was never missing; the PATH to it was** — [split 2 of 5 of [[S134]]; H12 + QC `VV-02` (part-closed)]
 - **The finding.** The camera rows draw a live selection and the only thing that WRITES it is unreachable
   behind `FigmaMode` — the fixture renders, so the drawing is right and the state never moves.
 - ⚠ `VV-02` is **part-closed**: the render half was answered, the stranded writer was not.
 - **DONE when:** the selection has a reachable writer or the rows honestly show that they cannot change,
   with a test that the drawn selection and the written one are the same value.
+
+#### ⭐ DONE 2026-09-06 — and the finding is that the diagnosis was half wrong
+
+QC and H12 both call this a **stranded writer**. ⛔ **`VesselData.SetCameraView` was never stranded**: it
+is live, it validates its argument against the real hull-cam count, and `DockingCamRenderer` reads what it
+sets. What was stranded was the **PATH** to it — its only caller sat in the legacy
+`SettingsPage.HitTest` → `PageAct.SetCamera` dispatch, unreachable under `FigmaMode`.
+
+⭐ So this is a routing fix, not new machinery, and that is also why it is **(A)**: choosing which camera
+a screen shows commands nothing.
+
+- **`SettingsVideoPage.RowRect`** names the geometry the draw already used, and **`HitTest`** reads the
+  same function — the `ChromeBar.LinkRect` rule. The page had **no hit test in the file** at all.
+- **`VisibleCams`** is the SAME clamp the draw applies, asked as a function, so the hit test cannot offer
+  a row that was never painted — *"a button bound to nothing wearing the shape of one that works"*, which
+  is the note `SettingsPage` already carries about this very camera list.
+- **A painter branch on `UiPage.AudioVideo`** dispatches it, and the press is recorded on a new
+  `CrewSurface.Video` / `video.camN` channel. ⚠ The id carries the ROW INDEX, not the camera's name: the
+  name comes from a vessel scan and changes with the craft, so `video.cam2` stays readable against a
+  recording made on a different vehicle.
+
+#### ⛔ TWO MUTATIONS SURVIVED, AND BOTH WERE THE SAME OLD SHAPE
+
+5 mutations, 3 killed at once.
+
+- **W2 — the row pitch drifted off the drawn one — survived TWICE.** It passed the round trip (my probe
+  locates rows with `RowRect`), and then it passed the read-off-the-render check too, because **the draw
+  uses `RowRect` as well** — so the drawn rects and the expected rects moved together. ⭐ Only an
+  INDEPENDENT statement catches it, and the numbers deserve one: 150 / 370 / 560 / 118 are the page's own
+  layout, unchanged by this line, which only gave them a name. Pinned with the same argument
+  `LegibilityFloorTest` makes for `Typography.Min == 16`.
+- **W5 — the letterboxed inverse used on a stretched page — survived** every check at the shipped panel,
+  because the rows are **560 design px wide** and the offset is only ~157 px of error. Caught by adding a
+  second aspect (4416×1406). ⭐ Exactly [[S134a]]'s lesson on the sibling page: **one aspect can never
+  catch a projection bug.**
+
+**All 5 killed after that.**
+
+#### Verified
+
+- **New suite `VideoCamRowsTest`, 23 checks** · `build.py test` green.
+- ⭐ The DONE-when's own clause — *"the drawn selection and the written one are the same value"* — is
+  checked by reading the highlight **off the render**: exactly one row is drawn highlighted, it is
+  `s.CameraView`, and hit-testing that row's own centre returns that same index.
+- ⚠ QC's must-not-break held: `CameraHeldByDocking` takes the FEED, not the LIST — the rows stay visible
+  and selectable while docking holds the camera, and a check pins it.
+- **Preview: 0 pages changed.** Correct and measured: the rows are drawn from the same geometry as before
+  and nothing about the render moved — only that they can now be pressed.
+- comment-loss **0** · no `install`, no glass, no `git push`.
+
+⚠ **H12 groups this with the other stranded settings handlers** (lights, brightness, seat view,
+page-per-display). Those are `SettingsPage`'s and remain [[S134c]]'s territory; only the camera rows are
+re-homed here.
 
 ### S134c [S] The settings page has five layouts and can render exactly one, forever — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 3 of 5 of [[S134]]; QC `A-01`]
 - Five layouts, one reachable. ⚠ Read [[S121c]] first: that line gave this file its RefPanelW pass, so

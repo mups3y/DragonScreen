@@ -48,13 +48,19 @@ namespace DragonScreen
             }
             else
             {
-                for (int i = 0; i < cams.Length && i < 8; i++)
+                int n = VisibleCams(s);
+                for (int i = 0; i < n; i++)
                 {
-                    float by = 370 + i * 150;
+                    // ⭐ S134b: the rect comes from `RowRect`, which `HitTest` also calls — one
+                    // geometry for the drawing and the touch, the `ChromeBar.LinkRect` rule. Before
+                    // this the page had NO hit test at all and the rows were a selection the crew
+                    // could see and not change (QC `VV-02`).
+                    float rx, ry, rw, rh;
+                    RowRect(i, out rx, out ry, out rw, out rh);
                     bool sel = s.CameraView == i;
-                    dl.Rect(PX(150), PY(by), 560 * sx, 118 * sy, sel ? Panel : Bg);
-                    dl.Box(PX(150), PY(by), 560 * sx, 118 * sy, St(sel ? 4 : 2), sel ? Accent : Hair);
-                    L(cams[i], 200, by + 40, 32, sel ? White : Dim);
+                    dl.Rect(PX(rx), PY(ry), rw * sx, rh * sy, sel ? Panel : Bg);
+                    dl.Box(PX(rx), PY(ry), rw * sx, rh * sy, St(sel ? 4 : 2), sel ? Accent : Hair);
+                    L(cams[i], rx + 50, ry + 40, 32, sel ? White : Dim);
                 }
             }
 
@@ -86,6 +92,67 @@ namespace DragonScreen
             SettingsTabStrip.Draw(dl, w, h, 2);
 
             BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+        }
+
+        // =========================================================================================
+        //  S134b / QC VV-02 — THE ROWS BECOME TOUCHABLE
+        // =========================================================================================
+        // ⛔ THE DEFECT: this page read `s.CamLabels` off a real vessel scan and highlighted
+        // `s.CameraView` — a genuinely live list — and had **no `HitTest` in the file**. `FigmaUI`'s
+        // settings branch resolved only the three tabs. So the crew could see which camera was selected
+        // and had no way to select another.
+        //
+        // ⭐ AND THE WRITER WAS NEVER ACTUALLY MISSING. `VesselData.SetCameraView` is live, validates its
+        // argument against the real hull-cam count, and is what `DockingCamRenderer` reads. What was
+        // stranded was the PATH to it: the only caller sat in the legacy `SettingsPage.HitTest` →
+        // `PageAct.SetCamera` dispatch, unreachable under `FigmaMode`. So this is a routing fix, not new
+        // machinery — which is also why it is (A) and not §14.4(a)-blocked: choosing which camera a
+        // screen shows commands nothing.
+        //
+        // ⚠ THE ROW GEOMETRY IS `RowRect`, USED BY BOTH. See the draw loop above.
+
+        /// <summary>Row height and pitch, in the design frame — the reference's own numbers.</summary>
+        public const float RowX = 150f, RowW = 560f, RowH = 118f, RowTop = 370f, RowPitch = 150f;
+
+        /// <summary>The most rows the page will draw, whatever the vehicle carries.</summary>
+        public const int MaxRows = 8;
+
+        /// <summary>Where camera row <paramref name="i"/> is drawn, in design coordinates.</summary>
+        public static void RowRect(int i, out float x, out float y, out float w, out float h)
+        {
+            x = RowX; w = RowW; h = RowH;
+            y = RowTop + i * RowPitch;
+        }
+
+        /// <summary>How many rows this state actually draws. ⛔ The SAME clamp the draw applies, asked
+        /// as a function so the hit test cannot offer a row that was never painted — "a button bound to
+        /// nothing wearing the shape of one that works", which is the note `SettingsPage.HitTest`
+        /// already carries about its own camera list.</summary>
+        public static int VisibleCams(PageState s)
+        {
+            int n = (s.CamLabels == null) ? 0 : s.CamLabels.Length;
+            return (n < MaxRows) ? n : MaxRows;
+        }
+
+        /// <summary>
+        /// Which camera row a touch fell on, or −1.
+        ///
+        /// ⚠ THE PAGE IS STRETCHED, not letterboxed — `PX(x) = x * w / RefW` — so the inverse is the
+        /// same stretch. [[S134a]] is the line about getting that wrong on a sibling page; this one is
+        /// drawn in code and there is only one projection to get right.
+        /// </summary>
+        public static int HitTest(float px, float py, int w, int h, PageState s)
+        {
+            if (w <= 0 || h <= 0) return -1;
+            float dx = px * RefW / w, dy = py * RefH / h;
+            int n = VisibleCams(s);
+            for (int i = 0; i < n; i++)
+            {
+                float rx, ry, rw, rh;
+                RowRect(i, out rx, out ry, out rw, out rh);
+                if (dx >= rx && dx < rx + rw && dy >= ry && dy < ry + rh) return i;
+            }
+            return -1;
         }
     }
 }

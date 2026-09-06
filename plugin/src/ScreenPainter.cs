@@ -633,6 +633,24 @@ namespace DragonScreen
                 rec.ControlId = CrewControlIds.Dock(da);
                 DockAction(da, ref rec);
             }
+            else if (cur == UiPage.AudioVideo)
+            {
+                // ---- S134b / QC VV-02: THE CAMERA ROWS, WHICH HAD NO HIT TEST AT ALL --------------
+                // ⛔ The writer was never missing - `VesselData.SetCameraView` is live and validates
+                // its argument against the real hull-cam count. What was stranded was the PATH: the
+                // only caller sat in the legacy `SettingsPage` dispatch, unreachable under FigmaMode.
+                // ⚠ (A), not §14.4(a): choosing which camera a screen shows commands nothing.
+                PageState vps = VesselData.State;
+                int cam = SettingsVideoPage.HitTest(px, py, w, h, vps);
+                rec.Surface = CrewSurface.Video;
+                rec.EnumValue = cam;
+                rec.ControlId = CrewControlIds.VideoCam(cam);
+                if (cam >= 0)
+                {
+                    rec.Acted = (cam != vps.CameraView);
+                    VesselData.SetCameraView(cam);
+                }
+            }
             else if (cur == UiPage.Hud)
             {
                 // ---- S132 / H11: THE TIMER'S TWO BUTTONS, WHICH HAD NO HIT RECT AT ALL ----------

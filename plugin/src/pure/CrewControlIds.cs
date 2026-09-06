@@ -76,7 +76,9 @@ namespace DragonScreen
         /// these ints and an older file must keep meaning what it meant.</summary>
         Audio = 9,        // SettingsAudioPage.AudioAct
         /// <summary>S132: Frame 58's RESET / START stopwatch. Appended, never renumbered.</summary>
-        Hud = 10          // Frame58Controls.TimerAct
+        Hud = 10,         // Frame58Controls.TimerAct
+        /// <summary>S134b: the Video settings page's camera rows. Appended, never renumbered.</summary>
+        Video = 11        // SettingsVideoPage row index
     }
 
     public static class CrewControlIds
@@ -92,6 +94,7 @@ namespace DragonScreen
         public const string PanelPrefix = "panel.";
         public const string AudioPrefix = "audio.";
         public const string HudPrefix   = "hud.";
+        public const string VideoPrefix = "video.";
 
         /// <summary>
         /// The `control_id` a touch that hit nothing carries. NOT null — the event is written with a
@@ -136,6 +139,16 @@ namespace DragonScreen
         {
             if (b == CoverPage.CoverButton.None) return null;
             return CoverPrefix + Name((int)b, typeof(CoverPage.CoverButton));
+        }
+
+        /// <summary>The Video settings page's camera rows (S134b). ⚠ The id carries the ROW INDEX, not
+        /// the camera's name: the name comes from a vessel scan and changes with the craft, so an event
+        /// naming "video.cam2" stays readable against a recording made on a different vehicle, and the
+        /// label is recoverable from the same scan the row was drawn from.</summary>
+        public static string VideoCam(int row)
+        {
+            if (row < 0) return null;
+            return VideoPrefix + "cam" + row;
         }
 
         /// <summary>Frame 58's stopwatch: RESET and START. ⚠ The value is the ONLY thing on that page
