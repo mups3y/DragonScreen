@@ -16515,7 +16515,7 @@ widens the hit test to swallow it and dies on exactly that.
   changed" here because its before-render failed to compile and it read the stale PNGs as unchanged.
 - `build.py test` green · comment-loss **0** across eight files · no `install`, no glass, no `git push`.
 
-### S164 [S] `CrewPressTest` cannot tell when a control channel is added without a name — **TODO** — [logged by [[S132]] per C1.1, 2026-09-06; TIER 3]
+### S164 [S] `CrewPressTest` cannot tell when a control channel is added without a name — **DOING** — [logged by [[S132]] per C1.1, 2026-09-06; TIER 3]
 - **The finding.** The suite's header says it pins the `control_id` namespace *"exhaustively over every
   value of every one of the seven dispatch types"*. The values are exhaustive; **the seven is not**. It is
   a hardcoded list of calls in `Run`, so a new `CrewSurface` with no namer at all leaves the suite green.
