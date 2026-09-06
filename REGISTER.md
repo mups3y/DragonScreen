@@ -23414,7 +23414,7 @@ x124 to x2530, rising only at the two extreme corners, which neither the panel n
 
 ---
 
-### S193 [O] UNIT 3c — the Vehicle strip made LIVE: navigation, severity colour, and the gauges proven — **DOING** — [owner directive on the [[S192]] preview, 2026-09-07]
+### S193 [O] UNIT 3c — the Vehicle strip made LIVE: navigation, severity colour, and the gauges proven — **DONE 2026-09-07 — ONE real defect in his list (the icons were dim, not white) and three claims that were already wired and are now PROVEN; 5 of 5 mutations killed** — [owner directive on the [[S192]] preview, 2026-09-07]
 
 🟢 **OWNER, 2026-09-07, verbatim**, on the `S192b` preview:
 
@@ -23445,3 +23445,53 @@ open questions, and [[S192]]'s Q1–Q3 stay open.
   item he named is.
 - **DONE when:** the four items are verified and pinned, `test` is green and mutation-proved,
   `previewdiff`'s changed list is reported in full, and the owner has seen the preview.
+
+#### ✅ DONE 2026-09-07 — one defect, three proofs
+
+🟢 **OWNER, 2026-09-07, verbatim**, on the caution tint, after seeing the amber render:
+
+> *"I meant amber the colour you choose is fine"*
+
+**`DragonPalette.Caution` (`#FFB74B`) is unchanged.** His *"turn orange"* was the behaviour, not a new
+colour, and he said so when asked to look — recorded because a later chat reading only the first
+instruction would otherwise "fix" a colour he has now approved.
+
+⛔ **THE ONE REAL DEFECT, AND IT WAS IN THE PART HE POINTED AT.** The icon and the label shared **one**
+colour, and at nominal that colour was `White` only on the **selected** tab. Every other icon was drawn
+`Text6` — the dim tint this build uses for *"no live source behind this"*. So seven of the eight icons
+read as half-dead on a strip where all eight were reporting nominal, **and the dim tint meant two
+different things on the same row**.
+
+⭐ **The two are now split, and the split is the whole point.** The **ICON** carries the SUBSYSTEM'S
+HEALTH — white nominal, `Caution` amber, `Alarm` red — and says it whether or not you are on that tab,
+which is exactly why the real vehicle puts severity on a nav bar (`REAL_DRAGON_SCREENS.md` §2:
+*"displays red when alerts exist in that subview"*). The **LABEL** keeps carrying SELECTION. One glyph,
+two facts, neither borrowing the other's colour.
+⚠ **A dead feed is still not nominal.** The no-severity-data overload keeps the icon **dim** rather than
+asserting white health it was never given — absence of data is not a clean bill, which is the same rule
+`Alarms.GaugeColour` already follows for the rings.
+
+**THE OTHER THREE WERE ALREADY WIRED — what was missing was anything that would catch them breaking.**
+The mapping, the routing (`ScreenPainter` → `FigmaUI.HitTest` → `ApplyNav`), the severity signals and the
+gauges' one-readout construction all existed and all worked. New suite **`VehicleLiveTest`, 72 checks**:
+
+| his words | how it is proven |
+|---|---|
+| *"icons lead to the correct pages"* | ⭐ **A ROUND TRIP, NOT A LOOKUP.** Comparing `VehicleTabBar.Tabs` against `FigmaUI`'s mapping array is worth almost nothing — two lists of the same thing, so a transposition is caught only if the test transposes it back by hand. This presses tab i's **icon**, follows the `NavHit`, **draws that page**, and asserts *that page's own strip* underlines tab i. Two independent pieces of code must agree or the loop breaks |
+| *"white when nominal, turn orange then red"* | asserted on the **Image** commands, per tab, **including the unselected ones** — which is where the defect was — plus a check that 30 % power is still white, so the caution band starts below it and the order he described actually holds |
+| *"like low fuel or power"* | `Alarms.Low` on the real `DragonProp01` / `Power01`, caution ≤25 %, alarm ≤10 %. ⭐ **The check that matters is not that a low tank reddens Prop, but that it reddens Prop AND the `All` roll-up AND NOTHING ELSE** — a severity that leaks across tabs is worse than one that never fires, because it sends the crew to the wrong page |
+| *"all gauges read accurately"* | **fixture-A-vs-fixture-B** ([[S79]]'s idiom). The rings agree with their numbers BY CONSTRUCTION, and a suite that only re-checked that construction would pass just as happily on a page wired to a constant. Two renders under different cabin state; every ring asserted to have **moved**, and to be 300° × its own fraction. Plus: a dead feed empties the ring instead of freezing the last reading |
+
+- **MUTATION-PROVED, 5 of 5 killed:** tab→page map transposed `Prop`↔`Mech` (2 fails) · icon colour
+  reverted to dim-when-unselected (12) · **gauge fill wired to a constant (15)** · `Severities` forced
+  all-Nominal (5) · low-power threshold moved `0.25 → 0.15` (3).
+- **`test` GREEN**, `SELFTEST OK`. **`previewdiff`: 21 CHANGED**, 106 unchanged, 0 new, 0 removed — the
+  Vehicle family, because the strip is shared. **R-01 census `0 regressed`.**
+
+⛔ **WHAT "MAKE IT LIVE" DID *NOT* COVER, each for a reason that was already settled.** The seven
+checklist rows and the four CONNECTIONS rows are reference COPY ([[S22]]) and making them live would
+invent content §1.4 reserves to the owner; the four Orbit-subtank rows are a settled dash (T5/§14.4(e));
+and **flight ACTUATION stays an honest no-op until Part B (§14.4(a))**. Every item he named is a READOUT
+or NAVIGATION, and all of those are now live and pinned.
+
+⚠ **[[S192]]'s Q1–Q3 remain open** — *"that will do for now"* released the LOOK, not the questions.
