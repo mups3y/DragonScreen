@@ -22654,3 +22654,43 @@ gate is the owner's and the overseer's to say, not a build chat's (C1.12). The t
 **Commits:** `7e26213` (DOING + the split + S183) · `4d6c98e` (step 0, S180 closed) · `3e6a2a2` (the
 rebuild + `VrioGeometryTest`) · `abdc39a` (the two owner questions, C1.14) · `3f821d0` (traps 1 and 4) ·
 this one. **No `git push` — the owner pushes from GitHub Desktop.**
+
+---
+
+### S184 [S] Land the owner's original NASA reference art, keyed to transparency and hashed — **DOING** — [owner directive, 2026-09-07; TIER 2: a build INPUT, landed and recorded]
+
+🟢 **OWNER, 2026-09-07, verbatim (C1.12's evidentiary standard):** *"I also have the original nasa art we can
+use for pages. Put these in the resources stash"* — and, on extraction quality, verbatim: *"I do not mind
+having a halo"*.
+
+- **What lands.** Four files from `C:\Users\User\Downloads\`: `crew_dragon_outline.jpg` (3238×1692),
+  `crew_dragon_profile.jpg` (3242×1696), `Interface.png` (1630×941), `Interface (1).png` (1950×1260).
+  All four are white-on-pure-black; corners read `(0,0,0)`.
+- **Keyed, not copied.** `alpha = max(r,g,b)`, colour forced white, `alpha <= 6` fully transparent, then
+  **cropped to the opaque bbox** so the black margin is not shipped. JPEG ringing around the strokes falls
+  below the 6 threshold and disappears.
+- **Where.** `assets/reference/nasa/` — REFERENCE, look-don't-ship (C7.1). ⛔ **NOT**
+  `plugin/GameData/DragonScreen/art/`: nothing draws this art yet, and shipped art is chosen by the unit
+  that uses it. ⛔ Nothing is wired to anything in this task.
+- **Recorded in-repo.** `docs/reference/NASA_REFERENCE_ART.md` — source path, dimensions, md5, opaque %,
+  and the owner quote as provenance, on the model of `docs/reference/FIGMA_ELEMENT_EXPORTS.md`.
+  ⚠ `assets/` is gitignored (`.gitignore:12` covers `assets/reference/`) and **has now been lost twice** —
+  `assets/kenney_ui_scifi` in run 3, and 263 of 337 `assets/figma` files between 2026-09-06 and 09-07.
+  **The manifest's hashes are what made the second recovery possible.** The policy question is [[S183]]'s
+  and is **not** solved here; landing files without hashes is what this clause forbids.
+- **DONE when:** the four files are keyed, cropped and landed under `assets/reference/nasa/`; the manifest
+  names each with its source, size, md5 and opaque %; the owner quote is recorded verbatim; and the
+  per-file opaque percentages are reported so a later chat can tell a good key from a bad one.
+
+#### ⛔ LOGGED, NOT ACTED ON (C1.1) — `discovery7.jpg` EXISTS, OUTSIDE THE REPO
+
+[[S162]] found `REAL_SPACEX_SCREENSHOTS/` absent — checked four ways, including `find . -iname "discovery*"`
+→ **nothing** — and on that absence the owner ruled the `VT-02` default (*absent tier-1 photographs, take
+`frame59`'s alignment and layout as a MARKED tier-2 fill*), which [[S153c]] then applied and which closed
+`VT-02`. **`C:\Users\User\Downloads\discovery7.jpg` exists** (137,386 bytes, 2026-09-06 22:10). At least one
+of the photographs the ruling was made in the absence of is therefore reachable.
+
+⚠ **This may reopen `VT-02` on tier-1 evidence** — the ruling's own option (a) was *"the photograph folder
+added to the repo … and I do the element-by-element pass as ruled"*. ⛔ **NOT DONE HERE, DELIBERATELY:** the
+file was not fetched, not opened, not landed, and `S162` was not re-opened. Reversing a settled decision is
+**C1.14 category 2 — the owner's `OVERRIDE` alone** (C1.8). Marked for him; a build chat decides none of it.
