@@ -19279,7 +19279,7 @@ inheriting this verdict — the mechanism is general, but whether a given page h
 - `python plugin/build.py test` → **ALL SUITES PASSED** with the tree back at HEAD.
 - **No code landed from this line.** No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **TODO** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
+### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **DOING** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `SuitCheckPage.cs` (~~47~~ **54**) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and
   `VrioTest` — one file, two page-views, see [[S110]]) · `ManualChuteDeployPage.cs` (58) ·
   `DeorbitBurnPrepPage.cs` (21) · `EntryPage.cs` (8).
