@@ -21029,6 +21029,12 @@ involved.**
 same warning [[S174]] logged. It is untracked reference art, is not this line's scope, and was not modified
 here. Still flagged so it is not lost quietly.
 
+✅ **APPROVED BY THE OWNER, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"approved, move
+on to the bottom bar"* — the preview was put in front of him (the Cover and the Vehicle page, straight
+from `build.py preview`, unannotated) and passed. **That approval closes THIS unit only.** Under the
+owner's per-page directive the next unit is the BOTTOM BAR itself — un-flattening the five nav icons
+per §14.2a clause (1) — and it is a **separate line in a fresh chat**, not a continuation of this one.
+
 ⚠ **NOTICED, NOT TOUCHED (C1.1): the bottom bar's five nav icons are still the flattened raster.** This
 line swapped the flattened component for a *cleaner* flattened component; it did not un-flatten anything.
 §14.2a clause (1) is satisfied for the bar only when the icons are sliced from the export. That is **unit 1**
