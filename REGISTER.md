@@ -20376,6 +20376,29 @@ build chat does not change it. This is a proposal.
   if a fourth copy appears.
 
 
+### S171 [owner-gated] Install + glass pass — run 4's build onto the glass — **DOING**
+- **Gate (C1.12 evidentiary standard) — recorded as the owner stated it, 2026-09-06, verbatim:**
+  *"we need a install and glass test I feel like we are moving away from the original design"*. That
+  opens `python plugin/build.py install` **and glass time**, for **THIS SESSION ONLY**. It does not
+  survive the session, and this line neither widens it nor inherits anything (C1.12): nothing else is
+  batched here — not [[S18]], not [[S10b]], not [[S153a]]'s six held lines.
+- ⚠ **This VARIES the owner's own 2026-09-05 sequence ruling** (*finish the build → QC → THEN glass*).
+  Recorded as a **deliberate owner resequencing**, not as a line ignoring a settled decision: the owner
+  gave the reason in the same sentence — he wants to check the build against the original design now,
+  rather than after the remaining work compounds on top of it.
+- **Scope of the build chat's half:** clean tree → `python plugin/build.py test` green (counts pasted)
+  → confirm with the owner that **KSP and CKAN are closed** → `python plugin/build.py install` → report
+  what was copied → **STOP**. No other task is started under this gate (it is for this pass, not a
+  widening) — [[S10b]] in particular is NOT built here.
+- ⛔ **The glass pass itself is the OWNER's**, not this chat's. This line does not interpret, pre-empt or
+  answer **S153a-Q1** (the geometry wall governing [[S153a]] · [[S153b]] · [[S153c]] · [[S153d]] ·
+  [[S153e]] · [[S154d]]) — that is what he is going to the capsule to look at, and a build chat deciding
+  it from a PNG is the exact failure C1.12/C1.14 forbid.
+- **DONE when:** `install` has run clean under the quoted gate and the copied DLL + cfg are reported here
+  with what the owner confirmed closed — or, if it could not run, the reason is recorded and the line is
+  left open. **A full KSP restart is required** before the glass pass.
+
+
 ---
 
 # 🟢 RUN 4 — SESSION RECORD, 2026-09-06. Where the continuous build chat got to, and how to resume.
