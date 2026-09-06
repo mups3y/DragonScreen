@@ -19834,7 +19834,7 @@ gives, and Z read as centred. · `build.py test` green · `build.py preview` 119
 module references no `DisplayList` and draws nothing**, which was the line's hard constraint ·
 comment-loss check **0**.
 
-### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
+### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **DOING (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
 - Six readouts, all live and pre-formatted already: `RollDegText`, `PitchDegText`, `YawDegText`,
   `RollRateText`, `PitchRateText`, `YawRateText`. **Zero new data, zero new model** — `DockingSimPage`
   draws the same fields today.
