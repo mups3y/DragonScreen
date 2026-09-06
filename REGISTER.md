@@ -19940,7 +19940,7 @@ the boxes someone remembered.** It counts all six now.
   attitude, six translation — and **no baked number survives anywhere on the frame**.
 - No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
-### S154d [S] Frame 58: the FLIGHT COMMANDS block — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; part §14.4(a))** — [H10]
+### S154d [S] Frame 58: the FLIGHT COMMANDS block — **DOING (UNBLOCKED 2026-09-06 by [[S154a]]; part §14.4(a))** — [H10]
 - ⛔ **This is the one split with a §14.4(a) edge in it.** FLIGHT COMMANDS names controls that would fly
   the vehicle. Until Part B they stay an honest no-op — *click, no light, no action, no red* — so this
   line draws the block's STATE honestly and wires nothing.
