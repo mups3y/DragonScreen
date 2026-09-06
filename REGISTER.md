@@ -20376,7 +20376,7 @@ build chat does not change it. This is a proposal.
   if a fourth copy appears.
 
 
-### S171 [owner-gated] Install + glass pass — run 4's build onto the glass — **DOING**
+### S171 [owner-gated] Install + glass pass — run 4's build onto the glass — **DONE 2026-09-06** (installed clean under the quoted gate; the glass pass itself is the owner's and is NOT done by this chat)
 - **Gate (C1.12 evidentiary standard) — recorded as the owner stated it, 2026-09-06, verbatim:**
   *"we need a install and glass test I feel like we are moving away from the original design"*. That
   opens `python plugin/build.py install` **and glass time**, for **THIS SESSION ONLY**. It does not
@@ -20397,6 +20397,37 @@ build chat does not change it. This is a proposal.
 - **DONE when:** `install` has run clean under the quoted gate and the copied DLL + cfg are reported here
   with what the owner confirmed closed — or, if it could not run, the reason is recorded and the line is
   left open. **A full KSP restart is required** before the glass pass.
+
+**DONE 2026-09-06 — the install half only.**
+- **Pre-flight.** Working tree **clean** at `1d105a7` (the DOING marker, committed before any work).
+  `python plugin/build.py test` **GREEN: 21,441 checks across 58 report lines, 0 failed** — `ALL SUITES
+  PASSED`, then the five post-suite checks (harness fault, event vocabulary 38/38, part-name source 0 bare
+  reads, black-box columns 206/0 writerless, `previewdiff` selftest) and the tool selftests, ending `--- ok`.
+  Only pre-existing warnings (6 × CS0162 in `ScreenPainter.cs`, 4 in test files); nothing new.
+- **KSP + CKAN closed — confirmed BOTH ways** before anything was written: a process scan found no matching
+  process, **and the owner confirmed in-chat** when asked ("Yes — both closed, install"). The scan alone was
+  not treated as the confirmation.
+- **`python plugin/build.py install` ran clean** — re-compiled (MechJeb 245 files → `DragonScreen.Mech.dll`
+  4316.0 KB; plugin 169 files → `DragonScreen.dll` 548.5 KB; tests 194 files), re-ran the full suite green,
+  then copied into
+  `C:\Program Files (x86)\Steam\steamapps\common\Kerbal Space Program\GameData\DragonScreen`, ending
+  `--- ok`. Census at install time unchanged from the run-4 checkpoint: **856 below the floor, 0 regressed,
+  0 improved**.
+- **What is on disk now — verified by SHA-256 against the repo copy, all four MATCH:**
+
+  | file | size | written | note |
+  |---|---|---|---|
+  | `DragonScreen.dll` | 548.5 KB | **2026-09-06 15:32** | the run-4 build — this is the change |
+  | `DragonScreen.Mech.dll` | 4316.0 KB | 2026-09-05 08:04 | rebuilt, bytes identical → skipped as unchanged |
+  | `DragonScreen.cfg` | 10.4 KB | 2026-09-05 23:28 | unchanged this pass |
+  | `SeatSwap.cfg` | 1.9 KB | 2026-08-27 04:06 | unchanged this pass |
+
+  plus `art/`, `sounds/`, `PluginData/` — every asset reported **unchanged**. ⚠ The installer copies only
+  what differs, so the older timestamps are *proof of a match*, not a stale file.
+- ⚠ **KSP NEEDS A FULL RESTART** to pick up the DLL change (the installer says so itself).
+- ⛔ **STOPPED HERE, as scoped.** No other task was started under this gate — [[S10b]] was not built, and
+  **S153a-Q1 was neither interpreted, pre-empted nor answered**: it is the owner's to settle on the glass.
+  The gate does not survive this session.
 
 
 ---
