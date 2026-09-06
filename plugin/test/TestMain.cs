@@ -170,6 +170,11 @@ public static class TestMain
         // as the suite above - every number is a literal, typed from Overview.vue's CSS, the owner's
         // rendered mock and VehicleSubsystemPage's own capsule x, never read off the page.
         bad += Suite(VehicleGeometryTest.Run);
+        // S193 / unit 3c: the strip navigates, warns and reads live. The navigation half is a ROUND
+        // TRIP - press the icon, follow the NavHit, draw that page, and ask its own strip which tab it
+        // underlines - because comparing two mapping arrays only catches a transposition if the test
+        // transposes it back by hand.
+        bad += Suite(VehicleLiveTest.Run);
         bad += Suite(Frame58MapTest.Run);
         bad += Suite(CoverActsTest.Run);
         bad += Suite(BarEventTest.Run);

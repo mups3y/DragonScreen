@@ -41,9 +41,14 @@ namespace DragonScreen
         // i.e. icons about 0.048 of frame height.
         //
         // ⚠ THE MOCK'S Y CANNOT BE COPIED AND THAT IS NOT A DEFECT. The mock has no global bottom bar;
-        // this build does, and `component_48` starts at design y1877. So the panel is fitted into the
-        // band this page actually has (1682..1877) and the icon band is scaled to it. The LABEL row is
-        // untouched at y1812 / size 28 — S153b is HELD on this family's type and nothing here moves it.
+        // this build does. So the panel is fitted into the band this page actually has and the icon band
+        // is scaled to it. The LABEL row keeps its size 28 — S153b is HELD on this family's type and
+        // nothing here moves it.
+        // ⚠ SUPERSEDED IN PLACE, 2026-09-07 (S192b): this paragraph originally said the band was
+        // "1682..1877" because `component_48` "starts at design y1877". The band is now 1778..1973 and
+        // the label row 1908, for the reason the S192b block immediately below sets out — 1877 is the
+        // bar's BOX, not its visible edge, which is 1983. The original wording is kept above rather than
+        // rewritten, because the mistake it records is the whole reason the next block exists.
         //
         // ⛔ THE PANEL'S ENDS ARE ROUNDED, NOT CHAMFERED, and that is a deliberate approximation. The
         // mock cuts a diagonal chamfer at each end; `DisplayList` has no filled-triangle primitive, and
@@ -118,10 +123,37 @@ namespace DragonScreen
                 float cx = CentreX(i);
                 bool on = (i == active);
                 Severity sev = (tabSeverity != null && i < tabSeverity.Length) ? tabSeverity[i] : Severity.Nominal;
-                Rgba col = sev != Severity.Nominal ? Alarms.Colour(sev)
-                         : on ? DragonPalette.White : DragonPalette.Text6;
-                Icon(dl, i, cx * sx, IconCy * sy, IconSize * sy, col);
-                dl.Text(Tabs[i], cx * sx, LabelY * sy, LabelSize * sy, TextAlign.Centre, col);
+
+                // ---- S193: THE ICON IS WHITE AT NOMINAL, WHATEVER THE SELECTION -------------------
+                // 🟢 OWNER, 2026-09-07, verbatim: "Icons in the bar you just moved are white when
+                // nominal, turn orange then red for issues that need the user attention like low fuel
+                // or power etc."
+                //
+                // ⛔ WHAT WAS WRONG. Icon and label shared ONE colour, and at nominal that colour was
+                // `White` only on the SELECTED tab — every other icon was `Text6`, the dim tint this
+                // build uses for "no live source behind this". So seven of the eight icons read as
+                // half-dead on a page where every one of them was reporting nominal, and the dim tint
+                // meant two different things on the same strip.
+                //
+                // ⭐ SO THE TWO ARE SPLIT, AND THE SPLIT IS THE POINT. The ICON carries the SUBSYSTEM'S
+                // HEALTH — white nominal, `Caution` orange, `Alarm` red — and it says that whether or
+                // not you are looking at that tab, which is the whole reason the real vehicle puts
+                // severity on a nav bar (REAL_DRAGON_SCREENS.md §2: "displays red when alerts exist in
+                // that subview"). The LABEL keeps carrying SELECTION, dim for the tabs you are not on,
+                // which is what tells you where you are. One glyph, two facts, neither borrowing the
+                // other's colour.
+                // ⚠ A DEAD FEED IS STILL NOT NOMINAL: `Severities` returns all-Nominal when `s.Valid`
+                // is false, and on that path the icon would go white while the page's gauges dash. So
+                // the caller's severity array being NULL — the "no alert data" overload, used by pages
+                // T5 never wired — keeps the icon dim rather than asserting white health it has not
+                // been given. Absence of data is not a clean bill.
+                bool known = tabSeverity != null && i < tabSeverity.Length;
+                Rgba iconCol = sev != Severity.Nominal ? Alarms.Colour(sev)
+                             : known ? DragonPalette.White : DragonPalette.Text6;
+                Rgba labelCol = sev != Severity.Nominal ? Alarms.Colour(sev)
+                              : on ? DragonPalette.White : DragonPalette.Text6;
+                Icon(dl, i, cx * sx, IconCy * sy, IconSize * sy, iconCol);
+                dl.Text(Tabs[i], cx * sx, LabelY * sy, LabelSize * sy, TextAlign.Centre, labelCol);
                 if (on)
                     dl.Rect((cx - MarkW * 0.5f) * sx, MarkY * sy, MarkW * sx, MarkH * sy,
                             sev != Severity.Nominal ? Alarms.Colour(sev) : DragonPalette.Accent);
