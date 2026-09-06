@@ -19889,7 +19889,7 @@ the correct render is not a check, and only running the mutation shows which one
   clear**, with zero cyan pixels at or past the label.
 - No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
-### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
+### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **DOING (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
 - `OffXText`, `OffYText`, `OffZText`, `RangeText`, `RateText`, `AccelPosText` — again all live and drawn
   correctly on `DockingSimPage` already.
 - ⚠ `#xyz-number` gives `left:14%` and **no top**, so this block needs one more anchor than the attitude
