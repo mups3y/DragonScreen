@@ -22565,3 +22565,34 @@ sit to the *right* of the text it introduces.
   shipped 2560x1406. The NEXT plate lands at `x981.2..1254.3, y1590.8..1697.4` against an export box of
   `x981..1255, y1591..1697`.
 - ⛔ **`install` and glass NOT used** ([[S171]] spent them) — judged on the PNG. **No `git push`.**
+
+## Open questions for the owner (C1.14) — S181
+
+**Q1 — the two content panels: white, as the reference draws them, or `Panel`, as the build does?**
+*Situation.* The page is now laid out on `Frame 59`'s own coordinates. The one visible thing still
+separating the render from the reference is the OUTLINE of the two big content panels: the reference
+strokes both pure white (raster-sampled from `Frame 59.png`, not inferred), this build strokes them
+`DragonPalette.Panel` (`#111B52`), which is nearly the page ground and reads as almost no outline at all.
+⛔ **A tint is not geometry, so this unit did not take it** — and the same call, with the same numbers, is
+shared **verbatim** with `SuitCheckPage`, the sibling procedure page whose template this one is. Changing
+one of a matched pair inside a geometry unit would split an idiom on no authority (C1.8).
+⚠ **This is TASTE, so it is the owner's** (C1.14's third category). No gate, no `OVERRIDE`.
+
+1. **Take the reference's white, on this page only.** *(recommended: it is what the reference does, it is
+   the last big difference between the two drawings, and this page is the one under review. ⚠ It leaves
+   `SuitCheckPage` dim until its own unit reaches it — the two pages will not match for a while.)*
+2. **Take white on BOTH procedure pages now.** Keeps the pair matched. ⚠ It edits a page outside this
+   unit's scope, so it wants saying out loud rather than doing quietly.
+3. **Leave it `Panel`.** The dim outline is the build's own look and the reference is tier-2 for tint.
+   ⚠ Costs the panel edge almost entirely at seat distance.
+
+**Q2 — two smaller divergences, both logged and neither taken. Worth a ruling now or leave them?**
+*Situation.* (a) The export draws the one INCOMPLETE checklist row as an empty ring (`Ellipse 110`); this
+page draws a dimmed tick. The register already called changing that glyph *"a new decision"*, so it was
+not made. (b) The export strokes NEXT's plate `#8489A3` — which IS this page's `Dim`, the tint NEXT's own
+comment says it takes *"like its neighbours"* — while the code uses the darker `Hair`.
+
+1. **Leave both to 2b.** *(recommended: (a) is a state glyph and 2b is the unit that gives this page real
+   state, so it should decide what "not done" looks like when it actually means something; (b) rides on
+   whether NEXT becomes hittable, which is also 2b's.)*
+2. **Rule on them now**, and 2a applies both before the owner signs off on this preview.
