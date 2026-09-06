@@ -16756,7 +16756,7 @@ a screen shows commands nothing.
 page-per-display). Those are `SettingsPage`'s and remain [[S134c]]'s territory; only the camera rows are
 re-homed here.
 
-### S134c [S] The settings page has five layouts and can render exactly one, forever — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 3 of 5 of [[S134]]; QC `A-01`]
+### S134c [S] The settings page has five layouts and can render exactly one, forever — **DOING** — [split 3 of 5 of [[S134]]; QC `A-01`]
 - Five layouts, one reachable. ⚠ Read [[S121c]] first: that line gave this file its RefPanelW pass, so
   the geometry has moved since QC measured it.
 - **DONE when:** every layout is reachable or the unreachable ones are removed with their reasoning kept
