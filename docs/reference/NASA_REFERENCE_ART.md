@@ -220,3 +220,64 @@ Image.fromarray(out, "RGBA").save(dst, optimize=True)
 ```
 
 The `Interface` PNGs are restored by copying the source and cropping to `Image.getbbox()` — no key.
+
+---
+
+## ADDED 2026-09-07 by `S192` — a THIRD render of this page, and the eight tab icons harvested from it
+
+🟢 **OWNER, 2026-09-07, verbatim**, on the first render of the rebuilt subsystem tab strip:
+
+> *"that strip looks shit. Harvest the icons as asset from the example screen"*
+
+**Why a third `Interface` file.** `S184` landed two renders of the Vehicle Overview page. There is a
+**third** in `Downloads` and it is the largest: `Crew Dragon Flight Control UI.png`, 2352x1410, with **no
+outer bezel**, so its usable card is **2352 px wide against `interface_1950x1260.png`'s 1708** — 1.38x the
+resolution. That put the tab icons at **40-45 px instead of 30**, which is why the harvest was taken from
+this file and not from the one already landed. Stored verbatim as RGB (its alpha channel is uniformly
+opaque, so nothing is lost).
+
+| landed file | source | source md5 | source w x h | landed w x h | landed md5 | bytes |
+|---|---|---|---:|---:|---|---:|
+| `interface_2352x1410.png` | `Crew Dragon Flight Control UI.png` | `0eeec498` | 2352x1410 | 2352x1410 | `52898b30` | 3,632,869 |
+
+Full source md5: `0eeec498c1aa44c9bdf9c5791c87eb4b`. Full landed md5: `52898b3080fb3ec57a14a258a826713a`.
+
+### The eight icons — and these SHIP, which none of the art above does
+
+⛔ **THIS IS THE FIRST ENTRY IN THIS MANIFEST THAT GOES TO `plugin/GameData/DragonScreen/art/`.** `S184`
+recorded the rule and the reason it did not apply to it: *"shipped art is chosen by the unit that uses
+it"*. `S192` is that unit, on the owner's direct instruction, so these eight are shipped assets and are
+tracked by git like every other file under `art/cover/`. The manifest row is here anyway, because the
+SOURCE they were cut from is not tracked and without it nobody could re-cut them.
+
+**How they were keyed.** Each icon sits on the tab panel's uniform ground `(26,28,72)`. Alpha is the
+per-channel excess over that ground normalised to white, then **rescaled so each icon's own 99th
+percentile reaches full alpha** — without that step the two icons the source draws in RED (Overview and
+Life) would have keyed out at about 80 % and rendered visibly faded next to the white ones. RGB is then
+forced to **white**, because `VehicleTabBar` tints every icon to its tab's own colour at draw time (T5
+severity), exactly as `ic_check` is already drawn.
+
+⚠ **SQUARE CANVASES, AND THAT IS QC `C-04`.** The source glyphs are not square — Power is 21x40, Avionics
+45x44 — so each is centred on a square canvas of its own longer side and drawn with the same scalar on
+both axes. A glyph-bearing asset that is only ever drawn square cannot be stretched.
+
+⚠ **The source strip has NINE tabs and this build's has EIGHT.** Its Overview/Life/Comms map onto this
+build's All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; **its Comms wifi glyph was
+NOT harvested** — there is no Comms tab to put it on, and T9's eight tabs are confirmed-real and are not
+changed to suit an icon.
+
+| shipped file | our tab | source rect (x, y, w x h) | canvas | ink % | md5 | bytes |
+|---|---|---|---:|---:|---|---:|
+| `ic_tab_all.png` | All | (712, 1309) 34x41 | 47x47 | 43.3 % | `16012267` | 585 |
+| `ic_tab_crew.png` | Crew | (833, 1309) 32x40 | 46x46 | 21.6 % | `f808a942` | 350 |
+| `ic_tab_prop.png` | Prop | (1059, 1309) 30x39 | 45x45 | 28.1 % | `45608613` | 741 |
+| `ic_tab_mech.png` | Mech | (1155, 1308) 40x40 | 46x46 | 31.7 % | `e1a8111b` | 812 |
+| `ic_tab_power.png` | Power | (1272, 1309) 21x40 | 46x46 | 33.6 % | `56216a93` | 383 |
+| `ic_tab_avionics.png` | Avionics | (1377, 1307) 45x44 | 51x51 | 36.1 % | `9ca12838` | 518 |
+| `ic_tab_gnc.png` | GNC | (1491, 1307) 45x44 | 51x51 | 21.6 % | `d097eb45` | 731 |
+| `ic_tab_thermal.png` | Thermal | (1606, 1308) 43x42 | 49x49 | 42.5 % | `f489929f` | 578 |
+
+⚠ **They are UPSCALED on the glass and the number is here rather than hidden:** drawn at 84 design units
+on a 2112-unit frame, they render at **56 device px at the shipped 2560x1406** against a 45-51 px canvas —
+about **1.15x**. That is the best available from any render of this page in the repository, and it is far
+better than the 1.87x the smaller file would have given.

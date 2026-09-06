@@ -312,7 +312,19 @@ namespace DragonScreen
         // design, and a touch target the exact size of the glyphs would be unusable on the glass.
         static readonly float[] TabX = { 150f, 420f };
         static readonly float[] TabW = { 190f, 110f };
-        const float TabTextY = 1760f, TabRuleY = 1798f, TabHitTop = 1736f, TabHitBot = 1820f;
+        // ---- S192, 2026-09-07: MOVED UP, AND THE MOVE WAS FORCED ---------------------------------
+        // These were 1760 / 1798 / 1736 / 1820. The owner asked for the reference's bottom-left button
+        // pair on the Vehicle Overview ("Systems cabin buttons are missing ... replace them with systems
+        // tree and systems p&id buttons"), and `VehicleDeepViewLinks` — which every Vehicle-family page
+        // draws, this one included — now occupies design x124..884, y1700..1851. This toggle sat at
+        // x150..530, y1736..1820: INSIDE it, on both counts.
+        // ⛔ AND IT WAS A DRAW *AND* A HIT COLLISION, WHICH IS THE PART THAT MATTERED. The pills would
+        // have painted over the words (visible on the first render as a stray "S" behind SYS P&ID), and
+        // `FigmaUI` routes `VehicleDeepViewLinks.HitTest` for every vehicle page while `ScreenPainter`
+        // routes `ToggleHit` — so one touch would have resolved two ways. Moving the toggle up clears
+        // both. The left checklist above it ends near y1330 (6 rows at a 195 pitch from 300), so there
+        // is room; the words, their sizes and their hit-band DEPTH are unchanged.
+        const float TabTextY = 1560f, TabRuleY = 1598f, TabHitTop = 1536f, TabHitBot = 1620f;
 
         /// <summary>Which half of the FUNCTIONS | ALERTS toggle a touch hit: 0 FUNCTIONS, 1 ALERTS,
         /// -1 neither. The page it is drawn on decides what to do with that - here it only says where the

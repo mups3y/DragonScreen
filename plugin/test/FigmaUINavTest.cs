@@ -733,6 +733,18 @@ public static class FigmaUINavTest
     /// A gauge's FILL is the second ArcBand at that centre: `Gauge` draws the dim 300-degree track first
     /// and the coloured fill over it, so a fill is any ArcBand that is not drawn in the track's colour.
     /// </summary>
+    /// <summary>How many GAUGE rings are filled — i.e. non-track arcs in the page's CONTENT area.
+    ///
+    /// ⚠ S192 ADDED THE `ContentBelow` BOUND, and it is a real scoping fix rather than a way of making
+    /// a red check go green. The owner asked for the subsystem tab strip to gain "its background and
+    /// icons"; `VehicleTabBar` now draws its panel's rounded ends and eight icon glyphs as ArcBands,
+    /// and this counter — which walked the WHOLE display list — went from 4 to 14 on a page whose
+    /// gauges had not moved. The claim being tested is "one fill per sourced GAUGE", so the tab strip
+    /// was never in scope; nothing had made that explicit because until now nothing else on these pages
+    /// drew an arc. The bound is the tab panel's own top edge (design y1682 of 2112), and these
+    /// fixtures all build at 1406 px, so 1682/2112 x 1406 = 1119.8 device px.</summary>
+    const float ContentBelow = 1119f;
+
     static int RingFills(DisplayList dl)
     {
         int n = 0;
@@ -741,6 +753,7 @@ public static class FigmaUINavTest
         {
             DrawCmd c = dl.At(i);
             if (c.Kind != DrawKind.ArcBand) continue;
+            if (c.B >= ContentBelow) continue;                 // the tab strip's panel and icons
             if (c.Colour.R == track.R && c.Colour.G == track.G && c.Colour.B == track.B) continue;
             n++;
         }
@@ -805,9 +818,23 @@ public static class FigmaUINavTest
         // distinguished FROM are still drawn in Accent and still touchable. If a later task restyles
         // VehicleDeepViewLinks, this reddens and the inert treatment has to be rechosen, not silently
         // lost — which is exactly the failure S75 exists to stop happening again.
-        Check("S75 the two links that ARE touchable stay in the Accent idiom",
-              SameColour(ColourOf(ov, "SYSTEMS TREE"), DragonPalette.Accent) &&
-              SameColour(ColourOf(ov, "SYSTEMS P&ID"), DragonPalette.Accent), "");
+        // ⚠ S192 RESTATED THIS CHECK RATHER THAN DROPPING IT, WHICH IS WHAT THE COMMENT ABOVE DEMANDS.
+        // The owner replaced the two accent words with the reference's own PILL PAIR ("keep "SYSTEMS"
+        // the same as in green box but change "CABIN" to " SYS P&ID""), so the Accent tint they were
+        // being distinguished FROM no longer exists. The distinction did not weaken — it got stronger:
+        // the touchable pair is now drawn as bordered pills with WHITE labels, while SHOW MARGINS TO is
+        // still unbordered text in the inert tint. Both halves are asserted, as before.
+        // ⚠ THE TWO BUTTONS CARRY DIFFERENT TINTS BY DESIGN, so the check is per-pill rather than
+        // shared: the owner asked for SYSTEMS to stay "the same as in green box", which is a solid
+        // white pill, so its LABEL is reversed out in the page ground; SYS P&ID is outlined with a
+        // white label. Neither is the inert tint, and that is the claim S75 actually needs.
+        Check("S192 the lit button's label is reversed out of its white pill",
+              SameColour(ColourOf(ov, "SYSTEMS"), DragonPalette.Background), "");
+        Check("S192 the unlit button's label is White",
+              SameColour(ColourOf(ov, "SYS P&ID"), DragonPalette.White), "");
+        Check("S192 neither touchable button is drawn in SHOW MARGINS TO's inert tint",
+              !SameColour(ColourOf(ov, "SYSTEMS"), DragonPalette.Text6) &&
+              !SameColour(ColourOf(ov, "SYS P&ID"), DragonPalette.Text6), "");
 
         // ---- (2) COVER: the gridicons_refresh glyph ----
         // Phase 0 (Deport & Burn), Earth camera: a plain, non-Reference build, so none of S54's
@@ -2104,35 +2131,47 @@ public static class FigmaUINavTest
             UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal };
         UiPage[] want = { UiPage.SystemsTree, UiPage.SystemsPid };
 
-        float cy = 1815f / RefH * H;   // inside the link band, same row as the tab strip
+        // ---- S192: THE AFFORDANCE MOVED AND CHANGED SHAPE; THE DESTINATIONS DID NOT ----------------
+        // 🟢 OWNER, 2026-09-07, verbatim: "Systems cabin buttons are missing ... we are going to put
+        // replace them with systems tree and systems p&id buttons. So keep "SYSTEMS" the same as in
+        // green box but change "CABIN" to " SYS P&ID"". Two accent words with an underline, parked to
+        // the RIGHT of the tab strip at design x2650/2960 in a y1778..1878 band, became the reference's
+        // bottom-LEFT pill pair at x124..884, y1700..1851.
+        // ⛔ EVERY NUMBER BELOW IS STILL A LITERAL and none is read from VehicleDeepViewLinks, exactly
+        // as before — that is why this suite went red the moment the page moved instead of following it.
+        float cy = 1775f / RefH * H;   // inside the new pill band (1700..1851)
 
         foreach (UiPage vp in vehiclePages)
         {
             for (int i = 0; i < want.Length; i++)
             {
-                // Aim at the same centre Draw uses (link left edge + half its width) — one rect, shared.
-                float cx = (2650f + 155f + i * 310f) / RefW * W;   // X[i] + LinkW*0.5 for i=0,1
+                // Aim at the same centre Draw uses (pill left edge + half its width) — one rect, shared.
+                float cx = (124f + 190f + i * 380f) / RefW * W;   // X0 + PillW*0.5 for i=0,1
                 NavHit hit = FigmaUI.HitTest(vp, cx, cy, W, H);
-                Check(vp + " deep-view link " + i + " (" + want[i] + ") routes",
+                Check(vp + " deep-view button " + i + " (" + want[i] + ") routes",
                       hit.Act == NavAct.Goto && hit.Target == want[i],
                       "got " + hit.Act + " " + hit.Target);
             }
         }
 
-        // The two links must not share a hit region with each other or with the real tab strip's own
-        // rightmost tab (Thermal, index 7) — geometry that would let one touch resolve two ways.
-        float thermalCx = VehicleTabBar.CentreX(7) / RefW * W;
-        NavHit thermal = FigmaUI.HitTest(UiPage.Vehicle, thermalCx, cy, W, H);
-        Check("thermal tab still routes to VehicleThermal (no link overlap)",
-              thermal.Act == NavAct.Goto && thermal.Target == UiPage.VehicleThermal,
-              "got " + thermal.Act + " " + thermal.Target);
-        float gapCx = ((2650f + 260f) + 2960f) * 0.5f / RefW * W;   // midpoint of the gap between links
-        Check("gap between the two links is inert",
-              FigmaUI.HitTest(UiPage.Vehicle, gapCx, cy, W, H).Act == NavAct.None, "");
+        // The pair must not share a hit region with the real tab strip — geometry that would let one
+        // touch resolve two ways. The strip's leftmost tab (All, index 0) is the one at risk now that
+        // the pair sits to its LEFT rather than to the right of Thermal.
+        float allCx = VehicleTabBar.CentreX(0) / RefW * W;
+        NavHit all = FigmaUI.HitTest(UiPage.Vehicle, allCx, cy, W, H);
+        Check("the All tab still routes to Vehicle (no pill overlap)",
+              all.Act == NavAct.Goto && all.Target == UiPage.Vehicle,
+              "got " + all.Act + " " + all.Target);
+        Check("the gap between the pair and the tab strip is inert",
+              FigmaUI.HitTest(UiPage.Vehicle, 888f / RefW * W, cy, W, H).Act == NavAct.None, "");
+        // ⭐ AND WHERE THE LINKS USED TO BE IS NOW INERT — a check that only passes because the hit
+        // region MOVED with the drawing rather than being left behind (trap 3).
+        Check("the pair's OLD position (x2805) no longer routes anywhere",
+              FigmaUI.HitTest(UiPage.Vehicle, 2805f / RefW * W, 1815f / RefH * H, W, H).Act == NavAct.None, "");
 
         // Inert on a non-vehicle page — this is a Vehicle-family affordance, not a global one.
-        Check("deep-view links inert off-vehicle",
-              FigmaUI.HitTest(UiPage.Hud, (2650f + 155f) / RefW * W, cy, W, H).Act == NavAct.None, "");
+        Check("deep-view buttons inert off-vehicle",
+              FigmaUI.HitTest(UiPage.Hud, (124f + 190f) / RefW * W, cy, W, H).Act == NavAct.None, "");
 
         // Both destinations are real pages a crew member can actually land on.
         Check("SystemsTree is a real page, not a placeholder", !FigmaUI.IsPlaceholder(UiPage.SystemsTree), "");

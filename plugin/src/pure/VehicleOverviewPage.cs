@@ -70,6 +70,59 @@ namespace DragonScreen
         /// <summary>No-source dash — the one idiom the whole mod uses for a value nothing can supply.</summary>
         const string Dash = "—";
 
+        // ---- S192 GEOMETRY, 2026-09-07 — every number below is derived, and the derivation is here ----
+        // The owner's five named edits, on the marked-up S185 preview. Sources: `Overview.vue`'s CSS
+        // (assets/reference/dragon2-ui-assets/) and his own rendered mock (assets/reference/nasa/
+        // interface_1950x1260.png, landed and hashed by S184, measured against its 1708x1019 card).
+
+        /// <summary>`dragon_crew.png`'s own pixel size. The capsule's drawn WIDTH is computed from its
+        /// height and this ratio at draw time, so the render is undistorted at every resolution —
+        /// which a pair of design constants cannot be, because this page maps x and y by different
+        /// scales. ⚠ If the art is ever swapped (S185 Q1 has a proven 771x1232 replacement waiting),
+        /// these two must be updated with it or the draw goes back to being a stretch.</summary>
+        const float ArtW = 294f, ArtH = 468f;
+
+        /// <summary>The capsule's ink height as a share of the frame, taken off the owner's mock:
+        /// 468 of its 1019-px card = 0.4593, and 0.4593 x 2112 = 970. The old draw rendered 0.3506 of
+        /// height, which is the "short" half of his "short and fat".</summary>
+        const float CapH = 970f;
+
+        /// <summary>The capsule's top, in design units. NOT the mock's own 0.3405 of height: the mock
+        /// has no global bottom bar and this build's `component_48` starts at y1877, so the taller
+        /// capsule is seated to clear CABIN MICS and the tab strip's panel beneath it. 630 puts its
+        /// ink at 630..1600 with 25 units clear of the big gauges above.</summary>
+        const float CapTop = 630f;
+
+        /// <summary>The small-gauge row. `SmallPitch` is the mock's own 0.1013 of width (347 design
+        /// units) and both offsets are measured from this page's centreline. `SmallInner` is the mock's
+        /// 407 opened to 430 — the smallest value that clears the enlarged capsule's box — and
+        /// `SmallOuter` keeps the mock's pitch above it.</summary>
+        const float SmallInner = 430f, SmallOuter = 778f, SmallCy = 1000f;
+
+        /// <summary>CONNECTIONS' left edge: 932 of 3427 = 0.2719 of width, which is the mock's own
+        /// 0.2722 and `Overview.vue`'s 0.300 to within its own panel padding. It also lands on LOOP A's
+        /// column, exactly as the mock does.</summary>
+        const float ConnX = 932f;
+
+        /// <summary>CABIN MICS. The anchor is the page centreline, so the block reads as centred; the
+        /// label is drawn RIGHT-aligned just before it and the state LEFT-aligned at it, so a dead feed
+        /// shortening the state to a dash moves only the dash. `MicY` clears the capsule's ink bottom
+        /// (1600) above and the tab strip's panel top (1682) below.</summary>
+        const float MicAnchor = 1713.5f, MicY = 1622f;
+
+        /// <summary>The CONSUMABLES card and its type. The owner called the old sizes — label 23,
+        /// value 25, header 24 — "to small"; these are the same table at 34/34/28, inside a bordered
+        /// panel. The columns keep T5's own x's, opened left to 2700 so a 34 px label still clears the
+        /// QTY column: the longest string, "Orbit 1 Subtank Oxidizer", is 24 characters.</summary>
+        /// ⚠ THE COLUMNS WERE OPENED AFTER MEASURING THE FIRST RENDER, NOT BEFORE. At 34 px the longest
+        /// label, "Usable Deorbit Oxidizer", ran to design x3020 while its value started at 3040 — a
+        /// 20-unit gap, which is the S38/S39 label-to-value failure in the opposite direction: too
+        /// close to read as two columns rather than too far. Opened to a 78-unit clearance on that same
+        /// row, with the card's left edge still 8 units clear of NET PWR2's ring.
+        const float ConsX0 = 2620f, ConsX1 = 3412f, ConsTop = 240f, ConsBot = 1640f;
+        const float ConsLabelX = 2665f, ConsQtyX = 3195f, ConsMarginX = 3385f;
+        const float ConsRowSize = 34f, ConsHeadSize = 28f, ConsPitch = 145f;
+
         /// <summary>S148 / S49 H45: the colour a VALUE should draw in — dimmed when it is a dash.
         ///
         /// ⛔ THE POINT IS NOT TIDINESS. A dash drawn in `White` reads with exactly the weight of a live
@@ -197,11 +250,50 @@ namespace DragonScreen
             // gauge is wired to Loop B's live value (T13a) — so reproducing "LOOP A" on both would show two
             // different temperatures under one label. docs/REFERENCE_PAGES.md already documents this pair
             // as LOOP A / LOOP B. Owner's call (C1.4): label the second gauge "LOOP B".
-            dl.Asset("dragon_crew", PX(1453), PY(760), 520 * sx, 760 * sy, White);
-            Gauge(1123, 900,  120, F(s.Cabin.LoopA01),
+            // ---- S192: THE CAPSULE IS THE MOCK'S SIZE AND THE ART'S OWN PROPORTIONS ------------------
+            // 🟢 OWNER, 2026-09-07, verbatim: "our 3d render is short and fat, it should be the same size
+            // and proportions as the one in green box."
+            //
+            // ⛔ "SHORT AND FAT" WAS MEASURABLE AND HE IS RIGHT ON BOTH COUNTS.
+            //   FAT: the old draw was `520 * sx, 760 * sy` — a design box whose DEVICE aspect at the
+            //     shipped 2560x1406 is 0.768 against the art's own 0.628. A 22.2 % horizontal stretch of
+            //     a PNG carrying the SPACEX, NASA and DRAGON wordmarks, which is exactly what QC `C-04`
+            //     forbids. S185 measured it and was told to write it up rather than fix it; this is the
+            //     owner answering that question in favour of the render's own proportions.
+            //   SHORT: on his mock the capsule's ink is 0.4593 of frame height. The old draw rendered
+            //     0.3506. He is asking for it 1.31x taller, which is what `CapH` below is.
+            //
+            // ⭐ AND THE WIDTH IS COMPUTED AT DRAW TIME, WHICH IS THE ONLY THING THAT ACTUALLY FIXES IT.
+            // This page maps x through `sx` and y through `sy`, so a FIXED design box has a
+            // RESOLUTION-DEPENDENT device aspect — at 2560x1406 the same 520x760 reads 0.768, at the
+            // design frame it reads 0.684. Any pair of design constants is therefore wrong at every
+            // resolution but one. The height is design-anchored and the width falls out of it and the
+            // art's own pixel aspect, in DEVICE units — the pattern `Images.FitHeight` and S103's
+            // `BarFit` already use for exactly this reason.
+            float capH = CapH * sy;
+            float capW = capH * (ArtW / ArtH);
+            dl.Asset("dragon_crew", PX(1713.5f) - capW * 0.5f, PY(CapTop), capW, capH, White);
+
+            // ---- S192: THE FOUR SMALL GAUGES ARE ONE ROW, FLANKING THE CAPSULE ----------------------
+            // 🟢 OWNER, 2026-09-07, verbatim: "Loop a loop b net pwr 1 net pwr 2 need to be arranged in
+            // the same layout" — i.e. the mock's, which is one row of four rather than two stacks of two.
+            // This closes [[S186]], which measured the divergence and left it for him.
+            //
+            // ⛔ THE POSITIONS ARE DERIVED, NOT PICKED. Both of this page's sources agree on this row to
+            // within 1.5 %: `Overview.vue` puts the four `#sub-sub-slot` divs at 0.25 / 0.35 / 0.65 /
+            // 0.75 of screen width (a 0.100 pitch), and the mock renders them at 0.2749 / 0.3762 /
+            // 0.6139 / 0.7155 (a 0.1013 pitch). `SmallPitch` below is the mock's, and the pair is
+            // symmetric about this page's own centreline rather than about the mock's 0.4952 — the
+            // centreline S185 put everything else on.
+            // ⚠ ONE ADJUSTMENT, AND IT IS STATED RATHER THAN HIDDEN: the mock's inner offset is 0.1187
+            // of width (407 design units), which at the capsule's NEW width would put the two inner
+            // rings 21 units INSIDE its box. `SmallInner` is 430 — the smallest offset that clears the
+            // enlarged capsule — and `SmallOuter` keeps the mock's pitch above it. The alternative was
+            // to shrink the capsule, which is the thing the owner asked to make bigger.
+            Gauge(1713.5f - SmallOuter, SmallCy, 120, F(s.Cabin.LoopA01),
                   GC(Alarms.Band(s.Cabin.LoopAC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm)),
                   "LOOP A", T(s.LoopAText), "°C");
-            Gauge(1123, 1200, 120, F(s.Cabin.LoopB01),
+            Gauge(1713.5f - SmallInner, SmallCy, 120, F(s.Cabin.LoopB01),
                   GC(Alarms.Band(s.Cabin.LoopBC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm)),
                   "LOOP B", T(s.LoopBText), "°C");
             // Net power is SIGNED — the sign lives in the printed number, the ring shows how hard the
@@ -210,43 +302,96 @@ namespace DragonScreen
             // power — a severity here would mean "discharging faster than X" and no X exists. Accent is
             // this build's "a reading, not a verdict" colour, and inventing a threshold to justify a
             // colour is the defect V-01 removes, not a smaller version of the fix.
-            Gauge(2303, 900,  120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent, "NET PWR1", T(s.NetPwr1Text), "W");
-            Gauge(2303, 1200, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent, "NET PWR2", T(s.NetPwr2Text), "W");
+            Gauge(1713.5f + SmallInner, SmallCy, 120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent,
+                  "NET PWR1", T(s.NetPwr1Text), "W");
+            Gauge(1713.5f + SmallOuter, SmallCy, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent,
+                  "NET PWR2", T(s.NetPwr2Text), "W");
 
             // ---- CONNECTIONS (left of the capsule base) ----
             // S22: "Connected" / "RECORDING" are reference COPY too, same as the checklist above — dash
             // and dim them on a dead feed rather than let a confident green/red word sit beside dashed
             // gauges. The row labels and the CONNECTIONS/CABIN MICS section labels are untouched.
-            L("CONNECTIONS", 1130, 1440, 26, Accent);
+            // ---- S192: THIS BLOCK MOVED, AND THE MOVE WAS FORCED RATHER THAN CHOSEN -----------------
+            // The owner named five edits and this was not one of them; his green box covers it, and his
+            // OWN change makes it unavoidable. The capsule he asked to enlarge now spans design x
+            // 1405..2022, and CONNECTIONS' values sat at x1400 — they would overlap. So the block goes
+            // to the x BOTH of this page's sources already put it at, which is also where [[S189]]
+            // measured it should be: `Overview.vue` has `.connections-panel { left: 35%; width: 10% }`,
+            // i.e. a left edge at 0.300 of width, and the mock renders its left edge at 0.2722. 932
+            // design units is 0.2719 — the mock's, to three decimal places.
+            // ⭐ AND IT LANDS ON LOOP A'S OWN COLUMN, which is what the mock does too: mock CONNECTIONS
+            // left 0.2722 against mock LOOP A centre 0.2749. Here 932 against 935.5.
+            // ⚠ THE ROWS ALSO MOVED UP, for the same forced reason: the tab strip's new panel starts at
+            // design y1682 (VehicleTabBar), and the old last row sat at 1668 with its ink below that.
+            L("CONNECTIONS", ConnX, 1330, 26, Accent);
             string[] cn = { "Manual Rings", "Changelog", "Airlock", "Wing" };
             for (int i = 0; i < 4; i++)
             {
-                L(cn[i], 1130, 1500 + i * 56, 24, White);
-                L(T("Connected"), 1400, 1500 + i * 56, 24, valid ? Go : Dim);
+                L(cn[i], ConnX, 1390 + i * 56, 24, White);
+                L(T("Connected"), ConnX + 270f, 1390 + i * 56, 24, valid ? Go : Dim);
             }
-            L("CABIN MICS:", 1130, 1748, 26, White);
+            // ---- S192: CABIN MICS IS CENTRED UNDER THE CAPSULE, WHICH IS WHERE BOTH SOURCES PUT IT ---
+            // The second forced move. It sat left-aligned at x1130, y1748 — and y1748 is now inside the
+            // tab strip's panel (1682..1877), so it could not stay. `Overview.vue` has
+            // `#dragon-main-heading { top: 82.5%; left: 50%; transform: translate(-50%,-50%) }` and the
+            // mock renders the block centred at 0.5003 of width; [[S189]] measured this build at 0.3729,
+            // a −0.127-of-width divergence and the largest single one left on the page. Centring it
+            // closes that item as a side-effect of clearing the panel.
+            // ⛔ IT IS TWO DRAWS WITH TWO TINTS AND THE SECOND CHANGES WIDTH WITH THE FEED, so it cannot
+            // be centred by shifting an x. The label is drawn RIGHT-aligned to a fixed anchor and the
+            // state LEFT-aligned just past it: the anchor is what is centred, the label's right edge is
+            // therefore fixed, and a dead feed shortening "RECORDING" to a dash moves only the dash.
+            // A block centred on the live string would jump left when the feed died, which is worse.
+            R("CABIN MICS:", MicAnchor - 16f, MicY, 26, White);
             // ---- S105 / QC V-02: RECORDING IS A STATE, NOT A FAULT ----
             // This was drawn in `Red` - the alarm colour - for a recorder that is working. §14.4(a): no
             // red for something that is not a fault, and CLAUDE.md quotes that rule for exactly this
             // reason. It reads `Go` now, matching the four `Connected` rows immediately above it: they
             // are the same kind of thing, a state that is currently true, and the block should read as
             // one. A FAILED recorder would be the red case, and nothing models one.
-            dl.Text(T("RECORDING"), PX(1290), PY(1748), SZ(26), TextAlign.Left, valid ? Go : Dim);
+            dl.Text(T("RECORDING"), PX(MicAnchor), PY(MicY), SZ(26), TextAlign.Left, valid ? Go : Dim);
 
             // ---- RIGHT: CONSUMABLES table (T5) ----
-            L("CONSUMABLE", 2760, 300, 24, Accent);
-            R("QTY", 3160, 300, 24, Accent);
-            R("MARGIN", 3360, 300, 24, Accent);
+            // ---- S192: BIGGER TYPE, AND A BLOCK INSTEAD OF EIGHT LOOSE ROWS -------------------------
+            // 🟢 OWNER, 2026-09-07, verbatim: "The consumable list on the right hand side text is to
+            // small and the whole list looks plain and out of place."
+            //
+            // ⭐ THIS IS THE RULING [[S153b]] HAS BEEN HELD WAITING FOR, ON THIS BLOCK. R-01's census
+            // counts draws BELOW the legibility floor, and this table was the second-worst offender on
+            // the page: `docs/QC_FINDINGS.md` measures its rows at `SZ(23)` = 7.7 mm, 48 % of the floor,
+            // and the header/values at 24/25. The owner has now said in as many words that it is too
+            // small. ⛔ So the census will read IMPROVED, not regressed — which is the one direction
+            // S153b's hold was never about, since nothing here takes a draw further below the floor.
+            // ⚠ [[S153b]] IS NOT CLOSED BY THIS. It owns 441 draws across eight page-views; this moves
+            // the twenty-seven in this table and nothing else. Its own question stands.
+            //
+            // ⛔ AND "PLAIN AND OUT OF PLACE" IS THE OTHER HALF, WHICH TYPE ALONE DOES NOT FIX. Every
+            // other block on this page is bounded — the gauges by their rings, the checklist by its
+            // icons, the capsule by its own silhouette — and this one was eight rows of loose text
+            // floating on the ground with a hairline under each. It now sits on a panel with a border
+            // and a ruled header, the same construction `DragonPalette.Panel` + `Strokes.Px` gives
+            // every other card in this build. The COLUMNS and the CONTENT are untouched: T5 settled
+            // what this table says, [[S79]] settled what MARGIN computes, and neither is reopened here.
+            float cardX = PX(ConsX0), cardY = PY(ConsTop);
+            float cardW = (ConsX1 - ConsX0) * sx, cardH = (ConsBot - ConsTop) * sy;
+            dl.Rect(cardX, cardY, cardW, cardH, Panel);
+            dl.Box(cardX, cardY, cardW, cardH, Strokes.Px(2f, sy), Faint);
+            L("CONSUMABLE", ConsLabelX, 300, ConsHeadSize, Accent);
+            R("QTY", ConsQtyX, 300, ConsHeadSize, Accent);
+            R("MARGIN", ConsMarginX, 300, ConsHeadSize, Accent);
+            dl.Rect(PX(ConsLabelX), PY(348), (ConsMarginX - ConsLabelX) * sx, SZ(3), Accent);
             for (int i = 0; i < ConsLabel.Length; i++)
             {
-                float y = 360 + i * 145;
+                float y = 400 + i * ConsPitch;
                 string qty = valid ? Qty(i, s) : null;
                 string margin = valid ? Margin(i, s) : null;
-                L(ConsLabel[i], 2760, y, 23, White);
-                R(qty ?? Dash, 3160, y, 25, string.IsNullOrEmpty(qty) ? Dim : White);
-                R(margin ?? Dash, 3360, y, 25,
+                L(ConsLabel[i], ConsLabelX, y, ConsRowSize, White);
+                R(qty ?? Dash, ConsQtyX, y, ConsRowSize, string.IsNullOrEmpty(qty) ? Dim : White);
+                R(margin ?? Dash, ConsMarginX, y, ConsRowSize,
                   string.IsNullOrEmpty(margin) || margin == Dashes.None ? Dim : White);
-                dl.Rect(PX(2760), PY(y + 30), 600 * sx, SZ(2), Faint);
+                if (i < ConsLabel.Length - 1)
+                    dl.Rect(PX(ConsLabelX), PY(y + ConsRowSize + 14f),
+                            (ConsMarginX - ConsLabelX) * sx, SZ(2), Faint);
             }
             // ---- S75: "SHOW MARGINS TO" IS NOT A CONTROL, SO IT MUST NOT BE PAINTED AS ONE ----
             // The reference render carries this as a toggle (SCREEN_INVENTORY.md's DillonBaird alt-text
@@ -263,7 +408,7 @@ namespace DragonScreen
             // checklist), which is exactly what this is until S76 lands. When the MARGIN column reads
             // modelled margins and a target set is settled, this goes back to Accent AND gains a rect —
             // the two happen together or not at all. Pinned by FigmaUINavTest.
-            L("SHOW MARGINS TO", 2760, 360 + ConsLabel.Length * 145 + 30, 24, Dim);
+            L("SHOW MARGINS TO", ConsLabelX, 400 + ConsLabel.Length * ConsPitch + 10f, ConsHeadSize, Dim);
 
             // ---- subsystem tab bar (All active) + bottom status bar ----
             // The real Vehicle page carries the eight-subsystem strip (VehicleTabBar); "All" is this

@@ -52,17 +52,28 @@ public static class VehicleGeometryTest
     /// on, typed as a literal so a mutation to the page's own 1713 cannot hide behind it.</summary>
     const float CentreFrac = 0.5f;
 
-    /// <summary>The capsule slot, in design units. LITERALS: `VehicleSubsystemPage` uses 1453 and a
-    /// 520x760 box, and this page must match it asset-for-asset.</summary>
-    const float SlotX = 1453f, SlotW = 520f, SlotY = 760f, SlotH = 760f;
+    /// <summary>The capsule, in design units. ⚠ S192 REPLACED THE SLOT WITH A HEIGHT: the owner ruled
+    /// the render "short and fat ... it should be the same size and proportions as the one in green
+    /// box", so the draw is now anchored on its HEIGHT and takes its width from the art's own aspect at
+    /// draw time. `CapH` is his mock's own figure — the capsule's ink is 468 of that render's 1019-px
+    /// card, 0.4593 of frame height, and 0.4593 x 2112 = 970. `CapTop` seats it clear of the big gauges
+    /// above and CABIN MICS below.</summary>
+    const float CapH = 970f, CapTop = 630f;
 
-    /// <summary>`dragon_crew.png` is 294x468 on disk. Typed here so the SLOT ASPECT QUESTION S185
-    /// raised cannot be closed by accident: 520/760 = 0.6842 against the art's 294/468 = 0.6282, and
-    /// at the shipped 2560x1406 that is a 22.2 % horizontal stretch of a PNG carrying the SPACEX,
-    /// NASA and DRAGON wordmarks — QC `C-04`'s rule. ⛔ NOT FIXED IN S185, deliberately: the prompt
-    /// ruled the slot aspect "a real question — write it up, do not do it quietly", and the same slot
-    /// is drawn by the sibling page. This constant is here so the number stays visible.</summary>
+    /// <summary>`dragon_crew.png` is 294x468 on disk, and this is now the CHECK rather than a note.
+    /// ⭐ S185 measured the old draw as a 22.2 % horizontal stretch of a PNG carrying the SPACEX, NASA
+    /// and DRAGON wordmarks — QC `C-04`'s rule — and was told to write it up rather than fix it. S192 is
+    /// the owner fixing it, in his own words. The assertion below therefore tests the DEVICE aspect of
+    /// the drawn box against this ratio, which is the only form of the check that means anything: this
+    /// page maps x through sx and y through sy, so a fixed pair of design constants has a DIFFERENT
+    /// device aspect at every resolution, and the suite runs at the design frame while the mod ships at
+    /// 2560x1406. A page that passed by luck at one size would fail here at the other.</summary>
     const float ArtW = 294f, ArtH = 468f;
+
+    /// <summary>The small-gauge row (S192, closing S186). `SmallPitch` is the mock's own 0.1013 of
+    /// width = 347 design units; the offsets are from the page centreline. Typed from the mock, not
+    /// read from the page.</summary>
+    const float SmallInner = 430f, SmallOuter = 778f, SmallPitch = 348f, SmallCy = 1000f;
 
     /// <summary>The big-gauge pitch this build draws. UNCHANGED by S185 and pinned as unchanged —
     /// see the header on why it is not pinned as *correct*.</summary>
@@ -133,17 +144,25 @@ public static class VehicleGeometryTest
         // asset in the same box at x 1453. All three agree, and this page used to draw it at 1560.
         float ax, ay, aw, ah;
         Check("the capsule asset is drawn", Capsule(dl, out ax, out ay, out aw, out ah), "no dragon_crew");
-        Near("capsule slot x (= VehicleSubsystemPage's own 1453)", ax, SlotX, 0.6f);
-        Near("capsule slot y", ay, SlotY, 0.6f);
-        Near("capsule slot width", aw, SlotW, 0.6f);
-        Near("capsule slot height", ah, SlotH, 0.6f);
-        Near("capsule slot CENTRE is the page centreline", ax + aw * 0.5f, centre, 0.6f);
+        Near("capsule top y", ay, CapTop, 0.6f);
+        Near("capsule height is the mock's own 0.4593 of frame height", ah, CapH, 0.6f);
+        Near("capsule CENTRE is the page centreline", ax + aw * 0.5f, centre, 0.6f);
 
-        // ⚠ THE SLOT ASPECT IS RECORDED, NOT ASSERTED CORRECT. This is the open question, pinned so a
-        // later chat that changes the slot has to come past this line and read why.
-        Check("the slot is still the 520x760 the aspect question is ABOUT",
-              Math.Abs(SlotW / SlotH - 0.684f) < 0.001f && Math.Abs(ArtW / ArtH - 0.628f) < 0.001f,
-              "slot " + (SlotW / SlotH) + " vs art " + (ArtW / ArtH));
+        // ⭐ THE ASPECT IS NOW ASSERTED, NOT MERELY RECORDED — S192, on the owner's ruling. And it is
+        // asserted TWICE, at two resolutions, because that is the only way the check can fail for the
+        // right reason: this page maps x by sx and y by sy, so a fixed design box has a different
+        // device aspect at every size. A single-resolution check would pass a page that is undistorted
+        // here and stretched on the glass, which is exactly the state S185 measured and reported.
+        Near("the drawn capsule has the ART's aspect at the design frame", aw / ah, ArtW / ArtH, 0.002f);
+        DisplayList ship = new DisplayList(VehicleOverviewPage.Commands + BottomBar.Commands + 64);
+        PageState sp = new PageState(); sp.Valid = true;
+        VehicleOverviewPage.Build(ship, 2560, 1406, sp);
+        float bx, by, bw, bh;
+        Check("the capsule is drawn at the shipped size too",
+              Capsule(ship, out bx, out by, out bw, out bh), "no dragon_crew at 2560x1406");
+        Near("and it has the ART's aspect THERE too (the 22.2 % stretch is gone)",
+             bw / bh, ArtW / ArtH, 0.002f);
+        Near("and it is still centred at the shipped size", (bx + bw * 0.5f) / 2560f, CentreFrac, 0.001f);
 
         // ---- 2. THE FOUR BIG GAUGES ---------------------------------------------------------------
         float g0 = Label(dl, "PPO2"),  g1 = Label(dl, "CABIN TEMP");
@@ -154,16 +173,29 @@ public static class VehicleGeometryTest
         Near("big-gauge pitch is UNCHANGED (1 -> 2)", g2 - g1, BigPitch, 0.6f);
         Near("big-gauge pitch is UNCHANGED (2 -> 3)", g3 - g2, BigPitch, 0.6f);
 
-        // ---- 3. THE FOUR SMALL GAUGES -------------------------------------------------------------
-        // LOOP A/B share one column and NET PWR1/2 the other, so the check is that the two columns are
-        // equidistant from the centreline — the symmetry the ±330 gaps around the capsule encode.
+        // ---- 3. THE FOUR SMALL GAUGES — ONE ROW, NOT TWO STACKS (S192, closing S186) ---------------
+        // 🟢 OWNER, 2026-09-07: "Loop a loop b net pwr 1 net pwr 2 need to be arranged in the same
+        // layout" — the mock's, which is one row of four flanking the capsule. Both of this page's
+        // sources agree on that row to within 1.5 % (Overview.vue 0.100 of width pitch, the mock
+        // 0.1013), so the pitch below is a source figure and not a preference.
         float la = Label(dl, "LOOP A"), lb = Label(dl, "LOOP B");
         float n1 = Label(dl, "NET PWR1"), n2 = Label(dl, "NET PWR2");
-        Near("LOOP A and LOOP B share one column", la, lb, 0.6f);
-        Near("NET PWR1 and NET PWR2 share one column", n1, n2, 0.6f);
-        Near("the two small-gauge columns are centred on the centreline", (la + n1) * 0.5f, centre, 0.6f);
-        Near("LOOP column clears the capsule by the same gap the NET PWR column does",
-             SlotX - la, n1 - (SlotX + SlotW), 0.6f);
+        Near("LOOP A is the outer left gauge", la, centre - SmallOuter, 0.6f);
+        Near("LOOP B is the inner left gauge", lb, centre - SmallInner, 0.6f);
+        Near("NET PWR1 is the inner right gauge", n1, centre + SmallInner, 0.6f);
+        Near("NET PWR2 is the outer right gauge", n2, centre + SmallOuter, 0.6f);
+        Near("the small-gauge pitch is the mock's own", lb - la, SmallPitch, 0.6f);
+        Near("and the same on the right", n2 - n1, SmallPitch, 0.6f);
+        Near("the row is centred on the centreline", (la + n2) * 0.5f, centre, 0.6f);
+        Check("all four small gauges are on ONE row, not two stacks",
+              Math.Abs(la - lb) > 300f && Math.Abs(n1 - n2) > 300f,
+              "LOOP A/B dx " + (lb - la) + ", NET PWR dx " + (n2 - n1));
+        // ⭐ AND THE INNER PAIR CLEARS THE ENLARGED CAPSULE. This is the check that would have caught
+        // the collision the bigger render creates: at the mock's own 407-unit inner offset the rings
+        // would overlap its box, which is why the page opens it to 430.
+        Check("the inner rings clear the capsule's box on both sides",
+              (centre - SmallInner) + SmallR <= ax + 1f && (centre + SmallInner) - SmallR >= ax + aw - 1f,
+              "LOOP B right " + ((centre - SmallInner) + SmallR) + " vs capsule left " + ax);
 
         // ---- 4. THE TITLE THE CENTRELINE WAS TAKEN FROM -------------------------------------------
         // The page has always centred its title at 1713. The defect S185 fixed was that nothing else
@@ -177,7 +209,7 @@ public static class VehicleGeometryTest
         // A translation must not have become a resize. The rings are ArcBands at the gauge centres;
         // assert one of each size sits at the expected radius, centred where its label is.
         Check("a big ring of radius 175 sits under PPO2", Ring(dl, g0, 430f, BigR), "");
-        Check("a small ring of radius 120 sits under LOOP A", Ring(dl, la, 900f, SmallR), "");
+        Check("a small ring of radius 120 sits under LOOP A", Ring(dl, la, SmallCy, SmallR), "");
 
         // ---- 6. THE DEAD-FEED PATH STILL DRAWS THE SAME GEOMETRY ----------------------------------
         // S22's guard changes the STRINGS, never the places. If a future edit gates a coordinate on
@@ -185,10 +217,67 @@ public static class VehicleGeometryTest
         DisplayList dead = Built(false);
         float dax, day, daw, dah;
         Check("the capsule is drawn on a dead feed too", Capsule(dead, out dax, out day, out daw, out dah), "");
-        Near("dead-feed capsule x is unmoved", dax, SlotX, 0.6f);
+        Near("dead-feed capsule x is unmoved", dax, ax, 0.6f);
+        Near("dead-feed capsule width is unmoved", daw, aw, 0.6f);
         float dsz; bool dok;
         Near("dead-feed PPO2 label x is unmoved", CentredX(dead, "PPO2", out dsz, out dok), g0, 0.6f);
         Check("dead-feed PPO2 label was found", dok, "");
+
+        // ---- 7. S192: THE BOTTOM-LEFT CONTROLS MUST NOT OVERLAP EACH OTHER ------------------------
+        // ⛔ THIS CHECK EXISTS BECAUSE THE COLLISION HAPPENED. The owner's button pair went in at design
+        // x124..884, y1700..1851, and `VehicleSubsystemPage`'s FUNCTIONS | ALERTS toggle was sitting at
+        // x150..530, y1736..1820 — inside it. Nothing caught that: it was found by eye on a sibling
+        // page's render, as a stray "S" painted behind the SYS P&ID pill. It was a HIT collision too —
+        // `FigmaUI` routes the pills for every vehicle page while `ScreenPainter` routes the toggle, so
+        // one touch resolved two ways — and a paint-order accident is what made it visible at all.
+        // ⚠ The numbers are literals on BOTH sides on purpose. Reading either rect from the code under
+        // test would let the two move together into a new overlap and keep this green.
+        // ⛔ AND THE TWO RECTS ARE PROBED FROM THE CODE, NOT TYPED IN — which is the opposite of this
+        // suite's usual rule and is right HERE for a reason worth recording. A first version compared
+        // two sets of literals and a mutation that moved the pills straight back on top of the toggle
+        // SURVIVED it: literals on both sides test that the DESIGN does not overlap, never that the
+        // CODE still matches the design. A collision check has to read where the two things actually
+        // are. `Rect` is the same function `Draw` and `HitTest` share, and the toggle band is found by
+        // asking `ToggleHit` itself where it answers.
+        float p0x, p0y, p0w, p0h, p1x, p1y, p1w, p1h;
+        VehicleDeepViewLinks.Rect(0, out p0x, out p0y, out p0w, out p0h);
+        VehicleDeepViewLinks.Rect(1, out p1x, out p1y, out p1w, out p1h);
+        float pillL = Math.Min(p0x, p1x), pillR = Math.Max(p0x + p0w, p1x + p1w);
+        float pillT = Math.Min(p0y, p1y), pillB = Math.Max(p0y + p0h, p1y + p1h);
+
+        // Sweep the toggle's own answer to find the band it claims, in design units.
+        float togL = float.MaxValue, togR = float.MinValue, togT = float.MaxValue, togB = float.MinValue;
+        for (int dy = 1400; dy < 1900; dy += 2)
+            for (int dx = 100; dx < 900; dx += 2)
+                if (VehicleSubsystemPage.ToggleHit(dx * W / (float)W, dy * H / (float)H, W, H) >= 0)
+                {
+                    if (dx < togL) togL = dx;
+                    if (dx > togR) togR = dx;
+                    if (dy < togT) togT = dy;
+                    if (dy > togB) togB = dy;
+                }
+        Check("the FUNCTIONS|ALERTS toggle still claims a band at all", togL < togR, "none found");
+        bool xOverlap = togL < pillR && togR > pillL;
+        bool yOverlap = togT < pillB && togB > pillT;
+        Check("the deep-view pills and the FUNCTIONS|ALERTS toggle do not overlap",
+              !(xOverlap && yOverlap),
+              "pills x" + pillL + ".." + pillR + " y" + pillT + ".." + pillB +
+              "  toggle x" + togL + ".." + togR + " y" + togT + ".." + togB);
+        Check("...and the clearance is in Y, which is how it is actually achieved",
+              togB <= pillT, "toggle bottom " + togB + " vs pill top " + pillT);
+        // ⛔ AND THE PILLS MUST SIT ABOVE THE GLOBAL BOTTOM BAR. `component_48` starts at design y1877
+        // and BottomBar draws over everything, so a pill that runs past it is half-hidden on the glass
+        // and its lower half is a touch target the crew cannot see. 1877 is a literal here because it
+        // belongs to the BAR, which this page does not own and must not be read from.
+        Check("the deep-view pills sit clear of the global bottom bar",
+              pillB <= 1877f, "pill bottom " + pillB + " vs bar top 1877");
+        Check("...and so does the tab strip's own panel",
+              1877f >= pillB, "");
+
+        // The pills must also clear the tab strip's leftmost hit edge (CentreX(0) - half-pitch).
+        Check("the pills clear the tab strip's leftmost hit edge",
+              pillR < VehicleTabBar.CentreX(0) - 100f,
+              "pill right " + pillR + " vs tab edge " + (VehicleTabBar.CentreX(0) - 100f));
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;

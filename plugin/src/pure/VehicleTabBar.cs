@@ -15,7 +15,8 @@ namespace DragonScreen
 {
     public static class VehicleTabBar
     {
-        public const int Commands = 24;   // 8 labels + 1 underline (+ headroom)
+        // S192: 8 labels + 1 underline + the panel's 4 pieces + 8 icon assets (+ headroom).
+        public const int Commands = 40;
         const float RefW = 3427f, RefH = 2112f;
 
         /// <summary>The eight subsystem tabs, in order. Index is the "active tab" the pages pass in
@@ -28,6 +29,28 @@ namespace DragonScreen
         const float Pitch = 205f, LabelY = 1812f, LabelSize = 28f;
         const float MarkY = 1858f, MarkW = 140f, MarkH = 6f;
         static float Start { get { return 1713.5f - Pitch * (Tabs.Length - 1) * 0.5f; } }
+
+        // ---- S192: THE PANEL AND THE ICONS, BECAUSE THE REFERENCE STRIP HAS BOTH -------------------
+        // 🟢 OWNER, 2026-09-07, verbatim: "Overview tab bottom bar is missing its background and icons."
+        //
+        // The mock (assets/reference/nasa/interface_1950x1260.png) draws this strip on a RAISED PANEL,
+        // a shade lighter than the page ground, with an icon above every label. This build drew eight
+        // bare words on the background. Measured on the mock's own 1708x1019 card: the panel's top edge
+        // sits at 0.9068 of height and it runs to the card's bottom; the icon band is 0.8950..0.9431,
+        // i.e. icons about 0.048 of frame height.
+        //
+        // ⚠ THE MOCK'S Y CANNOT BE COPIED AND THAT IS NOT A DEFECT. The mock has no global bottom bar;
+        // this build does, and `component_48` starts at design y1877. So the panel is fitted into the
+        // band this page actually has (1682..1877) and the icon band is scaled to it. The LABEL row is
+        // untouched at y1812 / size 28 — S153b is HELD on this family's type and nothing here moves it.
+        //
+        // ⛔ THE PANEL'S ENDS ARE ROUNDED, NOT CHAMFERED, and that is a deliberate approximation. The
+        // mock cuts a diagonal chamfer at each end; `DisplayList` has no filled-triangle primitive, and
+        // faking one with a thick `Line` would leave a seam that moves with resolution. A rounded end is
+        // the honest near-match with the primitives that exist — the same call `CoverPage`'s pill caps
+        // already make. Recorded so a later chat does not read it as an oversight.
+        const float PanelX0 = 900f, PanelX1 = 2530f, PanelTop = 1682f, PanelBot = 1877f, PanelR = 44f;
+        const float IconCy = 1748f, IconSize = 84f;
 
         /// <summary>Design-x of tab i's centre.</summary>
         public static float CentreX(int i) { return Start + i * Pitch; }
@@ -64,6 +87,16 @@ namespace DragonScreen
         public static void Draw(DisplayList dl, int w, int h, int active, Severity[] tabSeverity)
         {
             float sx = w / RefW, sy = h / RefH;
+
+            // ---- the panel, behind everything else in this strip ----
+            float px0 = PanelX0 * sx, px1 = PanelX1 * sx;
+            float pt = PanelTop * sy, pb = PanelBot * sy, pr = PanelR * sy;
+            Rgba plate = DragonPalette.Panel;
+            dl.Rect(px0, pt + pr, px1 - px0, pb - pt - pr, plate);
+            dl.Rect(px0 + pr, pt, px1 - px0 - pr * 2f, pr, plate);
+            dl.ArcBand(px0 + pr, pt + pr, 0f, pr, 270.0, 360.0, plate);
+            dl.ArcBand(px1 - pr, pt + pr, 0f, pr, 0.0, 90.0, plate);
+
             for (int i = 0; i < Tabs.Length; i++)
             {
                 float cx = CentreX(i);
@@ -71,6 +104,7 @@ namespace DragonScreen
                 Severity sev = (tabSeverity != null && i < tabSeverity.Length) ? tabSeverity[i] : Severity.Nominal;
                 Rgba col = sev != Severity.Nominal ? Alarms.Colour(sev)
                          : on ? DragonPalette.White : DragonPalette.Text6;
+                Icon(dl, i, cx * sx, IconCy * sy, IconSize * sy, col);
                 dl.Text(Tabs[i], cx * sx, LabelY * sy, LabelSize * sy, TextAlign.Centre, col);
                 if (on)
                     dl.Rect((cx - MarkW * 0.5f) * sx, MarkY * sy, MarkW * sx, MarkH * sy,
@@ -78,11 +112,62 @@ namespace DragonScreen
             }
         }
 
+        /// <summary>The harvested tab icons, in `Tabs` order. Shipped PNGs under
+        /// `art/cover/`, keyed out of the owner's own high-resolution render of this page.</summary>
+        static readonly string[] IconKey = {
+            "ic_tab_all", "ic_tab_crew", "ic_tab_prop", "ic_tab_mech",
+            "ic_tab_power", "ic_tab_avionics", "ic_tab_gnc", "ic_tab_thermal" };
+
+        /// <summary>
+        /// One tab's icon, centred on (cx, cy) in a SQUARE box of side <paramref name="s"/>, tinted to
+        /// the tab's own colour so a faulted subsystem's icon reddens with its label (T5) exactly as
+        /// the label does.
+        ///
+        /// ---- S192, SECOND PASS: THESE ARE HARVESTED ART, NOT VECTORS -----------------------------
+        /// 🟢 OWNER, 2026-09-07, verbatim, on the first render of this strip: "that strip looks shit.
+        /// Harvest the icons as asset from the example screen."
+        ///
+        /// ⛔ WHAT THE FIRST PASS DID AND WHY IT WAS WRONG. It drew eight glyphs from `Rect`/`Line`/
+        /// `ArcBand` primitives, on the reasoning that `art/cover/` held no subsystem icons and that
+        /// inventing eight PNGs would be art with no source (§1.4). The premise was right and the
+        /// conclusion was wrong: there IS a source, and it is the owner's own render of this page. The
+        /// icons did not have to be invented, only cut out.
+        ///
+        /// ⭐ WHERE THEY CAME FROM, AND WHY FROM THE 2352x1410 FILE RATHER THAN THE 1950 ONE. Both are
+        /// renders of this page; the larger has no bezel, so its card is 2352 px wide against the
+        /// other's 1708 — 1.38x the resolution, which put the icons at 40-45 px instead of 30. Keyed
+        /// off the panel's own uniform ground (26,28,72) by per-channel excess, normalised so each
+        /// icon's own peak reaches full alpha (without that the two RED icons in the source — Overview
+        /// and Life — would have keyed out at 80 % and rendered faded), then written WHITE so the tint
+        /// below is what colours them. `docs/reference/NASA_REFERENCE_ART.md` carries the per-file
+        /// hashes and the source rectangles.
+        ///
+        /// ⚠ SQUARE CANVASES, AND THAT IS QC `C-04`, NOT TIDINESS. The source glyphs are not square —
+        /// Power is 21x40, Avionics 45x44 — so each was centred on a square canvas of its own longer
+        /// side. The draw below is therefore `SZ(s)` on BOTH axes: a uniform scale, which cannot
+        /// stretch a glyph however the strip is later resized. It is the same construction `ic_eye`
+        /// already ships with (S181's own trap-1 table records its ink filling 0.688 of its box).
+        ///
+        /// ⚠ AND THE MOCK HAS NINE TABS WHERE THIS STRIP HAS EIGHT. Its Overview/Life/Comms become this
+        /// build's All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; its Comms wifi
+        /// glyph was NOT harvested, because this strip has no Comms tab to put it on (T9's eight tabs
+        /// are confirmed-real from the clean designer mockup and are not changed to suit an icon).
+        /// </summary>
+        static void Icon(DisplayList dl, int i, float cx, float cy, float s, Rgba c)
+        {
+            if (i < 0 || i >= IconKey.Length) return;
+            dl.Asset(IconKey[i], cx - s * 0.5f, cy - s * 0.5f, s, s, c);
+        }
+
         /// <summary>Which tab (0..7) a touch hit, or -1. Contiguous slots (half-pitch each side).</summary>
         public static int HitTest(float px, float py, int w, int h)
         {
             float dx = px * RefW / w, dy = py * RefH / h;
-            if (dy < LabelY - 34f || dy > MarkY + 20f) return -1;
+            // S192 / TRAP 3 — the hit band follows the DRAWING. The strip used to be eight bare words
+            // and the band was the words' own rows (LabelY-34 .. MarkY+20). It is now a panel with an
+            // icon above each label, so a touch on the icon has to hit the tab it belongs to; the band
+            // is the panel. Draw and hit moved together, which is the whole rule.
+            if (dy < PanelTop || dy >= PanelBot) return -1;
             for (int i = 0; i < Tabs.Length; i++)
             {
                 float cx = CentreX(i);

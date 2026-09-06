@@ -35,7 +35,12 @@ public static class MarginColumnTest
     const int W = 2560, H = 1406;
     const float RefW = 3427f, RefH = 2112f;
     /// <summary>The MARGIN column's design x — right-aligned, from the page's own `R(..., 3360, ...)`.</summary>
-    const float MarginX = 3360f;
+    /// ⚠ S192 moved the column from 3360 to 3385 when the owner asked for the CONSUMABLES block to be
+    /// re-typed and boxed ("the consumable list on the right hand side text is to small and the whole
+    /// list looks plain and out of place"). The COLUMN'S CONTENT did not change and neither did any
+    /// check below — only where it is drawn. This literal is the reason the move could not be silent:
+    /// the suite went red the moment the page moved, which is what it is for.
+    const float MarginX = 3385f;
 
     public static int Run()
     {
