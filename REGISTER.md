@@ -20430,6 +20430,66 @@ build chat does not change it. This is a proposal.
   The gate does not survive this session.
 
 
+### S172 [O] Cover / Frame 67 — the bottom bar is letterboxed on a page that is not — **TODO** — [logged by the 2026-09-06 glass pass per C1.1; owner finding; TIER 2]
+- **The owner's finding, verbatim (2026-09-06, from the glass pass):** *"the bottom bar does not go to
+  the edge of the screen as it should"*, in the session he opened with *"we need a install and glass
+  test I feel like we are moving away from the original design"*. Measured and confirmed below.
+- ⭐ **THE MECHANISM — THE COVER PAGE HAS TWO WIDTH RULES AND THE BAR IS ON THE WRONG ONE.**
+  `CoverPage.Build` reflows the 3427×2112 design to the panel by **height** (`sc = h/RefH` = 0.6657 at
+  2560×1406) and puts the 279 px of horizontal slack into the gap at `Split = 1500` design px:
+  `X(x) = x*sc + (x >= Split ? extra : 0)`, with `Wd` **stretching any box that straddles the Split**.
+  The top bar is such a straddler — `rectangle_173`, `Wd(0, 3427)` — so it lands **0..2560, full
+  bleed**. `BottomBar.Draw` does **not** use `X`/`Wd` at all: `BottomBar.Rect` centres the design frame,
+  `x = (w - RefW*sc)/2` = **139.3**, so the bar lands **139..2421**.
+- **The measurements** (`plugin/build/preview/ui_cover.png` vs `plugin/build/refart/dashboard_ui_frame_67.png`):
+
+  | thing | reference (frac of width) | ours (frac) | ours (px @2560) |
+  |---|---|---|---|
+  | bottom-bar left end | 0.000 | **0.055** | 139 px of bare ground |
+  | bottom-bar right end | **0.999** | **0.924** | 139 px of bare ground |
+  | bar top edge | 0.9381 | 0.9381 ✅ | height + y are already right |
+  | top bar | 0.000..0.999 | 0.000..0.999 ✅ | full bleed, correct |
+  | first bar icon | 0.0155 | 0.0551 | ~97 px too far right |
+  | bar's internal rule vs the column divider | **+8 px** (0.73 %) | **+155 px** (6.05 %) | should be +15 |
+
+- ⛔ **THE SECOND DEFECT IS THE ONE THAT READS AS BROKEN, NOT THE BARE ENDS.** The reference puts the
+  bar's `CURRENT STATE | POINTING MODE` rule at design x 1464, **23 design px right of the procedure
+  column divider at 1441** — it CONTINUES that divider down through the bar. Ours sits **155 px** right
+  of it, because the whole bar carries the 139 px letterbox offset. The bar's internals no longer line
+  up with the page above them.
+- ⚠ **THE CURRENT BEHAVIOUR IS DELIBERATE AND A FIX MUST NOT REGRESS IT** — `BottomBar.cs`'s header is
+  explicit (S103 / QC `C-04` + `H-07`): the bar used to be `dl.Asset("component_48", 0, .., w, ..)` on 21
+  pages, which **stretched a glyph-bearing PNG 12.2 % horizontally**, and drawing it `0..w` on the
+  ELEVEN letterboxed frame pages put the design frame's own border through the middle of the page. Its
+  fix was to letterbox it everywhere. That is right for the eleven; it is wrong for the **ten spread
+  pages**, and the file's own header already names the strips it leaves as *"new"* on those.
+- ⭐ **WHY THE TOP BAR GETS AWAY WITH STRETCHING AND THE BOTTOM ONE CANNOT:** `rectangle_173` (3427×220)
+  is a **plain** bar — flat ground + border, no baked glyphs — so `Wd`'s 12.2 % stretch is invisible.
+  `component_48` (3427×235) has **five icons and four text blocks baked in**, so the same stretch is
+  QC `C-04`. The route is therefore NOT "stretch it too": it is to draw the bar's GROUND full-width as a
+  primitive and place its contents with the page's own `X()` — icons left of `Split` stay left, the rule
+  lands back on the column divider, `POINTING MODE` + the SPX/ISS cluster take `extra` and pin right.
+  **S147 already did exactly this for `CURRENT STATE`**, so the method is this file's own.
+- ⚠ **SCOPE:** `BottomBar` is shared by 21 pages and its hit map and active-tab marker are in the same
+  file *"together, for that reason"* — the draw, `Hit` and `Marker` move as one or not at all.
+- **DONE when:** on the spread pages the bar reaches both edges, its rule continues the column divider
+  (≤ ~15 px at 2560), the eleven letterboxed pages are UNCHANGED, no glyph is stretched, and the hit map
+  still lands on the icons — with `FigmaUINavTest`'s shape check extended to cover the spread case.
+
+**Not defects — checked and cleared this pass, recorded so they are not re-opened:**
+- **Seven rail rows vs the reference's five** — deliberate: the community Figma baked five, the real
+  capsule has seven (`CoverPage.PhaseName`, sourced to `REAL_SPACEX_SCREENSHOTS` / `SCREEN_INVENTORY`).
+- **`TARGET LATITUDE` / `TARGET LONGITUDE` further apart than the reference** — deliberate: [[S105]] /
+  QC `C-13` re-centres them on the camera slot ± `ReadoutHalfGap` so both clear the globe disc.
+- **`NEXT VIEW` pill, which the reference has no counterpart for** — ours by design: we have three camera
+  modes where the export baked one. Geometry QC'd by [[S105]] / `C-03`.
+- **A textured Earth instead of the reference's flat disc** — the reference's own embedded raster
+  (`refart/embedded/frame_67_1.png`) IS a globe; it renders near-black in the export.
+- **The white 108-px block at the bottom-left** — in the reference too (SVG rect x=32 y=2100 w=108.59).
+- ⚠ **Type larger than the reference throughout** — that is the R-01 floor, and it is **[[S153a]]-Q1**,
+  which is the OWNER's to settle. NOT decided here and NOT re-posed.
+
+
 ---
 
 # 🟢 RUN 4 — SESSION RECORD, 2026-09-06. Where the continuous build chat got to, and how to resume.
