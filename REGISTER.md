@@ -10255,7 +10255,52 @@ an end state. Neither can be filled without a source: `SCREEN_INVENTORY.md`'s Di
    screen's features are included, and removing paint to avoid deciding what it means is the one thing this
    defect class should not teach.
 
-### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **HELD 2026-09-06 — S57's blocker is spent but S79-Q1 is an OWNER call and no code can land without it** — [TIER 2: a column that claims a number it never computes]
+### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **TODO — UNBLOCKED 2026-09-06: S79-Q1 answered (TIME-TO-DEPLETION), S79-Q2 moot** — [TIER 2: a column that claims a number it never computes]
+
+#### ⛔ SESSION DEVIATION FROM C1.1 + C1.7 — RECORDED HERE BECAUSE THIS IS THE FIRST LINE RUN 4 WRITES
+
+This line is being unblocked by the **continuous build chat, run 4**, which works MANY register lines in
+ONE session instead of one-task-one-chat. Owner directive, **2026-09-06, verbatim: "restart the run from
+s165"**, continuing the standing instruction **"make sure it loops until all tasks are complete committing
+and reading the rules etc in between jobs"**. It **overrides C1.1 ("ONE task at a time") and C1.7 ("never
+run a session to compaction mid-task") FOR THIS SESSION ONLY**. ⚠ **Every other rule stands — C1.12 above
+all**: this run opens no gate, decides no owner question, never runs `install`, never touches glass, never
+`git push`es, and edits neither `docs/BUILD_PLAN.md` nor `docs/QC_FINDINGS.md`. Each job still marks its
+line `DOING` and commits that marker before any code, and still commits at the end — the loop keeps C1.5's
+per-task commit, it only drops the fresh chat between tasks. *(Run 3 recorded the same deviation on
+[[S167]]; this is its continuation, not a second grant.)*
+
+#### 🟢 UNBLOCKED 2026-09-06 — S79-Q1 IS ANSWERED AND S79-Q2 IS MOOT
+
+**S79-Q1 — option 1 selected, 2026-09-06, via the overseer.** ⛔ Recorded as a **SELECTION FROM PRESENTED
+OPTIONS, not a verbatim quote** (C1.12's evidentiary standard — the `LZ1` failure was a manufactured
+quote). The option as it stands written above:
+
+> 1. **Time-to-depletion, one currency for the whole column** — hours or days remaining at the current
+>    modelled rate.
+
+So: **ONE currency for the whole MARGIN column.** Not split by row family (option 3 was explicitly not
+recommended for the oblique-viewing-angle reason S38/S39 established), not a surplus quantity, not dashed.
+
+**S79-Q2 is MOOT and needs no answer.** Its situation was *"of the eight rows only those two are computable
+with nothing borrowed from S57's harvest list"* — but S57's blocker is already spent (see the inherited note
+above), so the column lands **once**, in one pass, which is what its own option 1 wanted.
+
+⚠ **ACCEPTED CONSEQUENCE OF TIME-TO-DEPLETION, AND IT IS NOT A HOLE.** The two deorbit propellant rows
+read a real countdown **only while a burn is drawing them down**, and dash for the rest of the mission,
+because at zero draw rate there is no depletion time. ⛔ **THAT DASH MUST BE COMPUTED — rate is zero, so
+no depletion time exists — and must NEVER be a printed literal**, or the row fails this line's own
+DONE-when, which requires the whole column to be pinned fixture-A-vs-fixture-B (*"a constant cannot pass
+it"*). A literal dash passes neither fixture and is exactly the defect this line exists to remove.
+
+⛔ **AND THE FOUR ROWS IN PLAY ARE NAMED, so no later reader has to re-derive them:** **Power Unit 1
+Energy · Power Unit 2 Energy · Usable Deorbit Fuel · Usable Deorbit Oxidizer.** The four **Orbit n Subtank**
+rows stay REASONED-DASHED under any answer — their QTY is already a reasoned dash because the real
+vehicle's tank split has no KSP counterpart, and a margin on a quantity that does not exist does not exist
+either (§14.4(e)).
+⛔ **DO NOT WIRE `LifeSupport.Margins` INTO THIS COLUMN.** `H18`/`H39` both name it and both are wrong: it
+carries Food / Water / Oxygen days and **none of the eight rows are food, water or oxygen**. This line's
+own CORRECTION block below is the thing to start from, not the audit.
 Split out of **S75**, 2026-09-04, when that line closed its two painted controls (C1.7). S75's DONE-when
 carried a third clause — *"and the MARGIN column reads modelled margins rather than a hardcoded dash, pinned
 by a test in the same style as S54's"* — which S75's OWN body then says must land *"with or after S57"*.
@@ -10316,7 +10361,10 @@ back **in the same change** if and only if S75-Q1 settles what it targets — th
 
 #### Open questions for the owner (C1.14) — S79
 
-**S79-Q1. What does MARGIN mean on this table, for the rows that can have one?**
+**S79-Q1. What does MARGIN mean on this table, for the rows that can have one?** ✅ **ANSWERED
+2026-09-06 — option 1, TIME-TO-DEPLETION** (option selected via the overseer; see the unblock block at the
+top of this line). The question text is kept verbatim below because the reasoning behind the options is
+what makes the answer legible (C1.16 / G12).
 *Situation.* The column is real (DillonBaird's Vehicle render, `SCREEN_INVENTORY.md` 2026-09-01) and the
 capture records the column HEADER and no values, so nothing says whether a margin here is a TIME, a SURPLUS
 QUANTITY, or a percentage. §14.4(f) requires it filled with something that behaves live; which of the three
@@ -10334,7 +10382,8 @@ it is, is not derivable from any source in the repo.
    present literal. Honest, cheap, and strictly better than today, but it declines §14.4(f) for a real
    readout, so it needs the owner to choose it rather than a build chat.
 
-**S79-Q2. May the two Power Unit rows land BEFORE S57 unblocks?**
+**S79-Q2. May the two Power Unit rows land BEFORE S57 unblocks?** ✅ **MOOT 2026-09-06** — S57 is
+unblocked, so the column lands once. Kept for the record, not for action.
 *Situation.* Of the eight rows only those two are computable with nothing borrowed from S57's harvest list;
 the deorbit rows need `pure/Orbital.cs`, which is S57's. Splitting would land the column in two passes, which
 S57 item 2 explicitly warns against (*"do not land the column twice"*).
@@ -10346,10 +10395,14 @@ S57 item 2 explicitly warns against (*"do not land the column twice"*).
 3. **Answer S57-Q1 first** (it is already posed and unanswered) and this question disappears — S79 then runs
    once, in whatever order S57's answer implies.
 
-#### ⛔ HELD 2026-09-06 — reached in the continuous run, and stopped at the right place
+#### ⛔ HELD 2026-09-06 — reached in the continuous run, and stopped at the right place — ✅ **SUPERSEDED 2026-09-06, SAME DAY: the owner answered S79-Q1 and this line is TODO**
+
+⚠ **Kept in place, not deleted (C1.16 / G12).** The reasoning below is why the line stopped rather than
+guessed, and that is worth more than the two lines it would take to remove it. What follows was true until
+S79-Q1 was answered; it is no longer the line's status.
 
 This line's own S57 blocker is genuinely spent (the inherited note above is correct and was re-read). What
-stops it is **S79-Q1**, and that question is the owner's rather than the overseer's under C1.14:
+stopped it was **S79-Q1**, and that question was the owner's rather than the overseer's under C1.14:
 
 - ⛔ **It is not knowable from the repo, and the line says so in its own words:** *"the capture records the
   column HEADER and no values, so nothing says whether a margin here is a TIME, a SURPLUS QUANTITY, or a
@@ -15390,7 +15443,7 @@ pages changed**, which is this line's whole finding stated as a measurement · c
 `Pages.Build(…, 3, …)` and failed **24 of 24** — because that is `DockingPage.cs`, which has not had its
 pass. It belongs to [[S121d]] and the check was removed rather than left failing or weakened.
 
-### S163 [S] `Pages.cs` carries a dead docking subsystem — seven members, no caller — **HELD 2026-09-06 (needs an owner call; written up with three options and a recommendation)** — [logged by [[S121b-iii]] per C1.1, 2026-09-06; TIER 3]
+### S163 [S] `Pages.cs` carries a dead docking subsystem — seven members, no caller — **DONE 2026-09-06 — closed as LEAVE IT, MARKED AS IT IS; no code changed** — [logged by [[S121b-iii]] per C1.1, 2026-09-06; TIER 3]
 - **The finding.** `DockingOld` and the six members only it uses — `Axis`, `AxisR`, `DockingRingHeight`,
   `AlignRingRadius`, `BallDiameter`, `BallClearance` — are unreachable from any entry point. Established
   by grep (one source hit: the declaration) and confirmed by a 119-page preview diff showing 0 changes
@@ -15409,6 +15462,45 @@ pass. It belongs to [[S121d]] and the check was removed rather than left failing
   *(Recommendation: (1) — it compiles, it is now correct, it is marked, and it is the only worked example
   of this HUD's geometry in the tree. Re-earning that costs more than carrying it.)*
 - **DONE when:** the owner has chosen, or the line is closed as "leave it" with that recorded.
+
+#### 🟢 DONE 2026-09-06 — the owner chose option 1, and NO CODE WAS CHANGED
+
+**Option 1 selected, 2026-09-06, via the overseer.** ⛔ Recorded as a **SELECTION FROM PRESENTED OPTIONS,
+not a verbatim quote** (C1.12's evidentiary standard). The option as it stands written above:
+
+> (1) leave it, marked as it now is — costs nothing, and it is a worked reference for whoever rebuilds a
+> manual docking HUD
+
+⛔ **THE SCALE PASS IT ALREADY HAS STANDS, AND NOTHING IN `Pages.cs` WAS TOUCHED BY THIS CLOSE.** A line
+that closes as "leave it" and then edits the thing it left is not closing it.
+
+#### ⭐ ONE FACT ADDED BY THE OVERSEER — AND VERIFIED FIRST-HAND HERE BEFORE BEING RECORDED
+
+The overseer verified the dead-code claim independently and added that the members' only external
+consumers are **tests**. ⭐ **Re-checked by grep in this session rather than repeated on trust** — that is
+the `REAL_SPACEX_SCREENSHOTS/` lesson [[S162]] records, applied to a claim that happened to be right:
+
+| member | consumers outside `pure/Pages.cs` |
+|---|---|
+| `DockingOld` | `test/LegibilityFloorTest.cs` × 1 |
+| `DockingRingHeight` | `test/LegibilityFloorTest.cs` × 1 |
+| `AlignRingRadius` | `test/LegibilityFloorTest.cs` × 4 |
+| `BallDiameter` | `test/LegibilityFloorTest.cs` × 9 |
+| `BallClearance` | `test/LegibilityFloorTest.cs` × 2 |
+| `Pages.Axis` | ⛔ **none** (the 23 bare `Axis` hits in the tree are other types') |
+| `Pages.AxisR` | ⛔ **none** |
+
+⭐ **AND THAT IS THE REASON IT STAYS, stated more precisely than the recommendation managed.** The
+consumer is `LegibilityFloorTest.cs:697-717`, which pins the ALIGN-sweep ball clearance **at both widths**
+— the ring keeps its share of the glass, the clearance doubles with it, and *"the clearance at RefPanelW is
+exactly the 22 px it was measured as"*. So the subsystem is **dead, but correct, scaled and PINNED**: an
+in-game measurement with a live regression guard on it. Deleting the body would delete the only thing that
+exercises the geometry those tests check, and C1.16 / G12 forbids taking the comments — where the
+ALIGN-sweep clearance and the boresight-over-the-ball findings live — with it either.
+
+⚠ **This closes the LINE, not the observation.** `Pages.DockingOld` is still unreachable from any entry
+point and still draws nothing; if a manual docking HUD is ever rebuilt, this is the worked reference to
+start from, and its header says so.
 
 ### S121c [S] `SettingsPage.cs` — **DONE 2026-09-06 — the checks caught a real missed scaling before the preview did** — [split 3 of 5 of [[S121]]; 24 lines / 24 references]
 - ⚠ **Read [[S134]] before starting.** It owns the settings family's real coordinate-system defect and its
@@ -18766,7 +18858,7 @@ rule stands unchanged — especially C1.12**: no gate is opened, no `install`, n
 no owner ruling is recorded without saying exactly how it was given. ⚠ This is the SECOND such run; the
 first (2026-09-06, 63 commits) recorded the same deviation on its own first line.
 
-### S162 [S] Q9 / `VT-02` — the element split is RULED, and the evidence it needs is not in this repository — **HELD 2026-09-06 — C7 STOP-AND-FLAG** — [Q9 answered 2026-09-06; VT-02, un-withdrawn by that answer]
+### S162 [S] Q9 / `VT-02` — the element split is RULED, and the evidence it needs is not in this repository — **DONE 2026-09-06 — the owner ruled the default in the photographs' absence; the APPLICATION is [[S153c]]'s, and `VT-02` closes here** — [Q9 answered 2026-09-06; VT-02, un-withdrawn then closed by that answer]
 
 #### 🟢 THE RULING, and it is applicable — this line is not blocked on a decision
 
@@ -18847,6 +18939,48 @@ provisional.** Recorded so the choice is made deliberately rather than discovere
 - **DONE when:** the photographs are readable from inside the repo and the seven elements are split
   per the ruling — or the owner has ruled the default in their absence.
 
+#### 🟢 DONE 2026-09-06 — the second clause of the DONE-when is the one that was met
+
+**Option (b) selected, 2026-09-06, via the overseer**, answering the paste-ready prompt above. ⛔ Recorded
+as a **SELECTION FROM PRESENTED OPTIONS, not a verbatim quote** (C1.12's evidentiary standard — `LZ1`
+invented one and it took `S89` to unwind). The selection as it reached this run:
+
+> **TAKE FRAME59'S ALIGNMENT AND LAYOUT, MARKED TIER-2.**
+
+corresponding to this line's own option **(b)**, as it stands written above:
+
+> **(b)** a ruling that, absent the photographs, the seven elements default one way — either "keep the
+> rebuild, it is tier 1 until shown otherwise" or "take frame59's alignment and type as the marked tier-2
+> fill" — which needs no new evidence and unblocks the page
+
+⛔ **THE C7 FLAG STANDS AND WAS RE-CHECKED, not assumed to have gone away.** `ls -a` at the repo root
+this session: `.claude .git .gitattributes .gitignore CLAUDE.md LICENSE NOTICE README.md REGISTER.md
+assets docs plugin` — **no `REAL_SPACEX_SCREENSHOTS/`**. The photographs are still not here. The ruling
+does not conjure them; it says what to do without them.
+
+#### ⛔ THE GUARDRAIL IS THE POINT OF THE RULING, AND IT IS NOT OPTIONAL
+
+**This applies where tier-1 evidence is ABSENT — not where it is merely inconvenient to obtain.** It is
+NOT "the Figma frame wins when it is easier". ⛔ **Every element that DOES have a tier-1 source still
+takes it**, and **each of the seven must be MARKED IN THE CODE as a tier-2 fill.**
+⚠ **Unmarked, this ruling silently becomes the §1.4 inversion [[S111]] caught in [[S110]]** — a tier-2
+source standing in for tier-1 with nothing on the page saying so, which is indistinguishable from a
+tier-1 claim to every later reader. The marking is what keeps it a fill instead of a lie.
+
+#### ⭐ THIS LINE OWES NO CODE. [[S153c]] APPLIES IT.
+
+The ruling settles WHICH source the seven `VT-02` elements take. **Applying it means laying `VrioTestPage`
+out, and that page is [[S153c]]'s scope** (37 below-floor draws, one file drawn by both the `Procedure`
+and `VrioTest` page-views — see [[S110]]). ⭐ **That is the whole benefit of ruling now rather than later**:
+this line's own sequencing note warned that if S153c re-lays the page first and Q9 were then answered the
+other way, *"the page is laid out twice"*. Answered first, it is laid out **once**. Recorded on S153c too,
+so neither line depends on a reader finding the other.
+
+⭐ **`VT-02` CLOSES WITH THIS LINE.** [[S111]] parked it with *"VT-02 is not actioned until that is
+answered"*; it is answered, it was un-withdrawn by the answer, and its action is now S153c's marking pass.
+⚠ [[S160]]'s *"VT-02 is withdrawn, no code owed — do not re-open it from this line"* was correct when
+written and stays correct **for S160**: the work belongs to S153c, not there.
+
 ### S153a [S] Cover: raise the type to the two floors — **TODO** — [split of [[S153]]; **24** below-floor draws]
 - **Scope:** `plugin/src/pure/CoverPage.cs` only.
 - **Policy (S153, owner 2026-09-06):** LIVE → `Typography.MinDesignFor(w, sc)` (**48.07** design px at
@@ -18888,8 +19022,16 @@ provisional.** Recorded so the choice is made deliberately rather than discovere
   ⛔ **A build chat should not settle that on its own** — it decides how a procedure page looks — so it is
   written up for the owner and this line builds the straight-raise interpretation only if he declines to
   pick. **Ask before laying out.**
+- 🟢 **AND THIS LINE CARRIES [[S162]]'s RULING — read it before laying `VrioTestPage` out.** Q9 / `VT-02`
+  was answered **2026-09-06 (option selected via the overseer): "TAKE FRAME59'S ALIGNMENT AND LAYOUT,
+  MARKED TIER-2"** for the seven `VT-02` elements. ⛔ **MARK EACH OF THE SEVEN IN THE CODE as a tier-2
+  fill**; the ruling applies where tier-1 evidence is **ABSENT** (the photographs are not in this repo —
+  S162 checked four ways), **not where it is merely inconvenient**, so every element that HAS a tier-1
+  source still takes it. ⚠ **Unmarked, this becomes the §1.4 inversion [[S111]] caught in [[S110]].**
+  ⭐ Ruled BEFORE this line runs specifically so the page is laid out **once** instead of twice.
 - **DONE when:** every state word and tick clears the glanceable floor, the step text clears whichever
-  floor the owner names, and the baselines are lowered.
+  floor the owner names, the seven `VT-02` elements take frame59's alignment and layout **each marked
+  tier-2 in the code**, and the baselines are lowered.
 
 ### S153d [S] The systems deep-views: raise the type to the floor — **TODO** — [split of [[S153]]; **73** below-floor draws]
 - **Scope:** `SystemsTreePage.cs` (31) · `SystemsPidPage.cs` (42).
