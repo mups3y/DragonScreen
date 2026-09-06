@@ -19453,7 +19453,7 @@ question rather than six, and it is what S153a-Q1 asks.
   with the tree at HEAD. **No code landed.** No `install`, no glass, no `git push`.
 
 
-### S153f [S] Shared chrome and settings: raise the type to the floor — **TODO** — [split of [[S153]]; ~~**47**~~ → **51** below-floor draws ([[S165]] 2026-09-06)]
+### S153f [S] Shared chrome and settings: raise the type to the floor — **DOING** — [split of [[S153]]; ~~**47**~~ → **51** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `MenuPage.cs` (24) · `SettingsAudioPage.cs` (~~12~~ **13**) · `SettingsVideoPage.cs` (9) ·
   `MarginAffordance` (the HUD's 2) · ⭐ **`CabinLightingPanel.cs` (3)**.
 - ⚠ **Re-counted 47 → 51 by [[S165]], and the two additions are different in kind:**
