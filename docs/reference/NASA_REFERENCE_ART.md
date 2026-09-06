@@ -58,6 +58,73 @@ Full landed md5s: `fa57b08cd1ddbd9b767d8a4f5abadc37` · `7deffa3bb3ec4e66cc3f3cd
 Full source md5s: `d3544c29329018f8785ba86e089c0450` · `2b8decff49a96bf6ec51d311aea08795` ·
 `f44b978c7b9904a3d5ffb5473e7061db` · `41964d87d9ec190e034897d0fd2a9c5e`.
 
+---
+
+## ADDED 2026-09-07 by `S185` (UNIT 3) — the Vehicle Overview's 3D render, at 2.6x the shipped resolution
+
+🟢 **OWNER, 2026-09-07, verbatim:** *"Vehicle overview page gets the 3d render"* — and, excluding the line
+art from that page, *"they are for the other page with line art like those already on it, so we can show
+the rcs port locations clearer etc"*.
+
+**What this is.** `C:\Users\User\Downloads\crew_capsule.jpg` (2667x1500, 2026-09-06 16:39) is **the same
+SpaceX render the page already draws** — white capsule + ribbed trunk, SPACEX / NASA / DRAGON / US-flag
+markings, same pose, same framing. The shipped `plugin/GameData/DragonScreen/art/cover/dragon_crew.png` is a
+**294x468** crop of it. The subject in the source measures **771x1232**, so this is **2.62x the linear
+resolution** of what ships, against a slot that draws it at 388x506 device px at 2560x1406 — i.e. the
+shipped art is currently UPSCALED and this one would not be.
+
+⛔ **AND THE KEYING RECIPE `S185` WAS HANDED WAS WRONG FOR THIS FILE — THE SAME SHAPE AS `S184`'s OWN
+FINDING, ONE FILE LATER.** The instruction was *"it is on pure black -> `alpha = max(r,g,b)`, threshold ~10,
+crop to bbox"*. That is right for a white-on-black line drawing and **destructive for a full-colour render
+with dark regions**. Measured, not argued:
+
+- the shipped `dragon_crew.png` has **1,605 FULLY OPAQUE pixels below luminance 40**, down to luminance 0 —
+  the capsule's skirt, the window recesses and the shadowed trunk flutes. It was never luminance-keyed;
+- run as directed on `crew_capsule.jpg`, the recipe makes **3,346 subject pixels fully transparent** and
+  **118,217 subject pixels less than 50 % opaque**. It punches holes through the vehicle.
+
+**So the matte was taken by CONNECTIVITY, not by luminance**: a flood fill of `luminance <= 8` inward from
+the four borders marks the background; everything the fill cannot reach is the subject and is opaque.
+Luminance is then used **only** in the 2 px boundary band, where a JPEG genuinely does blend the subject
+into the black behind it, and the colour there is un-premultiplied so the crop composites the same on any
+ground.
+
+⭐ **AND THE KEY IS PROVEN AGAINST GROUND TRUTH RATHER THAN ASSERTED.** The shipped 294x468 asset is an
+existing, correct matte of the same subject, so it is a test. Downscaled to the shipped file's own ink crop
+(287x460):
+
+| measure | result |
+|---|---|
+| landed crop aspect vs shipped ink aspect | **0.6258 vs 0.6239** — 0.3 % apart, so the FRAMING is the same crop |
+| alpha agreement | mean abs difference **1.6 / 255**, median **0**, **98.6 %** of pixels within 24 |
+| RGB agreement where both are opaque (92,541 px) | mean abs difference **4.6 / 255**, **95.6 %** within 24 (JPEG artefacts account for most of it) |
+
+**What landed**
+
+| landed file | source | source md5 | source w x h | landed w x h | crop @ | opaque % (src) | opaque % (crop) | landed md5 | bytes |
+|---|---|---|---:|---:|---|---:|---:|---|---:|
+| `dragon_crew_hi_771x1232.png` | `crew_capsule.jpg` | `403ef17b` | 2667x1500 | 771x1232 | (946, 123) | **16.813 %** | 71.087 % | `bbaeb251` | 313,719 |
+
+Full landed md5: `bbaeb251e1fcdf78306b1b8476ac356f`. Full source md5: `403ef17b5a14897afb697da73f93a627`.
+⚠ The two `opaque %` columns here measure the **connectivity matte**, not a luminance key, and are therefore
+not comparable with the four rows above — the same caveat `S184` recorded for the two `Interface` files.
+
+⛔ **NOTHING WAS SWAPPED, AND THE REASON IS A FACT THIS UNIT DISCOVERED RATHER THAN A PREFERENCE.**
+`dl.Asset("dragon_crew", ...)` is called from **`VehicleOverviewPage.cs:200` AND `VehicleSubsystemPage.cs:290`**,
+and the second serves the six subsystem sub-tabs — so replacing the shipped PNG changes **seven page-views**,
+six of them outside unit 3's scope, and `S185`'s own verification criterion is that `previewdiff` reports
+*this page's views alone*. The swap is one file copy and it is proven safe; **whose call it is, is the
+owner's** (`REGISTER.md` `S185` Q1). ⛔ It is also NOT a fix for the 22.2 % horizontal stretch, which is the
+SLOT's aspect and is a separate open question — a sharper source is stretched by exactly the same factor.
+
+⛔ **AND THE OTHER `Downloads` CANDIDATES WERE CHECKED AND REJECTED, WITH REASONS**, so a later chat does not
+re-open the search: `dragon_threeview.png` (2645x1326, md5 `7c8361ac`) is the three-view LINE-ART sheet — same
+pixel size as this manifest's own `crew_dragon_profile.png` but a different key — and the owner excluded line
+art from this page; `crew dragon with trunk.jfif` (800x1303) is a white-on-black LINE-ART elevation of this
+exact view and belongs to `PropSchematic`, whose header already calls for capsule + trunk line-art;
+`crew_dragon_trunk.png` (213x347) and `crew_bottom_view.png` (132x147) are LOWER resolution than what ships;
+`Crew Dragon Flight Control UI.png` (2352x1410) is a UI reference, not vehicle art.
+
 None of the four source files was already anywhere in `assets/` or `plugin/GameData/` — checked by md5
 across every `.png`/`.jpg` in both trees, 0 matches each. These are new inputs, not re-drops.
 
