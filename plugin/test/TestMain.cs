@@ -160,6 +160,7 @@ public static class TestMain
         // same width. Every check in here is a comparison ACROSS widths, which is the only shape that
         // can fail.
         bad += Suite(LegibilityFloorTest.Run);
+        bad += Suite(SplitReflowTest.Run);
         bad += Suite(Frame58MapTest.Run);
         bad += Suite(CoverActsTest.Run);
         bad += Suite(CoverAlarmTest.Run);

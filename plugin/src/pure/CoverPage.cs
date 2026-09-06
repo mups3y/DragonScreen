@@ -424,20 +424,51 @@ namespace DragonScreen
             // everything left of Split at its position, shift everything right of Split to the right
             // edge, and stretch the two full-width bars across. Nothing is scaled non-uniformly, so the
             // globe stays round and text/icons keep their exact size. ----
-            float sc = h / RefH;
-            float extra = w - RefW * sc; if (extra < 0f) extra = 0f;
-            const float Split = 1500f;
-            float X(float x) => x * sc + (x >= Split ? extra : 0f);
+            //
+            // ⚠ SUPERSEDED IN PLACE 2026-09-06 by S174 — C1.16/G12: the paragraph above is left standing
+            // because it is the REASON the slack went into the gap, and that reasoning is still the
+            // premise the change below argues with. What it describes is no longer what the code does.
+            //
+            // WHAT CHANGED, AND ON WHOSE AUTHORITY. The owner was given options for S153a-Q1 (the Cover's
+            // type cannot clear the legibility floor inside its measured Figma boxes) and SELECTED
+            // "re-distribute the reflow slack first" — recorded as a selection in REGISTER.md S174, with
+            // no verbatim quote manufactured for it (C1.12). "Anchor everything left of Split at its
+            // position" is the clause that is gone: the CONTENT PANEL now takes a share of the slack and
+            // its interior stretches with it, because parking 100 % of the slack in the gap left the panel
+            // at its design width on a screen 418.5 design px wider than the design.
+            //
+            // ⛔ STILL TRUE, AND STILL THE POINT: nothing is scaled non-uniformly in the sense that
+            // matters. `Z` is untouched, so every glyph, ring and icon keeps its exact size and the globe
+            // stays round. The stretch is applied to POSITIONS inside the panel, not to the things drawn
+            // at them — which is what buys the panel's content room without distorting any of it.
+            //
+            // The map itself is `SplitReflow` now — ONE copy, shared with DrawRail, this page's hit test
+            // and ManualChuteDeployPage. It was written out four times in two files before S174.
+            float sc, extra, share, kx;
+            SplitReflow.Metrics(w, h, out sc, out extra, out share, out kx);
+            float X(float x) => SplitReflow.X(x, w, h);
             float Y(float y) => y * sc;
             float Z(float v) => v * sc;
-            float Wd(float x, float wref) => wref * sc + (x < Split && x + wref > Split ? extra : 0f); // stretch straddlers (bars)
+            float Wd(float x, float wref) => SplitReflow.Wd(x, wref, w, h);
             int St(float rs) => Strokes.Px(rs, sc);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
 
             dl.Rect(0, 0, w, h, DragonPalette.Background);
 
             // content panel border FIRST — in the Figma it runs a few px under the top + bottom bars, so
             // those (drawn later: rectangle_173 in the loop, component_48 right below) cover its overhang.
-            dl.Asset("rectangle_178", X(218), Y(216), Wd(218, 1224), Z(1779), DragonPalette.White);
+            //
+            // ⛔ S174 — DRAWN AS A PRIMITIVE, NOT AS ITS ASSET, AND THE ASSET WAS CHECKED BEFORE DECIDING.
+            // `rectangle_178.png` is 1224x1779 and **99.45 % TRANSPARENT**: a hollow rectangle OUTLINE
+            // with a uniform 2 px stroke and square corners, not a plain bar. Now that this box takes a
+            // share of the slack it has to widen, and stretching a hollow outline widens its VERTICAL
+            // strokes while leaving the horizontal ones at 2 px — a border whose sides do not match its
+            // top. That is QC C-04 (`component_48` stretched 12.2 %) one step to the left, and
+            // `BottomBar`'s header records what it cost. `rectangle_173` gets away with `Wd`'s stretch
+            // only because it is a SOLID single-colour fill with nothing baked in — checked, 100 %
+            // opaque, and so are the three card backgrounds, which is why they still go through `Wd`.
+            // A `dl.Box` reproduces this asset exactly — same 2 design px, same square corners, same
+            // white — at any width, with the stroke uniform on all four sides by construction.
+            dl.Box(X(218), Y(216), Wd(218, 1224), Z(1779), St(2), DragonPalette.White);
 
             // bottom status bar (Component 48: bg + CURRENT STATE / POINTING MODE / SPX·TDRS·ISS text) — full width
             BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
@@ -1264,11 +1295,15 @@ namespace DragonScreen
         public static void DrawRail(DisplayList dl, int w, int h, int selected)
         {
             if (dl == null || w <= 0 || h <= 0) return;
-            float sc = h / RefH; float extra = w - RefW * sc; if (extra < 0f) extra = 0f; const float Split = 1500f;
-            float X(float x) => x * sc + (x >= Split ? extra : 0f);
+            // S174: the shared map. The rail sits at design x 15..205, entirely LEFT of the content
+            // panel, so this page's share of the slack does not move it by one pixel — but it goes
+            // through `SplitReflow` anyway, because a second hand-written copy of a map is how the four
+            // copies this task removed came to exist.
+            float sc = h / RefH;
+            float X(float x) => SplitReflow.X(x, w, h);
             float Y(float y) => y * sc;
             float Z(float v) => v * sc;
-            float Wd(float x, float wref) => wref * sc + (x < Split && x + wref > Split ? extra : 0f);
+            float Wd(float x, float wref) => SplitReflow.Wd(x, wref, w, h);
 
             int sp = selected < 0 ? 0 : (selected >= PhaseCount ? PhaseCount - 1 : selected);
             for (int i = 0; i < PhaseCount; i++)
@@ -1431,9 +1466,14 @@ namespace DragonScreen
                 PadRect(w, h, 0.5f, 2, out bx, out by, out bw, out bh);
                 if (Control.Hit(px, py, bx, by, bw, bh)) return CoverButton.MapZoomOut;
             }
-            const float Split = 1500f;
-            float thr = Split * sc;                                  // panel-x where the right block starts
-            float fx = (px < thr) ? px / sc : (px - extra) / sc;     // inverse of the reflow map
+            // ⛔ S174 / TRAP 2 — THE INVERSE MOVES WITH THE MAP OR NOT AT ALL. This used to be a
+            // two-branch inverse of a two-branch map, written here by hand. **Eight of this page's ten
+            // hit rects lie INSIDE the content panel** (design x 260..1370), which is precisely the zone
+            // the slack redistribution stretches, so leaving this alone would have put every one of them
+            // out of register with its own painted control — `MarginAffordance`'s defect, on the page the
+            // crew opens on. `SplitReflow.InvX` IS the inverse of `SplitReflow.X`, and
+            // `SplitReflowTest` sweeps the round trip rather than trusting that sentence.
+            float fx = SplitReflow.InvX(px, w, h);
             float fy = py / sc;
 
             // the seven phase-rail rows — one per SlotY slot, spanning the left strip. Checked first so

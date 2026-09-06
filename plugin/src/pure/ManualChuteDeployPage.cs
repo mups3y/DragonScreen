@@ -215,11 +215,14 @@ namespace DragonScreen
         public static void Build(DisplayList dl, int w, int h, PageState s, MapView view)
         {
             if (dl == null || w <= 0 || h <= 0) return;
-            float sc = h / RefH; float extra = w - RefW * sc; if (extra < 0f) extra = 0f; const float Split = 1500f;
-            float X(float x) => x * sc + (x >= Split ? extra : 0f);
+            // S174: the SAME map as the Cover, from the same place — `SplitReflow`. These two pages are
+            // the only Split-reflow pages in the build and they share a rail; two copies of one reflow
+            // rule that disagree is how `MarginAffordance` came to have three rectangles in two files.
+            float sc = h / RefH;
+            float X(float x) => SplitReflow.X(x, w, h);
             float Y(float y) => y * sc;
             float Z(float v) => v * sc;
-            float Wd(float x, float wref) => wref * sc + (x < Split && x + wref > Split ? extra : 0f);
+            float Wd(float x, float wref) => SplitReflow.Wd(x, wref, w, h);
             int St(float rs) => Strokes.Px(rs, sc);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
             void L(string t, float x, float y, float z, Rgba c) => dl.Text(t, X(x), Y(y), Z(z), TextAlign.Left, c);
             void C(string t, float cx, float y, float z, Rgba c) => dl.Text(t, X(cx), Y(y), Z(z), TextAlign.Centre, c);
@@ -228,7 +231,10 @@ namespace DragonScreen
             dl.Rect(0, 0, w, h, DragonPalette.Background);
 
             // chrome: content-panel border, top bar bg, bottom bar (shared with the Cover)
-            dl.Asset("rectangle_178", X(218), Y(216), Wd(218, 1224), Z(1779), White);
+            // S174: a primitive, for the reason CoverPage.Build records at length — the asset is a
+            // hollow 2 px outline (99.45 % transparent), and a stretched outline's sides stop matching
+            // its top. Both pages draw this box; both draw it the same way.
+            dl.Box(X(218), Y(216), Wd(218, 1224), Z(1779), St(2), White);
             dl.Asset("rectangle_173", X(0), Y(0), Wd(0, 3427), Z(220), White);
             BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
 

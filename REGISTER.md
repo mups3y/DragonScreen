@@ -20627,7 +20627,7 @@ the whole R-01 policy exists to prevent.
    and a preview fixture that printed `18 %` beside `0.0 h`. Both were caught by looking at the output
    rather than by trusting the method that produced it.
 
-### S174 [O] Re-distribute the fill-to-fit slack on the two SPLIT pages — **DOING 2026-09-06** — [🟢 OWNER RULING via the overseer, 2026-09-06, **option SELECTED, not free text** — step ONE of `S153a-Q1`, which stays OPEN]
+### S174 [O] Re-distribute the fill-to-fit slack on the two SPLIT pages — **DONE 2026-09-06 — the content panel takes half the slack and its interior stretches with it; the camera slot does NOT shrink** — [🟢 OWNER RULING via the overseer, 2026-09-06, **option SELECTED, not free text** — step ONE of `S153a-Q1`, which stays OPEN]
 
 **🟢 AUTHORITY — RECORDED AS A SELECTION (C1.12).** The owner was given options and **chose one**; he did
 not write prose. ⛔ **No verbatim quote is manufactured here, and none should be read into this line** —
@@ -20665,3 +20665,120 @@ with it** (widening the box alone leaves the same overflows in a wider empty pan
 only changed pages are the Cover family and Manual Chute; `test` green; the new rule mutation-proved with
 each kill confirmed to come from the suite under test (`S167`); and the report states **the residual overflow
 with the raise applied** and **the new camera/globe slot width against the old**.
+
+---
+
+## S174 — THE RESULT
+
+**THE RULE, in one place — `plugin/src/pure/SplitReflow.cs`.** ⚠ **Plan-grade material, kept in this line
+per the guarded-file rule (G10); a later owner-authorised G-line carries it into the plan if it belongs
+there.**
+
+```
+x <  PanelL           ->  x*sc                            the left margin and the phase rail: UNMOVED
+PanelL <= x < PanelR  ->  PanelL*sc + (x-PanelL)*sc*K     the content panel: STRETCHED about its left edge
+PanelR <= x < Split   ->  x*sc + share                    carried across by the panel's growth
+x >= Split            ->  x*sc + extra                    the right block: still pinned to the right edge
+```
+
+`PanelL/PanelR` = 218/1442, `rectangle_178`'s own measured placement. **`PanelSlackShare = 0.5f` is the one
+knob** — half, for a stated reason: the panel needs ~33 design px of the 418.5 to clear today's worst row,
+so a share sized to today's content would be spent the moment the type rises again; half leaves real
+headroom for S153a–f **and** leaves the gap a real gap.
+
+⭐ **`Wd` is now `X(x + wref) - X(x)`** — the general definition, with no cases of its own. The hand-written
+version had to special-case straddlers; this one cannot get them wrong.
+
+⭐ **STRETCHING THE MAP IS THE MECHANISM, and the brief was right that widening alone would not work.** A
+card row is drawn at design 340 in a card ending 1427: the row's origin moves right by `122*(K-1)*sc` while
+its card's right edge moves by `1209*(K-1)*sc` — **nearly ten times as far** — so the row *gains*
+`1087*(K-1)*sc` of room. That ratio is the whole thing.
+
+**MEASURED — the numbers the task asked for, at the shipped 2560×1406** (`sc` 0.66572, `extra` 278.6 real =
+418.5 design, `share` 139.3 real, **K = 1.17094**):
+
+| | before | after |
+|---|---|---|
+| content panel width | 814.8 px | **954.1 px (+139.3, +17.1 %)** |
+| panel right edge | 960.0 | **1099.3** |
+| **camera / globe slot width** | 1321.5 | **1321.5 — UNCHANGED** |
+| gap, panel → slot | 278.6 | **139.3 (halved)** |
+
+⭐ **THE SLOT DOES NOT SHRINK, AND THE OWNER WAS TOLD IT WOULD.** The option he selected listed *"the
+globe/camera slot shrinks"* as an accepted cost. It is not spent: the slot is drawn by its own `v*sc +
+extra` map, so its width is `(RefW − ViewLeft)*sc` at any panel size and `share` never enters it. **What
+halves is the GAP.** Verified on the render — both pages' panel borders land at x 146 and 1099 against a
+computed 145.1 / 1099.3, and the globe is untouched and round.
+
+**RESIDUAL — with the raise applied at `MinDesignFor`/`DenseDesignFor`. This is the input to the reopened
+S153a-Q1.**
+
+⛔ **A DISCREPANCY BETWEEN THE TASK BRIEF AND THE SOURCE, REPORTED RATHER THAN SILENTLY RESOLVED.** The
+brief states *"Every overflow reported by run 4 is inside it [the content panel]."* **Measured against
+`CoverPage`'s own `Box` table, that is false**, and it changes what this task can achieve:
+
+| S153a's overflow | design x | inside the panel? | helped? |
+|---|---|---|---|
+| the three reference cards (`CONTINGENCY` row 2 to 1456; `ENTRY TIMELINE` to 1441) | 240..1427 | **yes** | ✅ **cleared** |
+| the two interrupt criteria ("fits, but abuts") | inside | **yes** | ✅ eased |
+| **the seven rail labels** (ink 124–186 in a 118.5-px box) | `rectangle_183` **21..199** | **NO — left of the panel** | ❌ untouched |
+| the six top-strip captions | **1765..3307** | **NO — right of Split** | ❌ untouched |
+| the `CAMERA` caption + view name | camera slot | **NO** | ❌ untouched |
+| the map pad labels (104-px squares) | camera slot | **NO** | ❌ untouched |
+
+**Two of six groups cleared; four are outside the panel and this rule cannot reach them.** The cards clear
+with room to spare — `CONTINGENCY`'s worst row ends at design-equivalent **1476.9 in a card ending 1633.7
+(156.8 spare)**, `ENTRY TIMELINE`'s at **1461.9 (171.8 spare)** — where before they ran past both the card
+background (1424/1427) and the divider (1442).
+
+⛔ **SO `S153a-Q1` STAYS OPEN, and `S153a`, `S153b`, `S153c`, `S153d`, `S153e` and `S154d` STAY HELD.** The
+residual above is the question's new input: the rail is a 178-design-px box in the left margin, and the
+slack redistribution has nothing to give it.
+
+**THE FIVE TRAPS.**
+1. ⭐ **`rectangle_178` IS NOT PLAIN — CHECKED FIRST, AND IT MATTERED.** 1224×1779 and **99.45 %
+   transparent**: a hollow rectangle OUTLINE, uniform 2 px stroke, square corners. Stretching it would
+   widen the vertical strokes and leave the horizontal ones at 2 px — QC C-04 (`component_48` at 12.2 %)
+   one step left. **Drawn as a `dl.Box` primitive** on both pages. ⭐ And the same check cleared the three
+   card backgrounds: `rectangle_179/180/181` are **100 % opaque single-colour fills**, `rectangle_173`'s own
+   case, so they still go through `Wd` and stretch safely.
+2. ⭐ **DRAW AND HIT MOVED TOGETHER — AND THE TESTS PROVED IT BY FAILING FIRST.** **Eight of the Cover's ten
+   hit rects sit inside the stretched zone** (design x 260..1370). The forward map, `Wd` and the inverse are
+   one function each. **Five test sites were aiming with their own copy of the old plain-scale map** and all
+   five went red: `FigmaUINavTest`'s Act\* block (its comment *"all six sit left of the 1500 Split, so the
+   frame->panel map is a plain scale"* was true and is not), its phase-less overload check, its ENTRY dash
+   probe, and `LayoutTest`'s card-row guard. All now aim through `SplitReflow.X` — PageAction's rule is
+   *one rect shared by the draw, the hit test **and the test***.
+3. **Both pages moved in this commit**, from the one function. Verified on both renders: panel borders at
+   **146 and 1099** on `ui_cover` and `ui_manualchute` alike.
+4. **`rectangle_173` is still full-bleed** — asserted in `SplitReflowTest` at four panel sizes and measured
+   on the render: row y=4 spans **x 0..2559 of 2560** on both pages.
+5. **The bottom bar was not touched.** It places its contents with the page's own `X()` and inherits this
+   change, which is why it is task A and comes after.
+
+**⚠ MY OWN TEST FOUND A REAL DEFECT IN THE INVERSE, WHICH IS WHY IT EXISTS.** First version of `InvX`
+resolved a touch in the GAP to design x **1546.6 — past `Split`, into the right block**, i.e. empty
+background firing a camera control. That is the `MarginAffordance` defect, and it would have been
+*introduced* by the commit that removed the other four copies of the map. Clamped, with the reason recorded
+at the site.
+
+**VERIFICATION.**
+- `build.py test` **green, ALL SUITES PASSED**; new `SplitReflowTest` **42 checks, 0 failed**.
+- `build.py previewdiff` (S168 — renders its baseline from a clean checkout, so it cannot report a false
+  green): **27 existing pages changed, 0 new, 0 removed, of 125 compared.** ⭐ **Every one is the Cover
+  family or Manual Chute** — checked by exclusion, not by eye: no page outside those two families appears in
+  the list, so no letterbox page was touched.
+- **MUTATION-PROVED, 5 mutants, all KILLED, all compiled** (so no kill came from a crash above the suite —
+  S167), and **every first failing suite was `DragonScreen SplitReflow tests`**, the suite under test:
+  M1 inverse reverted to the old two-branch form → round trip fails at x=224;
+  M2 `Wd` stops following the map → full-bleed fails;
+  M3 `PanelSlackShare = 0` → "panel is wider" fails;
+  M4 the seam loses continuity → continuity + round trip fail;
+  M5 the right block unpinned → full-bleed + round trip fail.
+- Preview inspected (C1.3): `ui_cover_phase5.png` at 2560×1406 — panel and its three cards visibly wider,
+  border uniform on all four sides, globe unchanged and round, air still between panel and globe, rail
+  unmoved.
+
+⚠ **NOTICED, NOT TOUCHED (C1.1):** `previewdiff` warns `assets/kenney_ui_scifi` is now EMPTY. It is
+untracked reference art, is not in this task's scope and was not modified here — `git status` shows only
+this task's seven files. Flagged so it is not lost quietly.

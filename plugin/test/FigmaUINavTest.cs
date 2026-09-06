@@ -1904,8 +1904,14 @@ public static class FigmaUINavTest
 
             for (int i = 0; i < hidden.Length; i++)
             {
-                // all six sit left of the 1500 Split, so the frame->panel map is a plain scale
-                float px = hidden[i][0] * sc, py = hidden[i][1] * sc;
+                // ⚠ S174 — "all six sit left of the 1500 Split, so the frame->panel map is a plain
+                // scale" was true until the slack redistribution and is NOT any more. These four points
+                // (design x 779..1370) are INSIDE the content panel, which now takes a share of the
+                // horizontal slack and stretches its interior with it. A test that keeps its own copy of
+                // the map is the third copy PageAction's rule exists to prevent — *one rect shared by
+                // the draw, the hit test AND THE TEST* — so this aims through the same function the page
+                // draws with. It failed loudly when the map changed under it, which is the point of it.
+                float px = SplitReflow.X(hidden[i][0], W, H), py = hidden[i][1] * sc;
                 Check("cover " + hidWant[i] + " hits on a normal phase (phase 0)",
                       CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, 0) == hidWant[i],
                       "got " + CoverPage.HitTest(px, py, W, H, CoverPage.CoverCam.Earth, 0));
@@ -1963,8 +1969,10 @@ public static class FigmaUINavTest
 
             // The legacy overloads keep their pre-S54 behaviour (NoPhase = every row live) — the painter
             // is the caller that dispatches, and it passes the real phase.
+            // S174: design x 1000 is inside the content panel, which the slack redistribution stretches,
+            // so the aim goes through the page's own map rather than a plain scale.
             Check("the phase-less overload still resolves the Act* rows (NoPhase, not slot 5)",
-                  CoverPage.HitTest(1000f * sc, 1080f * sc, W, H) == CoverPage.CoverButton.ActReview, "");
+                  CoverPage.HitTest(SplitReflow.X(1000f, W, H), 1080f * sc, W, H) == CoverPage.CoverButton.ActReview, "");
         }
     }
 
@@ -3245,7 +3253,9 @@ public static class FigmaUINavTest
         // baseline, because S129 centres the verdict on the CAPTION box instead of on either asset's
         // top (the two exported tops disagree by 6 design px). Pinning the exact y here would just
         // mirror the page's own arithmetic back at it.
-        float dashSize = SizeOfNear(unk, Dashes.None, 783f * scq, 1570f * scq, 40f);
+        // S174: design x 783 is inside the content panel and the panel now stretches, so this locates
+        // the dash through the same map the page drew it with. The y is untouched - the reflow is x-only.
+        float dashSize = SizeOfNear(unk, Dashes.None, SplitReflow.X(783f, VW, VH), 1570f * scq, 40f);
         Check("...and the dash with it", dashSize >= floor, "got " + dashSize + ", floor " + floor);
 
         // ⛔ ONE BASELINE. The two exported boxes disagree by 6 design px (`true` at y 1555, `false` at

@@ -1222,12 +1222,20 @@ public static class LayoutTest
             for (int i = 0; i < gd.Count; i++)
             {
                 DrawCmd t = gd.At(i);
-                if (t.Kind != DrawKind.Text || t.A < 240f * csc || t.A > 1427f * csc) continue;
+                // ⚠ S174 — these three x filters were `design * csc`, the plain-scale map. The cards
+                // are INSIDE the content panel, which now takes a share of the horizontal slack and
+                // stretches its interior, so `340 * csc` stopped matching any row and this guard
+                // examined 0. ⭐ IT FAILED RATHER THAN PASSING, which is the property mutation Y4 was
+                // built for and the reason the `examined == 15` line exists at all. Routed through the
+                // same map the page draws with; the y filters are untouched because the reflow does not
+                // touch y.
+                if (t.Kind != DrawKind.Text
+                    || t.A < SplitReflow.X(240f, cw, ch) || t.A > SplitReflow.X(1427f, cw, ch)) continue;
                 if (t.B < 443f * csc || t.B >= 1823f * csc) continue;
                 // ROWS ONLY. The export puts card titles at x 362 and rows at 340, and a title is
                 // legitimately larger than a row - the same geometric discriminator the S123 block
                 // above uses, and for the same reason: it survives a size change, a size match does not.
-                if (Math.Abs(t.A - 340f * csc) > 0.5f) continue;
+                if (Math.Abs(t.A - SplitReflow.X(340f, cw, ch)) > 0.5f) continue;
                 examined++;
                 if (t.C > (CoverPage.RowSize + 0.01f) * csc)
                 { raised++; if (t.C > biggest) { biggest = t.C; what = t.Str; } }
