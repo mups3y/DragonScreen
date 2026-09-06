@@ -21042,7 +21042,7 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — the build is done and verified; the unit stays OPEN for the owner's edits (edits 1 and 2 landed 2026-09-06; S176-Q1 still open)** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — edit 3 in progress: the owner's `OVERRIDE` gives the bar its OWN named type floor (29 design px), which CLOSES S176-Q1 and S179-Q2** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
@@ -21543,6 +21543,68 @@ through the same map. ⛔ `docs/QC_FINDINGS.md` is QC's file and was **not** edi
 
 **S176-Q2 IS THEREFORE CLOSED-BY-INSTRUCTION**, with the `OVERRIDE`-wording caveat above left open for a
 governance line. **S176-Q1 (the bar's typed text vs the nav-bar floor) is UNCHANGED and still open.**
+
+---
+
+#### ⭐ EDIT 3 (OWNER `OVERRIDE`, 2026-09-06) — THE BAR GETS ITS OWN NAMED TYPE FLOOR
+
+**🟢 OWNER `OVERRIDE`, 2026-09-06, quoted verbatim from this session's task prompt (C1.12):**
+*"THE BOTTOM BAR IS AN EXPLICIT EXCEPTION, under an owner `OVERRIDE` (option selected, 2026-09-06): bar
+text draws at **29 design px** against the bar's own named floor. **The bar still has a floor and is still
+in the census — it was NOT exempted.** Do not "correct" the bar back up to the glanceable floor on a later
+page."*
+
+⚠ **THE FORM THIS ARRIVED IN, STATED PLAINLY.** It is an option SELECTION relayed through the overseer's
+prompt, not a sentence the owner typed — recorded the same way [[S153]]'s own policy was, which also says
+in `Typography.cs` that it was "a SELECTION, not free text - there is no verbatim quote and none is
+invented here". The text quoted above is the prompt's own wording and is the authority this edit acts on.
+**Nothing wider is read into it:** it settles the bar's SIZE and the existence of the bar's floor. It does
+NOT rule on typing the bar's four tile-borne text elements, and this edit does not touch them.
+
+⭐ **IT ANSWERS TWO OPEN QUESTIONS AT ONCE, FROM OPPOSITE DIRECTIONS.**
+- **S176-Q1** asked whether the bar's text must be TYPED and therefore RAISED to the glanceable floor
+  (48.07 design px), and recommended option 1 — leave it — because the raise was 1.75×–2.37× and would
+  print two sourceless numbers at the floor. **The premise is now gone:** the bar's floor is 29, and the
+  export's own type on this bar is 20.3 / 27.5 / 30.4 design px. The dilemma dissolves rather than
+  resolving.
+- **S179-Q2** asked which way to close the 7-design-px gap between the owner's 29 and the static floor's
+  36.05. **The owner took neither of the posed options:** not option 1 (raise to 36.05), not option 3
+  (exempt the bar from the census). He took the one the options did not offer — **a named floor of the
+  bar's own, still inside the census.**
+
+## STEP A — THE GATHERED BACKLOG FOR THIS EDIT, AND EACH ITEM'S CLOSURE CRITERION
+
+Built by hand from all four sources (C1.2 / the prompt's Step A), re-walked rather than inherited from
+[[S176]]'s own list:
+
+| # | source | item | disposition |
+|---|---|---|---|
+| 1 | `REGISTER` S176-Q1 | the bar's text: typed, and at what size | **CLOSE** — settled by the `OVERRIDE` above |
+| 2 | `REGISTER` S179-Q2 | the owner's 29 sits below the HARD ratchet | **CLOSE** — settled by the `OVERRIDE` above |
+| 3 | `REGISTER` S179 **D2** | `CURRENT STATE`'s live value drops to 29 design px | **BUILD** — one draw site, `BottomBar.cs:463` |
+| 4 | `REGISTER` [[S172]] | still marked `TODO` though [[S176]] Step C closed it | **CLOSE** — bookkeeping only; flip to `DONE`, no code |
+| 5 | `REGISTER` S179 **D1** | the event box at 29 design px | ⛔ **DEFERRED — owner's.** Depends on the unprompted build, now STASHED; see below |
+| 6 | working tree | 7 uncommitted files from the unprompted build | ⛔ **STASHED, NOT JUDGED** — owner's disposition; see below |
+| 7 | `REGISTER` [[S147b]] | POINTING MODE / comm block / counter have no source | ⛔ **HELD, untouched** — §1.4 owner ruling + Part B |
+| 8 | `REGISTER` [[S177]] | the page frame's border is drawn only by the bar | — **not the bar's**: its own line says it is a PAGE-frame job |
+| 9 | `REGISTER` [[S178]] | a 4th vertical-centring figure | — **not the bar's**: it is `CoverPage.PadButton` |
+| 10 | `BACKLOG` §3 **H40** | the bar's live text is baked | half `DONE` ([[S147]]); remainder is item 7 |
+| 11 | `BACKLOG` §3 **H45** | a dashed value in a live weight | `DONE` ([[S148]]) — must survive this edit |
+| 12 | `BACKLOG` §3 **H7** | the bar carries the alarm surface | `DONE` ([[S130]]) — `StateInk` must survive |
+| 13 | `BACKLOG` §5 | no remaining QC finding names the bar | re-verified |
+| 14 | `BACKLOG` §2 | the bar is in none of the 17 duplicate pairs | re-verified |
+| 15 | `QC` *(read-only)* | `C-04` stretch · `C-12` smudge · `H-07` two borders | already closed — **must not be re-opened** |
+| 16 | `QC` *(read-only)* | `Q8` the letterbox-margin coupling | `MarginAffordance`'s strip must survive |
+
+⛔ **WHAT WAS FOUND IN THE WORKING TREE, AND WHY THIS LINE DID NOT DECIDE IT.** This session opened on a
+dirty tree: the seven files of [[S179]]'s unprompted event-dialog build, uncommitted. **They were not
+committed, not finished and not deleted.** Committing them would have ratified a build the owner asked
+three times not to have; deleting them would destroy sourced research (the 40-callout catalogue) against
+C1.16. They are **stashed** — `stash@{0}`, fully reversible with `git stash pop` — with a patch and file
+copies kept beside it, and the disposition is posed to the owner below. The stash was necessary because
+`BottomBar.cs` carries changes from BOTH, and committing that file by path would have swept an
+unprompted feature into this edit's commit.
+
 ---
 
 
