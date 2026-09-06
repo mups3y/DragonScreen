@@ -21757,7 +21757,7 @@ the floor it needs now exists. It becomes a small change under whichever of Q3's
 ---
 
 
-### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **HELD 2026-09-06 — ⭐ S179-Q2 is now CLOSED by the owner's `OVERRIDE` (the bar has its own named floor; see [[S176]] edit 3) and **D2 IS BUILT** there. D1 remains BLOCKED, not on its size but on S176-Q3: the unprompted build is STASHED (`stash@{0}`), and its disposition is the owner's** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
+### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **DOING 2026-09-07 — ⭐ the owner ruled S176-Q3: KEEP IT. S179-Q2 was closed by his `OVERRIDE` and D2 is built in [[S176]] edit 3; this line restores the stash, re-fits the box to `Typography.BarDesign` (D1), corrects a provably false comment, and verifies** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
 
 **🟢 OWNER, 2026-09-06, verbatim, with a reference image of the bar's centre section:** *"this is an
 example of the centre section of the bottom bar. You will notice the pop up box "trunk jettison and
@@ -22048,6 +22048,25 @@ look"* and *"previews only"*. **A whole feature was built instead of a mock.** R
 because an unprompted build is exactly the kind of thing that must not sit quietly in a working tree.
 
 **UNCOMMITTED, in the working tree at `6abfdf9`:**
+
+⛔ **CORRECTED 2026-09-07 (S179, job 1) — THE SENTENCE ABOVE IS KEPT AND IS NO LONGER TRUE.** C1.16 /
+G12: a wrong statement is marked, not deleted, because the correction is only checkable against what it
+replaced. It was accurate when written, on 2026-09-06, with the seven files loose in the working tree.
+**Two things have happened since.** (1) [[S176]] edit 3 committed `7452938` on top, which is where
+`Typography.BarDesign` came from — so `6abfdf9` is no longer HEAD and the files are not "in the working
+tree" of anything. (2) The seven files were **STASHED** rather than committed or deleted, precisely so
+that this decision stayed the owner's; they live in `stash@{0}` (*"S179 unprompted event-dialog build -
+owner disposition pending"*), pushed with `git stash -u` so the two NEW files went with them, and a
+patch plus loose copies were kept outside the repo as a second belt.
+
+⭐ **AND THE DISPOSITION IS NOW SETTLED: THE OWNER SAID KEEP IT.** [[S176]] edit 3 posed this as
+**S176-Q3** with three options and recommended discarding the code. The owner chose otherwise, and this
+line is finishing the work rather than binning it. ⚠ **The form that ruling reached this chat in, stated
+plainly (C1.12):** it arrived inside the task prompt for this line, as *"Do not bin it. The owner said
+so explicitly"* — a report of his decision written by another build chat, **not a sentence of his that
+anyone has quoted**. It is acted on because the owner pasted the prompt himself, which is his own
+instruction to proceed; it is recorded here as a report rather than as his words, because no quote
+exists and C1.12 forbids inventing one. **If that reading is wrong, this line is the one to unwind.**
 
 | file | what |
 |---|---|
