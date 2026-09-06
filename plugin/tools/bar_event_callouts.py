@@ -4,10 +4,23 @@ RefW, RefH = 3427.0, 2112.0
 h = 1406
 sc = h / RefH
 CELL = 475.0                 # design px between the bar's two rules - MEASURED off component_48
-PAD = 24.0
+INSET = 24.0                 # BarEvent.Inset  - cell rules -> box edge
+TEXTPAD = 24.0               # BarEvent.TextPad - box edge -> text. Restored to Inset 2026-09-07.
 CAP = 0.6638                 # MarginAffordance.CapAdvance, D-DIN caps, measured off a render
-floor = 32.0 / sc            # Typography.MinDesignFor at the shipped 2560x1406
-usable = CELL - 2 * PAD
+
+# ---- THE SIZE IS THE BAR'S OWN FLOOR, NOT THE GLANCEABLE ONE (owner D1, 2026-09-06) ----------
+# Typography.BarDesign. The owner was shown this box at the glanceable floor (32/sc = 48.07 design
+# px), rejected it, and picked 29 off a rendered ladder; S176 edit 3 made 29 a NAMED floor that the
+# bar's CURRENT STATE value also draws at.
+floor = 29.0
+
+# ---- AND THE BUDGET SUBTRACTS BOTH PADDINGS, WHICH IT DID NOT UNTIL 2026-09-07 -----------------
+# CORRECTED: this file used `usable = CELL - 2*PAD`, i.e. it modelled the INSET and never modelled
+# the text padding, so it computed 427 where BarEvent.Usable computes 379. It was therefore MORE
+# PERMISSIVE than the code it exists to prove, and that is how the header's "20 fit on one line and
+# 20 need two" came to be wrong (the true split at the glanceable floor was 16 / 24). A tool that
+# checks a different budget from the code is not a check.
+usable = CELL - 2 * INSET - 2 * TEXTPAD
 per_line = usable / (CAP * floor)
 
 # (phase, callout as the stream says it, in-repo source)
@@ -54,7 +67,8 @@ ROWS = [
     ("Entry",     "SPLASHDOWN",             "PHASE_6 4"),
 ]
 
-print("cell %.0f design px, %.0f usable, floor %.2f design px" % (CELL, usable, floor))
+print("cell %.0f design px, box %.0f, usable %.0f, size %.2f design px (Typography.BarDesign)"
+      % (CELL, CELL - 2 * INSET, usable, floor))
 print("budget: %.1f chars per line, %.1f over two lines" % (per_line, 2 * per_line))
 print()
 one = two = over = 0

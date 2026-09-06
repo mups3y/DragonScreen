@@ -112,8 +112,10 @@ namespace DragonScreen
 
         /// <summary>Draw commands the bar emits, worst case — every page that shows it must carry this
         /// much capacity on top of its own. ⚠ It was 2 (one asset + one text) until S176 un-flattened
-        /// the raster; the pages' `Commands` constants were raised by 20 in the same commit.</summary>
-        public const int Commands = 20;
+        /// the raster; the pages' `Commands` constants were raised by 20 in the same commit.
+        /// ➕ S179: `+ BarEvent.Commands` for the centre-cell announcement (7 for its rounded box, 2
+        /// lines of text, 1 spare). Derived rather than re-typed, so the two cannot drift.</summary>
+        public const int Commands = 20 + BarEvent.Commands;
 
         /// <summary>The bar's own box in the design frame: full width, 235 tall, at design y 1877.</summary>
         const float BarY = 1877f, BarH = 235f;
@@ -469,7 +471,14 @@ namespace DragonScreen
             dl.Asset("bar_comm_block", right - CommDx * k, y + CommY * k, CommW * k, CommH * k,
                      DragonPalette.White);
 
-            // ---- 7. CURRENT STATE — THE ONE LIVE THING ON THE BAR ----
+            // ---- 7. THE CENTRE CELL'S EVENT ANNOUNCEMENT (S179) ----
+            // ⭐ 475 design px of this bar — 13.9 % of it — carried no ink in the export, and this is
+            // what belongs there. It draws only when a LIVE signal has raised a callout; `BarEvent`
+            // owns no trigger and no clock. See that file's header for why that matters more here than
+            // anywhere else on the bar.
+            BarEvent.Draw(dl, s.Event, w, h, fit);
+
+            // ---- 8. CURRENT STATE — THE ONE LIVE THING ON THE BAR ----
             string state = CurrentState(s);
             // The ink CENTRE of the erased value sat at PNG row 185; a line drawn at `top` puts its
             // ink centre 0.553 * size below it (measured off a render in S129). So the live text lands

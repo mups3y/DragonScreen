@@ -21757,7 +21757,7 @@ the floor it needs now exists. It becomes a small change under whichever of Q3's
 ---
 
 
-### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **DOING 2026-09-07 — ⭐ the owner ruled S176-Q3: KEEP IT. S179-Q2 was closed by his `OVERRIDE` and D2 is built in [[S176]] edit 3; this line restores the stash, re-fits the box to `Typography.BarDesign` (D1), corrects a provably false comment, and verifies** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
+### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **DONE 2026-09-07 — the box is re-fitted to the owner's D1 (29 design px, all 40 callouts on ONE line), two provably false comments are corrected in place, and the mutation set went from 1 kill to 6 + 2 proven-equivalent. ⚠ WHICH of the 40 the bar raises is still S179-Q1 and still the owner's; only the 11 gate-driven ones are wired** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
 
 **🟢 OWNER, 2026-09-06, verbatim, with a reference image of the bar's centre section:** *"this is an
 example of the centre section of the bottom bar. You will notice the pop up box "trunk jettison and
@@ -22103,6 +22103,132 @@ decision needed is which of these closes the 7-design-px gap between the owner's
 
 **Gate flags (C1.12):** none needs `install` or glass. **Options 2 and 3 change a policy the owner set on
 2026-09-06 and are his alone.** Option 1 needs only his word that a slightly larger size is acceptable.
+
+
+---
+
+#### ⭐ FINISHED 2026-09-07 — THE BOX IS RE-FITTED TO THE OWNER'S RULING, AND TWO FALSE CLAIMS ARE CORRECTED
+
+**Authority:** the owner's D1 (this box draws at the size he picked) and his decision on S176-Q3 (keep
+the work), both recorded above. `Typography.BarDesign` already exists — [[S176]] edit 3 built it for D2.
+
+### JOB 1 — the stale sentence
+
+Corrected in place above (commit `2cdaf41`), not deleted. C1.16 / G12.
+
+### JOB 2 — re-fitted to `Typography.BarDesign`, and the fit RE-DERIVED rather than the constant swapped
+
+| | at 48.07 (the rejected floor) | at 29 (`BarDesign`) |
+|---|---:|---:|
+| fit on ONE line | **16** of 40 | ⭐ **40** of 40 |
+| need two lines | 24 | **0** |
+| overflow | 0 | **0** |
+| widest string `DRAGON ON INT POWER`, estimator | 606.3 | **365.8** |
+| ...as D-DIN actually renders it | 486.8 | **293.7** |
+| `TextPad` | 16 (a squeeze) | ⭐ **24 = `Inset`**, borrowed not chosen |
+
+**`TextPad` is back to 24 and it is now written as `= Inset`**, so the box's inner and outer breathing
+space are the same number by construction rather than by coincidence. The reason it was ever 16 —
+`DEORBIT BURN` sitting 3.9 px outside a 379-px budget — **only existed at the size that has since been
+rejected**: at 29 that string is 230.9. Every superseded figure is marked in place, not deleted.
+
+⛔ **AND THE TOOL WAS WRONG IN A WAY THAT MATTERED — `bar_event_callouts.py` NEVER MODELLED `TextPad`.**
+It computed `usable = CELL - 2*Inset` = **427**, where `BarEvent.Usable` computes **379**. So the tool
+that exists to re-derive the fit was checking a **more permissive budget than the code**, and that is
+where this line's own header figure — *"20 fit on ONE line and 20 need two"* — came from. **The true
+split at the glanceable floor was 16 and 24.** The tool now subtracts both paddings and reads its size
+from `BarDesign`; it agrees with the code and with an independent replication.
+
+### JOB 3 — the false causal claim, corrected in TWO places (the handoff named one)
+
+The claim: that the greedy word-wrap was a defect the test caught. **It is false, and it appears twice** —
+in `BarEvent.Wrap`'s body AND in `BarEventTest`'s section 3b, which additionally asserted *"They did NOT
+agree at 379"*. Both are kept and marked (C1.16 / G12).
+
+⭐ **PROVEN, NOT ASSERTED — AND WITH THE STRUCTURAL REASON, WHICH THE ORIGINAL MISSED.** As the split
+index moves right, line 1 grows and line 2 **shrinks**. Naive greedy takes the last split whose line 1
+fits, which is therefore the one with the **smallest line 2** — so if any split satisfies both bounds,
+the naive choice already does. Validating can only agree or fall back. Replicated over all 40 callouts
+at 48.07 **and** 29, at padding 16 **and** 24 — **120 comparisons, 0 differences**. At 379 they agreed
+too: both left `DEORBIT BURN` outside the box. ⛔ **The padding fixed it; the algorithm did not.**
+
+**`R1` is reported as an EQUIVALENT MUTANT and no check was invented to kill it.** The validating form is
+kept because it is never worse and its balanced fallback is genuinely better when no split fits — a case
+today's 40 never reach, which is why the synthetic-string test carries that contract.
+
+### ⛔ AND THE THING THE HANDOFF GOT WRONG: SEVEN OF EIGHT MUTATIONS SURVIVED, NOT THREE
+
+The handoff stated *"5 were killed, R3/R5/R6/R7/R8 among them"*. **Re-run against this code, only R8
+was killed.** Reported plainly because a suite believed stronger than it is, is worse than no suite.
+
+| | mutation | first run | after | why |
+|---|---|---|---|---|
+| R1 | `Wrap` → naive greedy | SURVIVED | ⚠ **SURVIVES — EQUIVALENT** | proven identical, 120 comparisons |
+| R2 | `TextPad` → the superseded 16 | SURVIVED | ✅ KILLED | the borrowed-`Inset` decision is pinned |
+| R3 | the box → the glanceable floor | **SURVIVED** | ✅ KILLED | ⭐ **this undoes the OWNER'S D1** |
+| R4 | draw with no event | SURVIVED | ⚠ **SURVIVES — EQUIVALENT** | the `None` guard is redundant with the empty-text guard below it; defence in depth, not a hole |
+| R5 | box shifts 40 design px down | SURVIVED | ✅ KILLED | only its **x** was ever checked |
+| R6 | `BottomBar.Commands` drops the box | SURVIVED | ✅ KILLED | every page sizes its list off that constant |
+| R7 | a gate maps to the WRONG callout | SURVIVED | ✅ KILLED | the map was unreachable — see below |
+| R8 | the wrap drops line 2 | ✅ KILLED | ✅ KILLED | — |
+
+⭐ **R3 IS S176 EDIT 3'S `M1` HAPPENING AGAIN, ONE FILE OVER.** Every check in `BarEventTest` computed
+its own `size` and **none ever asked what the DRAW used**, so reverting the owner's ruling failed
+nothing. The fix is the same shape: read the size off the **emitted command** and compare it to
+`BarDesign * k`, at both shipped sizes × all three fits.
+
+⭐ **AND R7 COULD NOT BE TESTED AT ALL, WHICH IS WHY THE MAPPING MOVED.** `CalloutForGate` was a private
+`static` in `VesselData` — **pure logic living in the KSP glue**, where the project's load-bearing
+pure/glue split says it must not be and where no headless test can reach it. `GateId` is itself pure
+(`pure/CrewGates.cs`), so the function is now `BarEvent.ForGate`, public and pure; the glue still owns
+the **trigger**. Pinned by name, by coverage (11 gates), and by a no-two-gates-collide check.
+
+### VERIFICATION
+
+- **`python plugin/build.py test` → ALL SUITES PASSED. 20 893 checks, 0 failed.** `BarEvent` suite
+  **169**. Reconciled against HEAD `7452938` (**20 709**), measured both ways rather than quoted:
+  **+184 = 169 (the new suite) + 15 (`ScreenSizeTest`, which walks every preview page and gained the 2
+  new fixtures)**.
+- ⚠ **AND A DROP WAS CHASED DOWN RATHER THAN WAVED AT.** Re-fitting to 29 first took the total *down*
+  96. Exactly accounted for: each two-line callout costs 2 checks (`line 2 fits` + `the wrap loses
+  nothing`), and 24 two-line × 2 × 2 sizes = 96. ⛔ **The honest consequence, stated: at 29 no real
+  callout reaches the two-line path, so its only coverage is the synthetic string.** That is why that
+  test matters more now than when it was written, and why the wrap is kept.
+- ⭐ **`previewdiff`: 0 existing page(s) changed, 2 new, 0 removed, of 125 — 125 unchanged.** The box
+  draws only when `Event != None` and every existing fixture leaves it `None`, so **nothing that
+  existed moved by a single pixel**. The two new pages are `ui_cover_event_gofordeorbitburn` and
+  `ui_cover_event_meco`.
+- **`preview` — 127 pages, no `MISSING art`, no overflow.**
+- **The R-01 census is UNMOVED: `856 below the floor, 0 page(s) regressed, 0 improved`,** and the bar's
+  own line still reads `26 draw(s) judged against the BAR's own floor`. The box is not in the census
+  because no census fixture raises an event — ⚠ **stated rather than implied: the box's own type is
+  therefore NOT ratcheted today.** It draws at `BarDesign` by construction and R3 pins that, but if a
+  census state ever raises an event, that is the moment to add it to the baseline table.
+- **8 mutations, 6 killed, 2 equivalent** — 0 compile errors and 0 crash lines on every one ([[S167]]),
+  so every kill came from the suite under test.
+- ⚠ **ONE TEST BUG OF MY OWN, FOUND AND FIXED:** the capacity check first drew the bar **and** the box,
+  overflowed, and read exactly like a product defect. `BottomBar.Draw` already calls `BarEvent.Draw`;
+  the box has one caller. Noted in the test so the next reader does not repeat it.
+- `install` and glass **SPENT** and untouched. **No `git push`.** `docs/BUILD_PLAN.md` untouched
+  (guarded, G10); `docs/QC_FINDINGS.md` untouched (QC's). §14.4(a) untouched — this announces, it
+  commands nothing. **C1.16 / G12: nothing deleted; five blocks marked SUPERSEDED / CORRECTED in place.**
+
+**DECLARED OUTPUTS:** `plugin/src/pure/BarEvent.cs` · `plugin/src/pure/BottomBar.cs` ·
+`plugin/src/pure/Pages.cs` · `plugin/src/VesselData.cs` · `plugin/preview/PreviewMain.cs` ·
+`plugin/test/BarEventTest.cs` · `plugin/test/TestMain.cs` · `plugin/tools/bar_event_callouts.py` ·
+`REGISTER.md`.
+
+## Open questions for the owner — UNCHANGED, and none of them decided here
+
+**S179-Q1's remainder — WHICH of the 40 the bar raises.** Only the **11 gate-driven** callouts are
+wired. `MECO` / `SECO-1` / `MAX-Q` / `STAGE SEPARATION` have **no detector anywhere in the tree**, and
+the named rendezvous burns are Part B. ⛔ **Nothing was wired to MET or to a timer**, and `BarEvent`
+still owns no clock — the one thing this box must never do. The other 29 are drawable and simply never
+fire.
+
+**S176-Q1 — whether the bar's four remaining tile-borne text elements get TYPED** — still open. The
+owner's D1/D2 are evidence about SIZE, not a closure of that question, and this line does not extend
+them.
 
 ### S178 [S] Four ways to centre a label vertically, and only one of them was measured — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: consistency]
 - **The finding.** "How far below a text `y` the cap centre falls, as a fraction of the size" now has a

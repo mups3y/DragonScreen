@@ -163,6 +163,7 @@ public static class TestMain
         bad += Suite(SplitReflowTest.Run);
         bad += Suite(Frame58MapTest.Run);
         bad += Suite(CoverActsTest.Run);
+        bad += Suite(BarEventTest.Run);
         bad += Suite(CoverAlarmTest.Run);
         bad += Suite(Frame58ControlsTest.Run);
         bad += Suite(AlertActivityTest.Run);

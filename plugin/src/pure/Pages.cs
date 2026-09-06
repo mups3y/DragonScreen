@@ -380,6 +380,19 @@ namespace DragonScreen
         /// </summary>
         public AudioLevels Audio;
 
+        /// <summary>
+        /// The stream callout the BOTTOM BAR is announcing in its centre cell right now, or
+        /// <see cref="BarCallout.None"/>. See pure/BarEvent.cs.
+        ///
+        /// ⛔ SET FROM A LIVE SIGNAL OR LEFT `None` — never from a clock. The bar's centre cell was
+        /// empty in the export and the owner identified it as an event dialog (S179); the copy is the
+        /// transcribed SpaceX/NASA stream vocabulary, and the TRIGGERS are the part that does not fully
+        /// exist yet. Crew gates and flight-phase transitions are live; MECO / SECO-1 / MAX-Q / STAGE
+        /// SEPARATION have no detector anywhere in the tree, and the named rendezvous burns are Part B.
+        /// A callout with no source stays unraised rather than being fired off MET.
+        /// </summary>
+        public BarCallout Event;
+
         /// <summary>Crew procedure gate the user must act on now - the checklist card. See GateCard.</summary>
         public bool GateActive;
         public string GateTitle;

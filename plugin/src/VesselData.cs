@@ -383,6 +383,23 @@ namespace DragonScreen
             state.FaultResponse = fdir.Response;
             state.FaultText = Fdir.FaultName(fdir.Fault);
 
+            // ---- S179: THE BOTTOM BAR'S CENTRE-CELL ANNOUNCEMENT ----------------------------------
+            // ⭐ WIRED TO THE GATE MACHINE, WHICH IS ALREADY LIVE AND ALREADY LATCHED. A gate is raised
+            // when the mission reaches its decision point and stays raised until the crew clears it, so
+            // the announcement needs NO timer, NO duration policy and NO state of its own here — which
+            // is exactly why this is the half that could be built honestly today.
+            // ⛔ AND THE OTHER CALLOUTS ARE DELIBERATELY NOT WIRED. MECO / SECO-1 / MAX-Q / STAGE
+            // SEPARATION have no detector anywhere in the tree, and the named rendezvous burns are Part
+            // B (§B12.5). They stay `None` until something MEASURES them. A real callout fired off MET
+            // would be a crew reading an event nothing observed; see pure/BarEvent.cs's header.
+            // ⚠ THE FLIGHT-PHASE CALLOUTS (ENTRY INTERFACE / DROGUES / MAINS / SPLASHDOWN) ARE ALSO NOT
+            // WIRED, and that is a judgement rather than a gap: `MissionPhase` is live, but the bar's
+            // own CURRENT STATE already prints the phase two cells to the left, and a transition
+            // announcement needs a LATCH POLICY (how long does it stay up?) that nothing has decided.
+            // Raising them would be S146 / H38 — one signal shown as two instruments. Logged, not done.
+            state.Event = BarEvent.ForGate(CrewProcedureOps.CrewActionNeeded()
+                                             ? CrewProcedureOps.CurrentGateId : GateId.None);
+
             state.GateActive = CrewProcedureOps.CrewActionNeeded();
             if (state.GateActive)
             {

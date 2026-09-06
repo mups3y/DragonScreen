@@ -1500,6 +1500,29 @@ public static class PreviewMain
                                   + " commands   ENTRY ENABLED = " + EntryReadiness.Text(ev));
             }
 
+            // ---- S179: THE BOTTOM BAR'S CENTRE-CELL EVENT ANNOUNCEMENT ----
+            // ⛔ WITHOUT THESE TWO RENDERS THE ELEMENT HAS NO EVIDENCE CHANNEL AT ALL. Every other
+            // Cover fixture has no conductor running, so no gate is raised, so `Event` is `None` and
+            // the cell is empty - which is the CORRECT default and is what `ui_cover.png` shows. The
+            // box only exists on a screen when something has raised a callout.
+            // ⚠ TWO of them, because the wrap has two cases and one render would only prove one:
+            // `MECO` (4 chars) is the ONE-LINE case and `GO FOR DEORBIT BURN` (19) is the TWO-LINE
+            // case, which is also the callout the live gate machine actually raises at G15.
+            foreach (BarCallout bc in new[] { BarCallout.Meco, BarCallout.GoForDeorbitBurn })
+            {
+                PageState vps = ps; vps.Event = bc;
+                DisplayList vdl = new DisplayList(600);
+                CoverPage.Build(vdl, CW, CH, vps, MapProjection.Default(), 0);
+                string path = Path.Combine(outDir,
+                    "ui_cover_event_" + bc.ToString().ToLowerInvariant() + ".png");
+                Render(vdl, CW, CH, path);
+                string l1, l2;
+                BarEvent.Wrap(BarEvent.Text(bc), 48.07f, out l1, out l2);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + vdl.Count
+                                  + " commands   EVENT \"" + BarEvent.Text(bc) + "\" -> \"" + l1
+                                  + "\"" + (l2 == null ? " (one line)" : " / \"" + l2 + "\""));
+            }
+
             // ---- S130 / H7: THE ALARM CHANNEL, WHICH USED TO HAVE NO CONSUMER ----
             // ⛔ Every other cover render is a NOMINAL feed, so the one state this line adds appears in
             // none of them. `Alarms.Mask` folded the whole FDIR spine every frame and was discarded; the
