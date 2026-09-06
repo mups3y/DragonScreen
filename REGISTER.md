@@ -20782,3 +20782,15 @@ at the site.
 ⚠ **NOTICED, NOT TOUCHED (C1.1):** `previewdiff` warns `assets/kenney_ui_scifi` is now EMPTY. It is
 untracked reference art, is not in this task's scope and was not modified here — `git status` shows only
 this task's seven files. Flagged so it is not lost quietly.
+
+
+### G13 [O] The Figma-export conformance rule: build from the export where one exists, and change nothing where one does not — **DOING**
+
+**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12 evidentiary standard):** *"are we going to be
+building all the elements of the pages correctly now? the way they were intended? The elements we have
+invented for pages not on this figma website will have to stay the same"* — and, authorising this task:
+*"write that governance prompt"*. No other authority is claimed and none is inferred.
+
+**Scope:** writes a RULE into the guarded `docs/BUILD_PLAN.md` (a `G`-line is authorised to, per C1.12's
+GUARDED-FILE STANDARD). It does **NOT** do the conformance work — no page rebuilt, no asset swapped, no
+code touched. Declared outputs: `docs/BUILD_PLAN.md` + this file, nothing else.
