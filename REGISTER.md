@@ -16337,6 +16337,32 @@ names the conditions that would earn it (a lost fix, a stale ephemeris, a map wi
   point. **`ui_cover_alarm.png`** is the new render: CURRENT STATE reads `ORBITING` in red.
 - `build.py test` green · comment-loss **0** · no `install`, no glass, no `git push`.
 
+#### ⛔ CORRECTION 2026-09-06, SAME DAY, BY [[S132]] — "0 existing pages changed" IS WRONG. IT IS 74.
+
+The line above is kept verbatim (C1.16 / G12) because the mistake is the useful part. **The real figure,
+re-measured against this line's own parent commit in a clean worktree: 74 existing pages changed, plus
+the one new render.**
+
+⚠ **THE MEASUREMENT WAS BROKEN, NOT THE CHANGE.** The before/after harness reverted a list of files to
+their `HEAD` versions and re-rendered — but the render **failed to compile** and the harness read the
+unchanged PNGs on disk as "nothing moved". A silent false green, which is the exact shape of defect this
+project spends its time removing, produced by the tool that was supposed to prevent one.
+⭐ Found by [[S132]] when the same harness reported 0 for a change that visibly redrew two elements.
+The harness now moves ADDED files aside as well as reverting modified ones, and **fails loudly** if
+either render does not report ok.
+
+⭐ **AND THE 74 ARE THE FIX WORKING, WHICH IS WHY THIS READS BETTER THAN THE CLAIM IT REPLACES.** The
+shared preview fixture carries a real **power caution** — it always has; `ui_vehicle.png`'s status row
+has printed `POWER · CAUTION` for as long as that row has existed. Before this line, **no Figma page
+could say so**: `Alarms.Mask` was folded every frame and discarded. Now every one of their bottom bars
+reads `ORBITING` in amber. That is 74 pages that were quietly under-reporting a live caution, and they
+have stopped.
+
+⚠ **[[S128]]'s identical claim was RE-CHECKED the same way and stands**: 0 existing pages, 1 new,
+measured against its own parent commit. Its latch rules genuinely draw only when latched, and the shared
+fixture latches neither. ⭐ Stated because a broken method does not make every result it produced wrong,
+and the two had to be told apart by measuring rather than by assuming either way.
+
 ### S131 [S] A 16 px black arrow renders outside the content panel, on the live camera slot — **DONE 2026-09-06 — dropped; verified by an EXACT before/after diff of all 19 Cover renders** — [QC `C-02`]
 - 🟢 **Owner answered Q1: "Drop it"** (option selected, 2026-09-05).
 - ⛔ **HELD on the owner's own condition** — the same *"ask the overseer to assess before acting"* that holds
