@@ -24040,7 +24040,7 @@ statement of what he reported.
 - **DONE when:** row 0 either carries a value or is declared ineligible for these columns, and a run
   closes with **0** coverage defects.
 
-### S197 [S] On the pad the NAV globe put the vessel marker ~90° from where the vessel was — **TODO** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a live readout that may be WRONG rather than absent]
+### S197 [S] On the pad the NAV globe put the vessel marker ~90° from where the vessel was — **DOING** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a live readout that may be WRONG rather than absent]
 
 - **How it was found.** [[S194]] was verifying that the Cover's live elements really were live
   (finding 3). Every other element checked out. **This one did not** — and a readout that is wrong is
