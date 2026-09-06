@@ -20430,7 +20430,7 @@ build chat does not change it. This is a proposal.
   The gate does not survive this session.
 
 
-### S172 [O] Cover / Frame 67 — the bottom bar is letterboxed on a page that is not — **TODO** — [logged by the 2026-09-06 glass pass per C1.1; owner finding; TIER 2]
+### S172 [O] Cover / Frame 67 — the bottom bar is letterboxed on a page that is not — **DONE 2026-09-06 - closed by [[S176]]'s rebuild; this line's status was simply never flipped, and S176 edit 3 found it still open while re-walking the page's backlog** — [logged by the 2026-09-06 glass pass per C1.1; owner finding; TIER 2]
 - **The owner's finding, verbatim (2026-09-06, from the glass pass):** *"the bottom bar does not go to
   the edge of the screen as it should"*, in the session he opened with *"we need a install and glass
   test I feel like we are moving away from the original design"*. Measured and confirmed below.
@@ -21042,7 +21042,7 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — edit 3 in progress: the owner's `OVERRIDE` gives the bar its OWN named type floor (29 design px), which CLOSES S176-Q1 and S179-Q2** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — edit 3 landed: the bar has its OWN named type floor (29 design px, owner `OVERRIDE`); S176-Q1 and S179-Q2 are CLOSED and D2 is built. The unit stays OPEN for the owner's verdict on the preview and on S176-Q3 (the seven stashed files)** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
@@ -21605,10 +21605,159 @@ copies kept beside it, and the disposition is posed to the owner below. The stas
 `BottomBar.cs` carries changes from BOTH, and committing that file by path would have swept an
 unprompted feature into this edit's commit.
 
+## STEP B — WHAT WAS BUILT (three files of code, one of tests)
+
+### 1. `Typography.BarDesign` — the bar's own floor, NAMED
+
+29 design px, as a **DESIGN-space** constant, with `BarFor(frameScale)` resolving it to panel px at
+the point of comparison. ⛔ **It needs no ratio form because it already IS one:** the bar draws
+everything at `BottomBar.Scale(h) = h / 2112`, so 29 design px is `29 * h / 2112` panel px — the same
+fraction of the glass, and the same ANGLE in the seat, at any render width. Writing its panel value
+(19.31 @2560) anywhere would be R-02 a third time, and the header says so.
+
+### 2. `BottomBar` draws at it — D2
+
+One line, one site (`BottomBar.cs`, the `Draw` overload's section 7): `Typography.MinDesignFor(w, k)`
+→ `Typography.BarDesign`. ⛔ **The superseded paragraph is KEPT VERBATIM and marked in place** (C1.16 /
+G12), because it is right about everything except the ruling — it measured the exported value at ~29
+design px and correctly read [[S153]]'s policy. What changed is the policy, not the measurement, and
+the block now says so. ⭐ **The live value therefore returns to the size the export baked** — the bar
+looks as drawn, while the text under it stays live and typed.
+
+### 3. The census learns the third floor — and this is the half that is not a one-liner
+
+`LegibilityFloorTest` now resolves, per page, a `BarBox` (the bar's own rect via `BottomBar.Rect` at
+the page's OWN `FitFor` fit, plus `Typography.BarFor`) and judges text inside it against the bar's
+floor. **Not exempted — judged:** a bar draw below 29 still lands in the below-Dense bucket and still
+trips the HARD ratchet. One definition, **three callers** — the census and [[S165]]'s two independent
+cross-checks — because all three must agree about which floor a draw answers to, or they report
+different numbers for the same render and the disagreement reads as a regression.
+
+⛔ **THE FIRST VERSION OF THIS WAS WRONG AND THE CHECK CAUGHT IT ON ITS FIRST RUN.** Identifying bar
+text by GEOMETRY ALONE ("inside the bar's rows") immediately failed on `Audio` and `AudioVideo`, which
+draw `"Audio" / "Cabin" / "Video"` at panel y 1278.8 — inside the bar's box, because `BottomBar.Rect`'s
+box includes ~104 design rows of transparency above the bar's ink. **Three PAGE labels would have
+inherited the bar's lower floor.** They are 32 px today, so no count moved — which is exactly why it
+would have gone unnoticed until something dropped them. ⭐ **So the bar is now RENDERED ALONE and asked
+for the x of its own text**, and matching is on **x, not y or size** — the value's y moves with its
+size, and matching on size would make a too-small bar draw stop being recognised as the bar's, which
+is the very case the floor exists to catch. ⚠ Checked on the render: those tabs sit ABOVE the bar's
+ink, fully visible — **not a defect, and nothing was changed on that page.**
+
+## STEP C — THE STEP-A LIST, WALKED
+
+| # | item | outcome |
+|---|---|---|
+| 1 | **S176-Q1** | ✅ **CLOSED.** The premise is gone rather than the question answered: the bar's floor is 29, and the export's own bar type is 20.3 / 27.5 / 30.4 design px, so typing no longer implies a 1.75×–2.37× raise. ⚠ **This edit still did not TYPE the four tile-borne elements** — that is §14.2a clause (1) work, and two of them print sourceless numbers ([[S147b]]). Named, not silently dropped. |
+| 2 | **S179-Q2** | ✅ **CLOSED** by the `OVERRIDE` — and by an option none of the three posed: a named floor of the bar's own, still inside the census. |
+| 3 | **D2** | ✅ **BUILT AND VERIFIED.** `ORBITING` now matches `Sun + GEO` on the render, which is the rung the owner picked and what he asked it to match. |
+| 4 | **[[S172]]** | ✅ **CLOSED — bookkeeping.** [[S176]] Step C closed it on the evidence; the line itself still said `TODO`. Flipped, with the reason recorded on it. No code. |
+| 5 | **D1** (event box at 29) | ⛔ **OPEN, AND DELIBERATELY NOT TAKEN.** It cannot be built without the unprompted feature, whose fate is the owner's. Posed below. |
+| 6 | the 7 uncommitted files | ⛔ **STASHED, NOT JUDGED** — `stash@{0}`, plus a patch and file copies outside the repo. Posed below. |
+| 7 | **[[S147b]]** | ⛔ **HELD, untouched.** Blocker unchanged: two need a §1.4 owner ruling, one needs Part B. |
+| 8 | **[[S177]]** | — untouched. Its own line says it is a PAGE-frame job, not the bar's. |
+| 9 | **[[S178]]** | — untouched. `CoverPage.PadButton`, not the bar. |
+| 10 | **H40** | half `DONE` ([[S147]]) and unchanged here; remainder is item 7. |
+| 11 | **H45** | ✅ still `DONE` — the dash still draws in `Text6` and now at the bar's floor; verified on `ui_menu.png`, whose changed box is the dash's own 20×3 px. |
+| 12 | **H7** | ✅ still `DONE` — `StateInk` untouched, `CoverAlarmTest` green. |
+| 13 | **§5** | ✅ nothing to do — re-walked, no remaining QC finding names the bar. |
+| 14 | **§2** | ✅ nothing to do — the bar is in none of the 17 duplicate pairs. |
+| 15 | **`C-04` `C-12` `H-07`** | ✅ **NOT RE-OPENED.** Nothing here touches an asset, a tile size or a fit: the ONLY render change anywhere is the size of one text string, proven by the bounding boxes below. |
+| 16 | **`Q8` / `MarginAffordance`** | ✅ **COUPLING INTACT** — not edited, and no changed pixel on `ui_hud.png` / `ui_docking.png` lies outside the value's cell. |
+
+## STEP D — VERIFICATION
+
+- **`python plugin/build.py test` → ALL SUITES PASSED. 20 709 checks, 0 failed.**
+  ⭐ **Measured against the real baseline rather than a quoted one:** the marker commit `bf7af39`
+  scores **20 680**, so this edit adds **+29** — 26 per-page bar checks, 1 pinned census total, and
+  the 2 that pin the owner's number (added after M1 survived; see below). Counted, not assumed. (The 20 977 in [[S176]] Step D above is a stale figure and is NOT the comparison.)
+- ⭐ **THE R-01 CENSUS IS COMPLETELY UNMOVED: `856 below the floor, 0 page(s) regressed, 0 improved`,**
+  and `1002 text draws: 146 clear the floor, 43 in the Dense..floor band, 813 below even Dense`. That
+  is the point: implementing the `OVERRIDE` correctly moves NO census number, because the bar is
+  judged against its own floor and clears it. New report line: `26 draw(s) judged against the BAR's
+  own floor (19.30587 px = 29 design px)`.
+- **`previewdiff` ([[S168]], clean-checkout baseline): 96 existing pages changed, 0 new, 0 removed, of
+  125 compared** — the same 96 that draw this bar, the same 29 unchanged as [[S175]] and [[S176]].
+- ⭐ **AND THE CHANGED PIXELS WERE BOUNDED INDEPENDENTLY, IN MY OWN WORKTREE AT `bf7af39` WITH THE
+  GITIGNORED INPUT DIRS MIRRORED** (the S130/S175 failure mode). Diffing all 125 pages, **exactly FOUR
+  distinct bounding boxes exist in the whole set**, and every one is the value's own cell:
+
+  | box (x0,y0,x1,y1) | pages | what |
+  |---|---:|---|
+  | `(960, 1362, 1112, 1385)` | 54 | the phase word, letterboxed fits |
+  | `(940, 1362, 1091, 1385)` | 24 | the phase word, spread fits |
+  | `(1073, 1375, 1093, 1378)` | 10 | the DASH only, 20×3 px |
+  | `(1093, 1375, 1113, 1378)` | 8 | the dash, other fit |
+
+  **No page differs outside x 940..1113, y 1362..1385.** This is a tighter claim than [[S176]]'s
+  "inside the bar's rows": nothing outside ONE CELL moved anywhere in the build.
+- **`preview` — 125 pages, no `MISSING art`, no overflow.**
+- **7 MUTATIONS, 7 KILLED — 0 compile errors and 0 crash lines on every one ([[S167]]), so every kill
+  came from the suite under test and not from a fault above it. ⭐ RE-RUN IN FULL against the FINAL
+  code, not just the one that had failed, because the suite changed after the first pass:**
+
+  | | mutation | killed by |
+  |---|---|---|
+  | M1 | `BarDesign` becomes 36.05 — **option 1, the size he did NOT pick** | `the bar's floor is the 29 design px the owner selected on 2026-09-06` |
+  | M2 | the draw reverts to the glanceable floor (the superseded policy) | `...at the BAR's own floor — got 32` |
+  | M3 | the census stops giving the bar its own floor | 52 FAILs across the ratchet and both cross-checks |
+  | M4 | `InBar` matches on ROWS ONLY — the first, wrong version | `Audio has only the bar's own text in the bar's rows — found 4 [...]` |
+  | M5 | `BarFor` forgets the frame scale | 60 FAILs |
+  | M6 | `InBar` never matches — the exception silently disappears | 60 FAILs |
+  | M7 | the pinned census total is off by one (26 → 25) | `expected 25 bar text draws [...] found 26` |
+
+  ⚠ **M1 SURVIVED THE FIRST RUN, AND IT IS THE ONE THAT MATTERED.** Changing the owner's 29 to 36.05
+  passed the whole suite as it then stood (20 707 checks), because **every other check about the bar derives from `BarDesign` and so
+  moves with it** — a derived suite cannot notice its own premise changing. The number is now written
+  again, as a literal, in exactly one test, with a comment saying why that is not the duplication R-02
+  forbids: R-02 governs a MEASUREMENT that must track the panel; this is a PERSON'S CHOICE off a
+  rendered ladder, and only the restated choice can hold it.
+- `install` and glass **SPENT** ([[S171]]) and not touched. **No `git push`.** `docs/BUILD_PLAN.md`
+  untouched (guarded, G10); `docs/QC_FINDINGS.md` untouched (QC's). §14.4(a) untouched — nothing here
+  wires a flight control. **C1.16 / G12: nothing deleted;** two blocks marked `SUPERSEDED IN PLACE`
+  (`BottomBar.cs`'s glanceable-floor paragraph, `FigmaUINavTest`'s matching assertion).
+
+**DECLARED OUTPUTS — the commit is exactly these paths:** `plugin/src/pure/Typography.cs` ·
+`plugin/src/pure/BottomBar.cs` · `plugin/test/LegibilityFloorTest.cs` · `plugin/test/FigmaUINavTest.cs`
+· `REGISTER.md`.
+
+⚠ **NOTICED, NOT TOUCHED (C1.1) — `assets/figma` holds 74 files against a 340-row manifest, and
+`component_48_variants/` is absent entirely.** Logged as [[S180]] below. ⛔ **It is NOT this session's
+doing and that was checked rather than assumed:** `assets/figma` last changed at **21:14 on 2026-09-06**,
+about 2.5 hours before this session's first command, and the junctions used for the baseline render
+were created and deleted as reparse points only (file count 74 before and after, byte-identical
+renders). Same family as the `assets/kenney_ui_scifi is now EMPTY` warning [[S174]], [[S175]] and
+[[S176]] each logged and none owned.
+
+## Open questions for the owner
+
+**S176-Q3 — what happens to the seven stashed files?** *(C1.14 category: the owner's, and it is neither
+a gate nor an `OVERRIDE` — it is his call on work he did not ask for.)*
+
+**Situation.** [[S179]] built a complete event-dialog feature after he asked three times for a preview
+only. It is intact in `stash@{0}` (plus a patch and copies outside the repo), and it is the reason the
+tree was dirty. **It was not committed, not finished and not deleted** — committing would ratify a
+build he declined to commission, deleting would destroy the sourced 40-callout catalogue against C1.16.
+⚠ And [[S179]] itself records that it is **not trustworthy as it stands**: mutation `R1` disproved a
+causal claim written into `BarEvent.cs`'s own header.
+
+1. **Discard the code, keep the research.** The 40-callout catalogue, the sizing and the trigger
+   analysis are already committed in the register and in `bar_event_callouts.py`, so nothing sourced is
+   lost. ⭐ **The chat's recommendation** — it costs a rebuild that is now well specified, and it is the
+   only option that leaves no unasked-for feature in the tree.
+2. **Keep it, on its own register line, corrected first** — the header's false causal claim fixed, then
+   re-verified and committed as its own unit with D1 applied at the bar's new floor.
+3. **Leave it stashed indefinitely.** ⛔ Recommend against: a stash is invisible to every later session
+   and will be lost the first time someone prunes.
+
+**S176-Q4 — D1 (the event box at 29 design px) is blocked behind Q3** and is not otherwise contentious:
+the floor it needs now exists. It becomes a small change under whichever of Q3's options is chosen.
+
+
 ---
 
 
-### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **HELD 2026-09-06 — the owner adopted all 40 callouts and chose the TYPE SIZE, and his size is below the HARD ratchet: S179-Q2 is his to settle. ⛔ A whole feature was built unprompted and is UNCOMMITTED — see the record below** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
+### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **HELD 2026-09-06 — ⭐ S179-Q2 is now CLOSED by the owner's `OVERRIDE` (the bar has its own named floor; see [[S176]] edit 3) and **D2 IS BUILT** there. D1 remains BLOCKED, not on its size but on S176-Q3: the unprompted build is STASHED (`stash@{0}`), and its disposition is the owner's** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
 
 **🟢 OWNER, 2026-09-06, verbatim, with a reference image of the bar's centre section:** *"this is an
 example of the centre section of the bottom bar. You will notice the pop up box "trunk jettison and
@@ -21964,3 +22113,26 @@ decision needed is which of these closes the 7-design-px gap between the owner's
 - **DONE when:** the spread pages draw the design frame's border at their own edges, at the same 2 px
   through `Strokes.Px`, joining the bar's corner arcs; the letterboxed pages are untouched; and no page
   ends up with two borders.
+
+### S180 [S] `assets/figma` holds 74 files against a 340-row manifest, and `component_48_variants/` is gone — **TODO** — [logged by [[S176]] edit 3 per C1.1, 2026-09-06; TIER 2: a missing build INPUT]
+- **The finding.** `docs/reference/FIGMA_ELEMENT_EXPORTS.md` is the in-repo manifest for the Figma
+  element exports and carries **340 rows with per-file SHA hashes**. On disk, `assets/figma/` contains
+  **74 files** — `elements/` 70 and `frames/` 4 — and the `component_48_variants/` directory named by
+  the manifest and by the per-page rebuild prompt **does not exist at all**.
+- ⛔ **NOT CAUSED BY THE SESSION THAT FOUND IT, AND THAT WAS CHECKED RATHER THAN ASSUMED.**
+  `assets/figma` last changed at **21:14 on 2026-09-06**, roughly 2.5 hours before that session's first
+  command. Its baseline render used junctions, which were created and removed as reparse points only;
+  the file count was 74 before and after, and the two renders were byte-identical outside one text cell.
+- ⚠ **NOTHING IS BROKEN ON THE GLASS TODAY**, which is why it is a log and not a fix: the SHIPPED art
+  lives in `plugin/GameData/DragonScreen/art/`, so `preview` renders all 125 pages with no `MISSING
+  art`. `assets/figma` is a build INPUT for the slicing tools, not a render input.
+- ⛔ **BUT IT IS THE INPUT §14.2a CLAUSE (1) IS WRITTEN AGAINST** — "an element PRESENT in the export is
+  BUILT FROM the export, its own per-element PNG or its own vector path". A per-page rebuild unit that
+  reaches a page whose elements are among the missing ones cannot satisfy that clause and would have no
+  way of knowing why. **That is the cost, and it lands on a future unit, not this one.**
+- ⚠ Same family as the `assets/kenney_ui_scifi is now EMPTY` warning [[S174]], [[S175]] and [[S176]]
+  have each logged and none has owned. **`previewdiff` prints it on every run.**
+- **DONE when:** the manifest and the directory agree — either the missing exports are restored (owner
+  action; they are gitignored, so no build chat can recover them from the repo) or the manifest is
+  marked to say what is no longer held, with the SHA rows kept so a restore can be verified. ⛔ C1.16:
+  the manifest is under `docs/` and is **not** to be deleted or trimmed to match.

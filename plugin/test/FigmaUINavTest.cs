@@ -2663,9 +2663,23 @@ public static class FigmaUINavTest
               "drawn at " + XOf(a, "Orbit") + ", box right edge " + vx);
         // ⚠ LIVE type, so S153's glanceable floor - the baked value was ~29 design px, 60% of it, and
         // is one of QC R-01's own samples.
-        Check("...and at the glanceable floor, not the baked size",
-              SizeOf(a, "Orbit") >= Typography.MinFor(VW),
-              "got " + SizeOf(a, "Orbit") + ", floor " + Typography.MinFor(VW));
+        //
+        // ⛔ SUPERSEDED IN PLACE 2026-09-06 (S176 edit 3, owner `OVERRIDE`) — C1.16 / G12: the two lines
+        // above are KEPT and their conclusion no longer holds. The owner was shown this very value
+        // rendered at the glanceable floor, rejected it ("the text is way to big and looks out of
+        // place"), and chose 29 design px off a rendered 20/29/36/48 ladder. The bar now answers to a
+        // floor of its own, `Typography.BarDesign` — so the value returns to the size the export baked,
+        // which is what the superseded comment was measuring when it called it "the baked size".
+        //
+        // ⭐ AND IT IS CHECKED AS EQUALITY, NOT AS ">=". The ruling named ONE size, so a value drawn
+        // LARGER than the bar's floor is as wrong as one drawn smaller. A ">=" here would have passed
+        // the old 48.07 behaviour unchanged and proved nothing about the change.
+        Check("...and at the BAR's own floor, which is the size the export baked",
+              Math.Abs(SizeOf(a, "Orbit") - Typography.BarFor(BottomBar.Scale(VH))) < 0.01f,
+              "got " + SizeOf(a, "Orbit") + ", the bar's own floor is "
+              + Typography.BarFor(BottomBar.Scale(VH)) + " px = " + Typography.BarDesign
+              + " design px (owner 2026-09-06); the glanceable floor it used to use is "
+              + Typography.MinFor(VW));
 
         // ---- 4. THE FIVE PAGES WITHOUT STATE DASH, AND THAT IS HONEST --------------------------
         // MenuPage / PlaceholderPage / FigmaFramePage / SuitCheckPage / VrioTestPage genuinely do not

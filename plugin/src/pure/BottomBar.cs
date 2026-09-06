@@ -386,6 +386,22 @@ namespace DragonScreen
         /// at design x 1461 with the icon strip ending at 625, there are 836 design px of clear run,
         /// against 798 for the longest string the baked art ever showed.
         ///
+        /// ⛔ SUPERSEDED IN PLACE 2026-09-06 (S176 edit 3, owner `OVERRIDE`) — THE PARAGRAPH ABOVE IS
+        /// KEPT VERBATIM AND ITS CONCLUSION NO LONGER HOLDS. C1.16 / G12: reasoning is marked, never
+        /// deleted, and this one is worth keeping because it is RIGHT about everything except the
+        /// ruling. It measured the exported value at ~29 design px / 19.3 panel px and correctly read
+        /// [[S153]]'s policy as putting a LIVE value at `Typography.MinDesignFor`.
+        ///
+        /// ⭐ WHAT CHANGED IS THE POLICY, NOT THE MEASUREMENT. The owner was shown this very value at
+        /// that floor and rejected it — "the text is way to big and looks out of place" (REGISTER.md
+        /// S179 D1) — then chose 29 off a rendered ladder. So the bar now draws at
+        /// `Typography.BarDesign`, the bar's OWN named floor, and 29 is no longer "60% of the floor":
+        /// it IS the floor here. ⭐ Note what that means — the live value returns to the size the
+        /// export baked, so the bar looks as drawn while the text underneath stays live and typed.
+        ///
+        /// ⚠ THE CLEAR-RUN FIGURES BELOW ARE UNAFFECTED and were re-checked, not assumed: the run is
+        /// a property of the FIT and the value only got SMALLER, so every headroom figure grows.
+        ///
         /// ⚠ S176: THE CLEAR RUN IS NOW A PROPERTY OF THE FIT, not a single number. Under Frame it is
         /// unchanged. Under Stretch and Split the icons pin left and the rule moves right relative to
         /// them, so the run only ever GROWS — measured at the shipped 2560x1406: 836 design px under
@@ -458,7 +474,11 @@ namespace DragonScreen
             // The ink CENTRE of the erased value sat at PNG row 185; a line drawn at `top` puts its
             // ink centre 0.553 * size below it (measured off a render in S129). So the live text lands
             // on the same optical line the baked value did, at whatever size it is drawn.
-            float size = Typography.MinDesignFor(w, k);
+            // ⛔ THE BAR'S OWN FLOOR, NOT THE GLANCEABLE ONE — owner `OVERRIDE`, 2026-09-06. See the
+            // superseded block in this method's own docstring for what this replaced and why, and
+            // `Typography.BarDesign` for the ruling. It is a DESIGN size drawn at `k`, so it is the same
+            // angle in the seat at any render width; nothing here writes its panel-pixel value.
+            float size = Typography.BarDesign;
             float top = ValueInkMid - InkCentreOfTop * size;
             dl.Text(state, r1 - (Rule1X - ValueRight) * k, y + top * k, size * k, TextAlign.Right,
                     StateInk(s, state));

@@ -1843,6 +1843,7 @@ public static class LegibilityFloorTest
                 if (Baseline[i].Page == up) { want = Baseline[i].Below; wantD = Baseline[i].BelowDense; }
             if (want < 0) continue;
             float floor = Typography.MinFor(W2), dense = Typography.DenseFor(W2);
+            BarBox bar = BarBoxFor(up);   // S176 edit 3 - the bar answers to its own floor
             foreach (CensusState c in StatesFor(up))
             {
                 DisplayList dl = new DisplayList(1200);
@@ -1853,8 +1854,9 @@ public static class LegibilityFloorTest
                     DrawCmd d = dl.At(i);
                     if (d.Kind != DrawKind.Text) continue;
                     text++;
-                    if (d.C < floor) below++;
-                    if (d.C < dense) belowDense++;
+                    bool ib = InBar(bar, d);
+                    if (d.C < (ib ? bar.Floor : floor)) below++;
+                    if (d.C < (ib ? bar.Floor : dense)) belowDense++;
                 }
                 if (text == 0) continue;
                 Check("S165 " + up + "'s baseline covers state \"" + c.What + "\"",
@@ -1875,6 +1877,7 @@ public static class LegibilityFloorTest
             {
                 if (FigmaUI.IsPlaceholder(up)) continue;
                 int maxBelow = -1, maxDense = -1, drawn = 0;
+                BarBox bar = BarBoxFor(up);   // S176 edit 3 - as above
                 foreach (CensusState c in StatesFor(up))
                 {
                     DisplayList dl = new DisplayList(1200);
@@ -1885,8 +1888,9 @@ public static class LegibilityFloorTest
                         DrawCmd dd = dl.At(i);
                         if (dd.Kind != DrawKind.Text) continue;
                         text++;
-                        if (dd.C < floor) below++;
-                        if (dd.C < dense) belowDense++;
+                        bool ib = InBar(bar, dd);
+                        if (dd.C < (ib ? bar.Floor : floor)) below++;
+                        if (dd.C < (ib ? bar.Floor : dense)) belowDense++;
                     }
                     if (text == 0) continue;
                     drawn++;
@@ -2031,6 +2035,71 @@ public static class LegibilityFloorTest
         public int Below, BelowDense;     // ⛔ PER-METRIC MAXIMA - possibly from two DIFFERENT states
         public int StatesDrawn;
         public string Worst, WorstBelow;  // which state produced each maximum
+        public int BarText;               // S176 edit 3: text judged against the BAR's own floor
+        public string BarWhat;            // ...and WHICH draws they were, so a failure names them
+    }
+
+    /// <summary>
+    /// S176 edit 3: the bottom bar's box on one page, plus the floor that applies inside it.
+    ///
+    /// ⛔ ONE DEFINITION, THREE CALLERS, ON PURPOSE. The census and S165's two independent
+    /// cross-checks must agree about which floor a given draw is judged against, or they report
+    /// different numbers for the same render and the disagreement looks like a regression. S165's
+    /// independence is about the STATE-WALKING and the max-picking - that is what its mutation
+    /// attacked - not about re-deriving arithmetic, so sharing this and only this keeps the guard
+    /// it was written to be.
+    /// </summary>
+    struct BarBox
+    {
+        public float Y, H, W, Floor;
+        public float[] TextX;     // the x of every text command the BAR ITSELF draws
+        public int NTextX;
+    }
+
+    /// <summary>
+    /// ⛔ THE BAR IS ASKED WHICH DRAWS ARE ITS OWN — geometry alone was WRONG and the check caught it.
+    ///
+    /// The first version of this treated "inside the bar's rows" as "the bar's", and the pinned count
+    /// FAILED IMMEDIATELY on Audio and AudioVideo: they draw "Audio" / "Cabin" / "Video" at panel
+    /// y 1278.8, inside the bar's box (y 1249.5..1406), because those tab labels sit at the bottom of
+    /// the page. Under that version three PAGE labels would have inherited the bar's lower floor. They
+    /// are 32 px today so no count moved — which is exactly why it would have gone unnoticed until
+    /// something dropped them.
+    ///
+    /// So the bar is RENDERED ALONE here and asked for the x of its own text. A page's draw at another
+    /// x is not the bar's, whatever row it lands on. ⛔ MATCHED ON X, NOT ON Y OR SIZE, deliberately:
+    /// the value's y is `ValueInkMid - CapCentreOfTop * size`, so it MOVES with the size, and matching
+    /// on size would make a too-small bar draw stop being recognised as the bar's — which is precisely
+    /// the case the floor exists to catch. The x does not depend on the size.
+    /// </summary>
+    static BarBox BarBoxFor(UiPage up)
+    {
+        BarBox b = new BarBox();
+        BarFit fit = BottomBar.FitFor(up);
+        float bx, by, bw, bh;
+        BottomBar.Rect(W2, H2, fit, out bx, out by, out bw, out bh);
+        b.Y = by; b.H = bh; b.W = bw;
+        b.Floor = Typography.BarFor(BottomBar.Scale(H2));
+
+        b.TextX = new float[8]; b.NTextX = 0;
+        DisplayList probe = new DisplayList(BottomBar.Commands + 16);
+        BottomBar.Draw(probe, W2, H2, new PageState(), fit);
+        for (int i = 0; i < probe.Count; i++)
+        {
+            DrawCmd c = probe.At(i);
+            if (c.Kind == DrawKind.Text && b.NTextX < b.TextX.Length) b.TextX[b.NTextX++] = c.A;
+        }
+        return b;
+    }
+
+    /// <summary>Is this text command one the BAR drew? Inside the bar's rows AND at an x the bar
+    /// itself draws text at. See <see cref="BarBoxFor"/> for why both halves are needed.</summary>
+    static bool InBar(BarBox b, DrawCmd d)
+    {
+        if (b.W <= 0f || d.B < b.Y || d.B >= b.Y + b.H) return false;
+        for (int i = 0; i < b.NTextX; i++)
+            if (Math.Abs(d.A - b.TextX[i]) < 0.5f) return true;
+        return false;
     }
 
     /// <summary>
@@ -2064,17 +2133,41 @@ public static class LegibilityFloorTest
         CensusPick p = new CensusPick();
         p.Dl = null; p.Worst = "-"; p.WorstBelow = "-"; p.StatesDrawn = 0;
         p.Below = -1; p.BelowDense = -1;
+
+        // ---- S176 EDIT 3: THE BOTTOM BAR IS JUDGED AGAINST ITS OWN FLOOR, AND STILL JUDGED ----
+        // ⛔ THE OWNER'S `OVERRIDE` HAS TWO HALVES AND THIS IMPLEMENTS BOTH. Bar text draws at 29
+        // design px, and "the bar still has a floor and is still in the census - it was NOT
+        // exempted". So bar text is not skipped and not waved through: it is counted like every
+        // other draw, and measured against `Typography.BarFor` instead of against MinFor/DenseFor.
+        // A bar draw BELOW 29 still lands in `bd2` and still trips the hard ratchet.
+        //
+        // ⛔ WHY GEOMETRY AND NOT A TAG: `DrawCmd` carries no owner, and adding one to the pure
+        // display list to satisfy a test would be the test dictating the shape of the code. The bar
+        // knows its own box, so ask it - `BottomBar.Rect` with the page's OWN fit, the same call the
+        // draw and the hit map both make. `BarTextIsExactlyTheBarsOwn` pins the count this finds, so
+        // a page that ever draws its own text into the bar's rows FAILS rather than quietly
+        // inheriting the bar's lower floor. That is the one way this could rot.
+        BarBox bar = BarBoxFor(up);
+
         foreach (CensusState state in StatesFor(up))
         {
             DisplayList d2 = new DisplayList(1200);
             CensusBuild(d2, up, state);
-            int n2 = 0, ok2 = 0, st2 = 0, bd2 = 0;
+            int n2 = 0, ok2 = 0, st2 = 0, bd2 = 0, bar2 = 0;
+            string what2 = "";
             for (int i = 0; i < d2.Count; i++)
             {
                 DrawCmd c = d2.At(i);
                 if (c.Kind != DrawKind.Text) continue;
                 n2++;
-                if (c.C >= floor) ok2++; else if (c.C >= dense) st2++; else bd2++;
+                if (InBar(bar, c))
+                {
+                    bar2++;
+                    what2 += (what2.Length > 0 ? ", " : "") + "\"" + c.Str + "\" @y "
+                             + c.B.ToString("0.0") + " size " + c.C.ToString("0.00");
+                    if (c.C >= bar.Floor) ok2++; else bd2++;
+                }
+                else if (c.C >= floor) ok2++; else if (c.C >= dense) st2++; else bd2++;
             }
             if (n2 == 0) continue;
             p.StatesDrawn++;
@@ -2082,7 +2175,7 @@ public static class LegibilityFloorTest
             if (p.Dl == null || bd2 > p.BelowDense)
             {
                 p.Dl = d2; p.Text = n2; p.Ok = ok2; p.Static = st2; p.BelowDense = bd2;
-                p.Worst = state.What;
+                p.Worst = state.What; p.BarText = bar2; p.BarWhat = what2;
             }
         }
         if (p.Below < 0) p.Below = 0;
@@ -2095,6 +2188,7 @@ public static class LegibilityFloorTest
         float floor = Typography.MinFor(W2), dense = Typography.DenseFor(W2);
         int tT = 0, tOk = 0, tStatic = 0, tBelowDense = 0, tBelow = 0, regressed = 0, improved = 0;
         int covered = 0;
+        int tBar = 0;   // S176 edit 3: draws judged against the BAR's own floor
 
         Console.WriteLine("  ---- R-01 census @" + W2 + "x" + H2 + ": floor " + floor
                           + " px, static-reference floor " + dense + " px ----");
@@ -2116,6 +2210,21 @@ public static class LegibilityFloorTest
                     + "below-Dense {4,3} (\"{5}\")",
                     up, seenStates, below, p.WorstBelow, bd, worst));
             tT += n; tOk += ok; tStatic += st; tBelowDense += bd; tBelow += below;
+            tBar += p.BarText;
+
+            // ⛔ S176 edit 3 — THE ONE WAY THE BAR'S OWN FLOOR COULD ROT. Bar text is identified by
+            // GEOMETRY (see WorstStateOf), so any text a PAGE draws into the bar's rows would be
+            // judged against 29 instead of against 32/24 and would silently stop being a finding.
+            // The bar draws exactly ONE string - CURRENT STATE's value - so more than one text
+            // command in that box means a page put something there, and that must FAIL rather than
+            // inherit the exception. QC `M-01` (the Menu's 31st card drawn under the bar) is the
+            // known live candidate for tripping this.
+            Check("S176 edit 3: " + up + " has only the bar's own text in the bar's rows",
+                  p.BarText <= 1,
+                  "found " + p.BarText + " text draws inside the bottom bar's box [" + p.BarWhat
+                  + "] - the bar draws 1. "
+                  + "A page drawing into the bar's rows would inherit the bar's lower floor; give it "
+                  + "its own home or exclude it explicitly.");
             if (PrintBaselines)
                 Console.WriteLine(string.Format("        B(UiPage.{0,-18} {1,3}, {2,3}),   // worst: {3} / {4}",
                                                 up + ",", below, bd, p.WorstBelow, worst));
@@ -2176,11 +2285,64 @@ public static class LegibilityFloorTest
             + "only), {3} below even Dense", tT, tOk, tStatic, tBelowDense));
         Console.WriteLine("    " + tBelow + " below the floor, " + regressed + " page(s) regressed, "
                           + improved + " improved");
+        Console.WriteLine("    " + tBar + " draw(s) judged against the BAR's own floor ("
+                          + Typography.BarFor(BottomBar.Scale(H2)) + " px = "
+                          + Typography.BarDesign + " design px, owner 2026-09-06)");
+
+        // ⛔ S176 edit 3 — THE TOTAL IS PINNED, and it is the census-wide half of the per-page check
+        // above. The per-page check catches a page putting TWO strings in the bar's box; this catches
+        // the bar's exception silently SPREADING - a page newly drawing the bar, or the bar's text
+        // vanishing from a page that should have it. Both are one number, so both are one check.
+        Check("S176 edit 3: the bar's floor applies to exactly the pages that draw the bar",
+              tBar == BarTextDraws,
+              "expected " + BarTextDraws + " bar text draws across the census, found " + tBar
+              + " - if a page gained or lost the bar this number moves, and it must move in a line "
+              + "that says why.");
     }
+
+    /// <summary>
+    /// S176 edit 3: how many text draws the census expects to find inside the bottom bar's own box,
+    /// summed over every page it walks. The bar draws ONE string (CURRENT STATE's value), so this is
+    /// also the count of census pages that draw the bar at all.
+    ///
+    /// ⛔ NOT A BASELINE AND NOT A RATCHET - an EXACT pin, in both directions. A ratchet would let
+    /// this fall silently, and a falling count here means the bar stopped being drawn somewhere,
+    /// which is exactly as much of a defect as it spreading.
+    /// </summary>
+    const int BarTextDraws = 26;
 
     // ---- 9. THE OWNER'S TWO-FLOOR POLICY, AS ARITHMETIC (S153) ----------------------------------
     static void TheTwoFloorsAreBothRatios()
     {
+        // ---- S176 EDIT 3: THE OWNER'S NUMBER, PINNED AS A LITERAL, ON PURPOSE -------------------
+        // ⛔ THIS IS THE ONE CHECK ABOUT THE BAR THAT MAY NOT READ `Typography.BarDesign` TO GET ITS
+        // EXPECTATION, and it exists because the mutation that proved it necessary SURVIVED.
+        // Everything else about the bar's size derives from that constant — the draw, the census's
+        // third branch, the equality check in FigmaUINavTest — so all of them move WITH it. Changing
+        // 29 to 36.05 (option 1: the size the owner was offered and did NOT pick) passed all 20 707
+        // checks. A derived suite cannot notice its own premise changing.
+        //
+        // ⭐ SO THE NUMBER IS WRITTEN AGAIN, HERE, AND NOWHERE ELSE. That is not the duplication the
+        // R-02 header forbids: R-02 forbids a bare constant standing in for a MEASUREMENT that must
+        // track the panel. This is not a measurement — it is a PERSON'S CHOICE off a rendered ladder,
+        // and the only thing that can hold a choice in place is the choice, restated. Anyone editing
+        // BarDesign now has to come here and change the owner's number deliberately.
+        Check("S176 edit 3: the bar's floor is the 29 design px the owner selected on 2026-09-06",
+              Math.Abs(Typography.BarDesign - 29f) < 1e-6f,
+              "BarDesign is " + Typography.BarDesign + " — the owner picked 29 off a rendered "
+              + "20 / 29 / 36 / 48 ladder (REGISTER.md S179, D1). Changing it takes a new ruling, "
+              + "not an edit.");
+
+        // ⭐ AND IT IS BELOW BOTH GENERAL FLOORS — which is WHY it needed an `OVERRIDE` at all, and
+        // is the property that makes the census's third branch load-bearing rather than decorative.
+        // If this ever stops holding, the bar no longer needs an exception and this whole mechanism
+        // should be deleted rather than left standing over nothing (C1.16's own lesson).
+        Check("S176 edit 3: ...and it sits below BOTH general floors, which is why it took a ruling",
+              Typography.BarFor(BottomBar.Scale(H2)) < Typography.DenseFor(W2)
+              && Typography.DenseFor(W2) < Typography.MinFor(W2),
+              "bar " + Typography.BarFor(BottomBar.Scale(H2)) + " px, static floor "
+              + Typography.DenseFor(W2) + " px, glanceable floor " + Typography.MinFor(W2) + " px");
+
         // Dense's ratio form, exactly as MinFor is Min's.
         Eq("DenseFor(RefPanelW) is exactly Dense", Typography.DenseFor(Typography.RefPanelW),
            Typography.Dense, 1e-4f);

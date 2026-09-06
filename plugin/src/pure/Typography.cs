@@ -88,6 +88,35 @@
  * repeating itself one layer up: a bare number is right for one cfg, wrong for the next, and cannot
  * be checked against a premise it does not carry. MinDesignFor / DenseDesignFor below resolve it at
  * the point of comparison, from the panel the page is actually drawing on.
+ *
+ * ---- A THIRD FLOOR, AND IT IS THE BOTTOM BAR'S ALONE (S176 edit 3, 2026-09-06) ----
+ * ⛔ ADDED, NOT A REWRITE. Nothing above this line is edited.
+ *
+ * The owner selected, on 2026-09-06, that the BOTTOM BAR's text draws at 29 DESIGN px against a floor
+ * of the bar's own - and, in the same breath, that the bar "still has a floor and is still in the
+ * census - it was NOT exempted". BOTH HALVES ARE THE RULING. It is a SELECTION relayed through the
+ * overseer, not free text, exactly as S153's policy above was; REGISTER.md S176 edit 3 quotes the
+ * wording it arrived in and states that form plainly rather than inventing a sentence for it.
+ *
+ * WHY A THIRD FLOOR AND NOT A HOLE IN THE CENSUS. He was shown this bar's one live value rendered at
+ * the glanceable floor and rejected it in those words - "the text is way to big and looks out of
+ * place" (REGISTER.md S179, D1) - then chose 29 off a rendered 20 / 29 / 36 / 48 ladder, captioned
+ * with what each rung matched. 29 is below BOTH floors above, so there were only three ways to draw
+ * it: exempt the bar from the census, lower the hard ratchet for every surface, or give the bar a
+ * floor of its own that the census still enforces. He took the third - and it is the only one of the
+ * three that keeps the property the census exists for, which is that below-floor text stays VISIBLE
+ * to the build instead of becoming invisible to it.
+ *
+ * ⚠ THIS IS A NARROWER FLOOR, NOT A LOWER STANDARD. It binds ONE component. Every other surface
+ * keeps MinFor / DenseFor exactly as they are, and the bar is still ratcheted - against 29 rather
+ * than against 24. "The bar is exempt" is NOT what was ruled, and a later page quietly borrowing this
+ * floor for something that is not the bar is the failure mode to watch for.
+ *
+ * ⛔ AND WHY IT IS A DESIGN-SPACE CONSTANT, WHICH IS R-02 A THIRD TIME. 29 design px is ALREADY a
+ * fraction of the panel: the bar draws everything at BottomBar.Scale(h) = h / 2112, so the drawn size
+ * is 29 * h / 2112 - the same fraction of the glass, and therefore the same ANGLE in the seat, at any
+ * render width. It needs no ratio form because it IS one. Writing its PANEL-pixel value (19.31 at the
+ * shipped 2560x1406) into anything is the R-02 mistake repeating itself once more.
  */
 namespace DragonScreen
 {
@@ -237,7 +266,34 @@ namespace DragonScreen
         public const float CapCentreOfTop = 0.553f;
 
         /// <summary>
-        /// Dense reference detail, BELOW the glanceable floor and legal only because zoom exists.
+        /// THE BOTTOM BAR'S OWN FLOOR, in DESIGN pixels - owner-selected 2026-09-06. See the header.
+        ///
+        /// ⛔ THIS ONE COMPONENT ONLY. 29 design px is 19.31 panel px at the shipped 2560x1406,
+        /// which is below BOTH <see cref="MinFor"/> and <see cref="DenseFor"/>. It is legal on the bar
+        /// because the owner ruled it there and nowhere else; anything else drawing below DenseFor is
+        /// still a defect and the census still says so.
+        ///
+        /// ⛔ AND IT IS THE SIZE, NOT JUST THE FLOOR. The bar's text draws AT this rather than
+        /// being lifted to it, so there is deliberately no BarDesign equivalent of
+        /// <see cref="LiveDesign"/>: a "lift" implies a range of legal sizes above the floor, and the
+        /// ruling named ONE size. If bar text ever needs to be larger than this, that is a new ruling.
+        /// </summary>
+        public const float BarDesign = 29f;
+
+        /// <summary>
+        /// The bar's floor in PANEL pixels, for a bar drawn at <paramref name="frameScale"/> (i.e.
+        /// <c>BottomBar.Scale(h)</c>). 19.31 at the shipped 2560x1406.
+        ///
+        /// ⛔ EXISTS SO THAT NOTHING WRITES 19.31 - the same reason MinFor exists, and the same
+        /// reason MinDesignFor exists one layer up. The census resolves the bar's floor through this
+        /// at the point of comparison, from the panel the bar is actually drawn on.
+        /// </summary>
+        public static float BarFor(float frameScale)
+        {
+            return BarDesign * frameScale;
+        }
+
+        /// <summary>Dense reference detail, BELOW the glanceable floor and legal only because zoom exists.
         ///
         /// Permitted for a table someone leans in to read. NOT for any live value, any alert, or
         /// anything on the nav bar. If it would be a problem to miss it, it is not this size.
