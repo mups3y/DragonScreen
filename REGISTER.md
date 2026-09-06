@@ -16874,7 +16874,7 @@ branch, which is a separate line rather than a silent addition.
   from its top (which read as truncated, the very impression the baked caption already gave).
 - comment-loss **0** · no `install`, no glass, no `git push`.
 
-### S134e [S] The audio page's dividers and its signal glyph — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
+### S134e [S] The audio page's dividers and its signal glyph — **DOING** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
 - `A-03`: the dividers' five equal cells do not contain AUX's value or two of the four button clusters.
 - `A-04`: the signal glyph is drawn below its own button and too small to read as one.
 - ⚠ Both are layout on a page [[S135]] and [[S121c]] have both touched since QC measured them — re-measure
