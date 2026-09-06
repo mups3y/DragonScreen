@@ -22596,3 +22596,29 @@ comment says it takes *"like its neighbours"* — while the code uses the darker
    state, so it should decide what "not done" looks like when it actually means something; (b) rides on
    whether NEXT becomes hittable, which is also 2b's.)*
 2. **Rule on them now**, and 2a applies both before the owner signs off on this preview.
+
+#### STEP D addendum — the two traps this line owed an explicit check on, run rather than assumed
+
+**TRAP 1 / QC `C-04` — S174's check, run BOTH WAYS on all sixteen elements this unit built.** The rule is
+that a glyph-bearing or outline PNG must never be stretched, while a 100 % opaque single-colour fill may be.
+
+| classification | elements | how they are drawn here |
+|---|---|---|
+| **transparent outline** (99.31 % / 99.63 % / 92.79 %) | `Rectangle 178`, `Rectangle 179`, `Rectangle 177` | **`dl.Box` primitives.** Nothing sampled, nothing stretched |
+| **glyph** (21.5 % – 80.3 %) | `Vector`, `Ellipse 110`, `bytesize_eye`, `heroicons-solid_view-grid` | `dl.Asset` with **w AND h = `SZ(s)`** — a UNIFORM scale, so the draw box is square on the device |
+| **100 % opaque fill** (≤ 0.04 %) | `Rectangle 138/187/188/189`, `Line 93`, `Line 100`, `Rectangle 185/190/186` | `dl.Box` / `dl.Line` / `dl.Rect` — **primitives even where a stretch would have been legal**, which is stricter than the rule requires |
+
+⭐ **AND IT WAS CHECKED ON THE RENDER, NOT ONLY ON THE SOURCE.** Measured in device px:
+`ic_check` **28×28** (aspect 1.000) · `ic_grid` **19×19** and **19×20** · `ic_eye` **32×23**. ⚠ That last
+one looks like a 1.39 stretch and **is not**: `ic_eye`'s source art is a 160×160 box whose INK fills only
+0.688 of the height, i.e. an ink aspect of 1.45 — the measurement is the artwork's own shape inside a
+square box, and 1.391 at 32 px is that ratio at this quantisation. **No glyph on this page is stretched.**
+
+**TRAP 4 — no live readout was "corrected" back to the export's baked value.** The relevant one is the
+bar's CURRENT STATE, where the raw export still carries the frozen literal *"Far Field Pointing Deorbit"*
+that [[S147]] had to cut out so the live phase could be typed over it. In this render that box carries
+**26 ink px — a single em dash**, the honest reading for a preview with no vessel. ⭐ It is visible in the
+comparison the owner was shown: the reference reads *"Far Field Pointing Deorbit"* and this build reads
+`—`, and that difference is **correct**. `plugin/src/pure/BottomBar.cs` and
+`plugin/GameData/DragonScreen/art/` are **untouched by this unit** (`git diff HEAD~2 HEAD` on both: empty).
+Nothing else on this page is live — every string is a literal — so there was nothing else to get wrong.
