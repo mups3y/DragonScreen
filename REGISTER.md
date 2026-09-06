@@ -4429,8 +4429,21 @@ checks, 0 failed**. **Pure code only — no draw changed, so no preview applies*
   that comes with restoring `CrewProcedureOps`/`FlightDriver` for real. No `.cs` file touched by this
   closure. `/next` can no longer route anyone to T17.
 
-### T18 [O] Wire Ascent (PVG) — **TODO**
+### T18 [O] Wire Ascent (PVG) — **DOING**
 - **Read:** §B8 / §B11.  **DONE when:** PVG flies to insertion in-sim.
+
+#### ⚠ BATCH DEVIATION FROM C1.1 + C1.7, RECORDED ON THE FIRST LINE THIS SESSION WRITES
+
+**Owner, 2026-09-07, verbatim:** *"no I want the whole thing wired up ready to go including the auto
+pilot, user gates, everything as if you were planning on it being the correct and complete build. Every
+page functioning as it should and auto pilot flying"*, and *"give batch t18-t-21"*.
+⛔ That directive **overrides C1.1 (one task at a time) and C1.7 (one task per fresh chat) FOR THIS
+SESSION ONLY** — T18, T19, T20 and T21 are built in one chat, in mission order. **Every other rule
+stands**, including C1.12 (a build chat never opens a gate), C1.16 (research is never deleted), C7 and the
+`docs/BUILD_PLAN.md` guard (G10). `install` and glass are **SPENT** on the T15b flight, so **none of the
+four can be marked `DONE` in this chat** — all four DONE-criteria are in-sim. Each ends
+**`NEEDS-WORK — built, awaiting the in-sim criterion`**, and the session closes with ONE gate request
+covering the whole mission profile.
 
 ### T19 [O] On-orbit ops + re-plan loop — **TODO**
 - **Read:** §B10.2 / §B12.4 / §B9.  **DONE when:** rendezvous to the KOS in-sim.  **May SPLIT if large.**
