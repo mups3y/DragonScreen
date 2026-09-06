@@ -24,10 +24,11 @@ namespace DragonScreen
         public static readonly string[] Tabs =
             { "All", "Crew", "Prop", "Mech", "Power", "Avionics", "GNC", "Thermal" };
 
-        // Row centred on the screen (design centre x = 1713.5), sitting just above the bottom bar
-        // (component_48 starts at design y1877). 8 slots at this pitch span x≈996..2431.
-        const float Pitch = 205f, LabelY = 1812f, LabelSize = 28f;
-        const float MarkY = 1858f, MarkW = 140f, MarkH = 6f;
+        // Row centred on the screen (design centre x = 1713.5), sitting just above the bottom bar's
+        // VISIBLE edge at design y1983 (see the panel block below: `BarY` 1877 is the bar's box, not its
+        // artwork). 8 slots at this pitch span x≈996..2431.
+        const float Pitch = 205f, LabelY = 1908f, LabelSize = 28f;
+        const float MarkY = 1954f, MarkW = 140f, MarkH = 6f;
         static float Start { get { return 1713.5f - Pitch * (Tabs.Length - 1) * 0.5f; } }
 
         // ---- S192: THE PANEL AND THE ICONS, BECAUSE THE REFERENCE STRIP HAS BOTH -------------------
@@ -49,8 +50,23 @@ namespace DragonScreen
         // faking one with a thick `Line` would leave a seam that moves with resolution. A rounded end is
         // the honest near-match with the primitives that exist — the same call `CoverPage`'s pill caps
         // already make. Recorded so a later chat does not read it as an oversight.
-        const float PanelX0 = 900f, PanelX1 = 2530f, PanelTop = 1682f, PanelBot = 1877f, PanelR = 44f;
-        const float IconCy = 1748f, IconSize = 84f;
+        // ---- S192b: DROPPED 96 UNITS, TO SIT JUST ABOVE THE BAR ITSELF ---------------------------
+        // 🟢 OWNER, 2026-09-07, verbatim, with arrows drawn from the strip down to the bar:
+        // "Move it so it sits just above the bottom bar".
+        //
+        // ⭐ AND THE REASON THERE WAS A GAP IS WORTH RECORDING, BECAUSE THE OBVIOUS NUMBER IS WRONG.
+        // `BottomBar.BarY` is 1877 and the first version of this panel ended exactly there — flush with
+        // the bar, by that number. But 1877 is the top of the bar's BOX, not of anything you can see:
+        // `component_48` carries about 106 design units of TRANSPARENT margin above its own artwork, so
+        // the bar's visible top edge is at design y1983. Measured on the render rather than assumed —
+        // the frame rule is flat at 1983 for every column from x124 to x2530, rising only at the two
+        // extreme corners, which neither this panel nor the pills reach.
+        // ⛔ So the panel now ends at 1973, ten units clear of the bar's real edge, and everything
+        // inside it moved by the same +96: the icons, the labels and the active underline. ⚠ THE LABEL
+        // SIZE DID NOT MOVE — only its y. S153b is HELD on this family's type and a translation is not
+        // a resize.
+        const float PanelX0 = 900f, PanelX1 = 2530f, PanelTop = 1778f, PanelBot = 1973f, PanelR = 44f;
+        const float IconCy = 1844f, IconSize = 84f;
 
         /// <summary>Design-x of tab i's centre.</summary>
         public static float CentreX(int i) { return Start + i * Pitch; }

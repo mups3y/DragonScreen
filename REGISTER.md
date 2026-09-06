@@ -23381,3 +23381,33 @@ it is one change across seven page-views — exactly the shape this unit just di
 it currently suffers is worse than when Q1 was written, and the swap is still one file copy. ⚠ It touches
 the same seven page-views this unit has already touched, so the objection that stopped [[S185]] doing it
 no longer costs anything extra.
+
+#### ➕ A THIRD OWNER INSTRUCTION — the strip sits ON the bar now, and the reason it did not is a real finding
+
+🟢 **OWNER, 2026-09-07, verbatim**, on a marked-up render with arrows drawn from the tab strip down to
+the bottom bar:
+
+> *"Move it so it sits just above the bottom bar"*
+
+⭐ **THE OBVIOUS NUMBER WAS WRONG, AND THAT IS THE PART WORTH KEEPING.** The panel's first version ended
+at design **y1877** — which is `BottomBar.BarY`, the bar's own declared top, so by the code it was already
+flush. On the glass it was not: **`component_48` carries about 106 design units of TRANSPARENT margin
+above its artwork**, so the bar's *visible* edge is at **y1983** and the strip floated 105 units clear of
+it. Measured on the render rather than assumed — the frame rule reads a flat 1983 for every column from
+x124 to x2530, rising only at the two extreme corners, which neither the panel nor the pills reach.
+
+- **Everything in the strip dropped by +96**: panel `1682..1877 → 1778..1973`, icons `1748 → 1844`,
+  labels `1812 → 1908`, the active underline `1858 → 1954`. ⚠ **The label SIZE did not move, only its
+  y** — [[S153b]] is HELD on this family's type and a translation is not a resize.
+- **The pills dropped with it**, to `1822..1973`, so their bottom is flush with the panel's and the two
+  read as one band. He marked only the strip; leaving the buttons 96 units above it would have split a
+  row that his own mock draws as one.
+- ⛔ **AND THE TEST'S OWN CLEARANCE NUMBER WAS WRONG FOR THE SAME REASON**, so it was corrected rather
+  than merely re-pointed: it asserted `pillBottom <= 1877` and passed while the gap was visible. It now
+  pins **1983** as the bar's visible edge, with the 1877-vs-1983 distinction written into the check, and
+  it asserts the gap is **small** as well as non-negative — because "clear of the bar" was already true
+  when the owner asked for this, and only "close to it" was not.
+- **MUTATION-PROVED both directions**: pills back to the old `Top 1700` → **killed**; pills pushed under
+  the bar at `Top 1880` → **killed**.
+- **`previewdiff`: `21 CHANGED`, 106 unchanged, 0 new, 0 removed** — the same Vehicle-family set, since
+  the strip and the pills are shared. **R-01 census `856 below the floor, 0 regressed, 0 improved`.**

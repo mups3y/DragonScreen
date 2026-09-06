@@ -265,14 +265,21 @@ public static class VehicleGeometryTest
               "  toggle x" + togL + ".." + togR + " y" + togT + ".." + togB);
         Check("...and the clearance is in Y, which is how it is actually achieved",
               togB <= pillT, "toggle bottom " + togB + " vs pill top " + pillT);
-        // ⛔ AND THE PILLS MUST SIT ABOVE THE GLOBAL BOTTOM BAR. `component_48` starts at design y1877
-        // and BottomBar draws over everything, so a pill that runs past it is half-hidden on the glass
-        // and its lower half is a touch target the crew cannot see. 1877 is a literal here because it
-        // belongs to the BAR, which this page does not own and must not be read from.
-        Check("the deep-view pills sit clear of the global bottom bar",
-              pillB <= 1877f, "pill bottom " + pillB + " vs bar top 1877");
-        Check("...and so does the tab strip's own panel",
-              1877f >= pillB, "");
+        // ⛔ AND THE PILLS MUST SIT ABOVE THE BOTTOM BAR'S VISIBLE EDGE. BottomBar draws over everything,
+        // so a pill running past it is half-hidden on the glass and its lower half is a touch target the
+        // crew cannot see.
+        // ⚠ THE NUMBER IS 1983, NOT `BottomBar.BarY`'s 1877, AND THE DIFFERENCE IS THE WHOLE POINT.
+        // 1877 is the top of the bar's BOX; `component_48` carries ~106 design units of TRANSPARENT
+        // margin above its artwork, so the visible edge is at 1983. S192's first pass ended the panel at
+        // 1877 and looked flush by the code while leaving a 105-unit gap on the glass, which is what the
+        // owner then asked to close. Measured on the render: the frame rule is flat at 1983 for every
+        // column from x124 to x2530. Literals on both sides, because the bar is not this page's to read.
+        const float BarVisibleTop = 1983f;
+        Check("the deep-view pills sit clear of the bottom bar's VISIBLE edge",
+              pillB <= BarVisibleTop, "pill bottom " + pillB + " vs bar edge " + BarVisibleTop);
+        Check("...and they sit CLOSE to it, which is what the owner asked for",
+              BarVisibleTop - pillB <= 40f,
+              "gap " + (BarVisibleTop - pillB) + " design units, want <= 40");
 
         // The pills must also clear the tab strip's leftmost hit edge (CentreX(0) - half-pitch).
         Check("the pills clear the tab strip's leftmost hit edge",

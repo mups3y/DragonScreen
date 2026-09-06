@@ -75,7 +75,11 @@ namespace DragonScreen
         // The pair, in design units. Left edge and height are the mock's own (see the header); the
         // width is split evenly because the two labels are near enough the same length, and the right
         // edge stops clear of VehicleTabBar's leftmost hit edge (CentreX(0) - half-pitch = 893.5).
-        const float X0 = 124f, PillW = 380f, Top = 1700f, PillH = 151f, Radius = 24f;
+        // S192b: dropped with the tab strip on the same owner instruction ("Move it so it sits just
+        // above the bottom bar"). The pair's BOTTOM is now flush with the panel's — 1822 + 151 = 1973 —
+        // so the two read as one band rather than the strip dropping and the buttons staying behind.
+        // The bar's visible edge is at design y1983, not at `BottomBar.BarY`'s 1877; see VehicleTabBar.
+        const float X0 = 124f, PillW = 380f, Top = 1822f, PillH = 151f, Radius = 24f;
         const float TextSize = 30f;
 
         /// <summary>Pill i's rect in DESIGN units. The one source both Draw and HitTest read.</summary>

@@ -2139,7 +2139,10 @@ public static class FigmaUINavTest
         // bottom-LEFT pill pair at x124..884, y1700..1851.
         // ⛔ EVERY NUMBER BELOW IS STILL A LITERAL and none is read from VehicleDeepViewLinks, exactly
         // as before — that is why this suite went red the moment the page moved instead of following it.
-        float cy = 1775f / RefH * H;   // inside the new pill band (1700..1851)
+        // ⚠ S192b dropped the pair to y1822..1973 on the owner's "Move it so it sits just above the
+        // bottom bar" - so this probe row moved with it. It is a LITERAL, which is why the suite went
+        // red on the move instead of following it silently.
+        float cy = 1890f / RefH * H;   // inside the pill band (1822..1973)
 
         foreach (UiPage vp in vehiclePages)
         {
