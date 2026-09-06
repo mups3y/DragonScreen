@@ -16581,7 +16581,7 @@ is nothing for it to contradict. A check pins the harder half anyway: **the wors
   [[S132]]'s two patches and two values plus up to twelve alert rows at two commands each.
 - comment-loss **0** · no `install`, no glass, no `git push`.
 
-### S134 [S] The settings family: five layouts that can render one, a stranded writer, and a tab strip in two incompatible forms — **TODO** — [H12 + QC `A-01` `A-03` `A-04` `F-03` `F-04` `VV-02`; TIER 2: contains a real coordinate-system defect]
+### S134 [S] The settings family: five layouts that can render one, a stranded writer, and a tab strip in two incompatible forms — **DOING** — [H12 + QC `A-01` `A-03` `A-04` `F-03` `F-04` `VV-02`; TIER 2: contains a real coordinate-system defect]
 - **The findings, and they are one cluster:** the page has five layouts and can render exactly one forever
   (`A-01`); the audio ± and fan buttons have **no HitTest in the file** and the video page's camera rows
   draw a live selection **whose only writer is stranded** by `FigmaMode` (H12, `VV-02` part-closed — the
