@@ -14,7 +14,11 @@ namespace DragonScreen
 {
     public static class Frame58Hud
     {
-        public const int Commands = 20;
+        // ⚠ RAISED FROM 20 BY [[S133]], 2026-09-06. The page used to be five draws and a raster. It now
+        // carries S132's two patches and two live values, and an ALERT ACTIVITY list of up to twelve
+        // rows at two commands each - a label and a value. 20 + 4 + 24 = 48, and the headroom above
+        // that is for the list growing rather than for guesswork.
+        public const int Commands = 64;
         const float RefW = 3427f, RefH = 2112f;
 
         // the light-blue attitude bowl, from the frame metadata (Ellipse 6 centre) — the disc the
@@ -47,6 +51,7 @@ namespace DragonScreen
             // the vessel, the snapshot or the reference — see `Frame58Controls`' header. The baked row
             // is correct, and redrawing a correct constant would only add a way to get it wrong.
             DrawBottomRow(dl, w, ox, sc, s);
+            DrawAlertActivity(dl, w, ox, sc, s);
 
             // "MANUAL DOCKING" entry in the letterbox margin (screen-space, so it never overlaps the
             // fit-to-height frame art). Opens the manual docking screen.
@@ -120,6 +125,51 @@ namespace DragonScreen
             dl.Text(Frame58Controls.TimerText(s.HudTimerSeconds),
                     ox + (TimerPatchX0 + TimerPatchX1) * 0.5f * sc, ty * sc, live * sc,
                     TextAlign.Centre, DragonPalette.White);
+        }
+
+        /// <summary>Reused across frames - the draw path allocates nothing.</summary>
+        static readonly AlertItem[] alertScratch = new AlertItem[AlertActivity.Max];
+
+        /// <summary>
+        /// S133 / QC `H-05`: fill the ALERT ACTIVITY panel, which had 822 px of nothing under its own
+        /// title while `Alarms` folded the whole vehicle every frame and threw the answer away.
+        ///
+        /// ⭐ Nothing is patched here. Unlike the CAMERA row and the timer, this region is genuinely
+        /// EMPTY in the raster - measured, not assumed (see `Frame58Map.AlertPanel`) - so the rows are
+        /// simply drawn into it. No baked ink is covered and nothing can be lost behind a patch.
+        ///
+        /// ⚠ A QUIET VEHICLE AND A DEAD FEED GET DIFFERENT WORDS. `AlertActivity.EmptyText` answers
+        /// both cases, and they must never read alike (rule E4).
+        /// </summary>
+        static void DrawAlertActivity(DisplayList dl, int w, float ox, float sc, PageState s)
+        {
+            Frame58Map.Box p = Frame58Map.AlertPanel;
+            float size = Typography.MinDesignFor(w, sc);
+            float pitch = size * 1.28f;
+            float x = ox + p.X0 * sc;
+
+            int n = AlertActivity.Build(s, alertScratch);
+            if (n == 0)
+            {
+                dl.Text(AlertActivity.EmptyText(s), x, p.Y0 * sc, size * sc, TextAlign.Left,
+                        DragonPalette.Text6);
+                return;
+            }
+
+            // ⚠ CLIPPED BY THE PANEL, NOT BY THE ARRAY. A list longer than the space drops its
+            // QUIETEST rows, because they are the ones at the bottom - worst-first ordering makes the
+            // clip safe. A panel that ran off the frame would hide whatever it overflowed onto.
+            int fit = (int)((p.H) / pitch);
+            if (fit < 1) fit = 1;
+            int rows = (n < fit) ? n : fit;
+
+            for (int i = 0; i < rows; i++)
+            {
+                float y = (p.Y0 + i * pitch) * sc;
+                Rgba ink = Alarms.Colour(alertScratch[i].Sev);
+                dl.Text(alertScratch[i].Label, x, y, size * sc, TextAlign.Left, ink);
+                dl.Text(alertScratch[i].Value, ox + p.X1 * sc, y, size * sc, TextAlign.Right, ink);
+            }
         }
 
         /// <summary>Cover a baked box in the ground it sits on, so live text can replace it.

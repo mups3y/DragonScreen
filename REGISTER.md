@@ -16526,13 +16526,60 @@ widens the hit test to swallow it and dies on exactly that.
 - **DONE when:** the suite enumerates `CrewSurface` and fails if any value has no namer, and the count of
   dispatch types is derived rather than written in prose.
 
-### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **DOING** — [QC `H-05`; TIER 2]
+### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **DONE 2026-09-06 — it lists the vehicle, worst first, out of [[S137]]'s own machinery** — [QC `H-05`; TIER 2]
 - **The finding.** A titled panel occupying 822 px of the busiest page in the build, showing nothing, while
   the alarm channel is computed every frame **and written to the black box**.
 - ⚠ **Same family as [[S130]] and [[S137]]** — three surfaces that each discard a live `Alarms` channel.
   Whoever takes one should read the other two; the model is shared even though the pages are not.
 - **DONE when:** the panel lists real events from `Alarms`/`SystemsState` or is honestly collapsed, and a
   preview shows the empty and populated states.
+
+#### ⭐ DONE 2026-09-06 — the third of the three surfaces that discarded a live channel
+
+`AlertActivity` walks the five `AlertScope` values, keeps every row at Caution or worse, and orders them
+worst-first. ⭐ **It adds no banding, no thresholds and no vocabulary** — [[S137]]'s `AlertList` already
+turns one scope into the rows its severity is MADE of, with every value formatted from the same number
+its severity is banded on. So a row here and the same row on the Vehicle subsystem page cannot disagree:
+they are the same function.
+
+#### ⛔ WHY A WHOLE-VEHICLE LIST IS RIGHT HERE AND WAS WRONG THERE
+
+[[S137]]'s central defect was a whole-vehicle list under a word that reports ONE subsystem — a green
+`NOMINAL` over an amber `POWER 18%`, **one panel, two answers**. The fix there was to scope the list to
+the severity printed above it.
+⭐ **This panel has no severity word above it.** Its title is "ALERT ACTIVITY" — a question about the
+vehicle, not a verdict about a subsystem — so a whole-vehicle list is what the title asks for and there
+is nothing for it to contradict. A check pins the harder half anyway: **the worst row must equal
+`Alarms.SystemSeverity`**, so the panel cannot disagree with the bottom bar [[S130]] tints from.
+
+#### What it looks like, and what it does not
+
+- ⭐ **Nothing is patched.** Unlike [[S132]]'s CAMERA row, this region is genuinely EMPTY in the raster,
+  and that is measured rather than assumed: a query of every path in the right-hand column finds FLIGHT
+  COMMANDS, FAR FIELD POSITIONING and ALERT ACTIVITY — then **nothing at all** below y 386. The rows are
+  drawn into the space; no baked ink is covered and nothing can be lost behind a patch.
+- ⚠ **A quiet vehicle and a dead feed get different words.** `NO ALERT ACTIVITY` against a dash — rule
+  E4, and mutation **U3** collapsing them dies on it.
+- ⚠ **The list clips by height and drops its QUIETEST rows**, which is only safe because it is
+  worst-first. A check runs the same state into a two-row buffer and requires the two ALARMS to survive;
+  mutation **U1** inverts the order and that check reports the two cautions instead.
+- ⛔ **Nothing nominal is listed.** A green row in an alert list is noise competing with the thing the
+  crew is looking for. Mutation **U2** keeps them and the row count goes 4 → 8.
+
+#### Verified
+
+- **6 mutations, 5 killed.** ⚠ **U4 survives and is not counted as covered**: removing the `!s.Valid`
+  guard changes nothing, because `AlertList.Build` already returns 0 on an invalid feed. The clause is
+  defence in depth, it is now **labelled as redundant in the source**, and saying so is better than
+  reporting 6 of 6.
+- **New suite `AlertActivityTest`, 16 checks** · `build.py test` green.
+- **Preview: 5 existing Frame 58 renders changed + 1 new.** `frame58_hud_alerts.png` drives real bands
+  and the panel lists **CO2 6.5 mmHg** and **BATTERY 6%** in alarm red above **PPO2 2.10 psia** and
+  **PROPELLANT 11%** in caution amber. The other four now show the empty state under their own title,
+  which is also new — the panel said nothing at all before.
+- ⚠ `Frame58Hud.Commands` raised **20 → 64**: the page was five draws and a raster and now carries
+  [[S132]]'s two patches and two values plus up to twelve alert rows at two commands each.
+- comment-loss **0** · no `install`, no glass, no `git push`.
 
 ### S134 [S] The settings family: five layouts that can render one, a stranded writer, and a tab strip in two incompatible forms — **TODO** — [H12 + QC `A-01` `A-03` `A-04` `F-03` `F-04` `VV-02`; TIER 2: contains a real coordinate-system defect]
 - **The findings, and they are one cluster:** the page has five layouts and can render exactly one forever

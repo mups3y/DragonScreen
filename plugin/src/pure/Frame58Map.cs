@@ -152,5 +152,16 @@ namespace DragonScreen
         // gives the two verticals per button and one shared pair of horizontals.
         public static readonly Box ResetButton = new Box(2953.4f, 1765.9f, 3134.2f, 1859.5f);
         public static readonly Box StartButton = new Box(3164.3f, 1765.9f, 3345.0f, 1859.5f);
+
+        // ---- THE ALERT ACTIVITY PANEL ([[S133]] / QC `H-05`, 2026-09-06) --------------------------
+        // The title's own ink box, and the empty region under it. ⭐ THE EMPTINESS IS MEASURED, not
+        // assumed: a query of every path in the right-hand column (x 2900..3427) finds FLIGHT COMMANDS
+        // at y 125-150, FAR FIELD POSITIONING at 258-279, ALERT ACTIVITY at 362-386 — and then
+        // **nothing at all** until the docking-mechanism graphic far below. QC measured 822 px of it.
+        public static readonly Box AlertTitle = new Box(2961.71f, 362.51f, 3221.17f, 386.46f);
+
+        /// <summary>Where the list may draw: under the title, down to well clear of the artwork below.
+        /// ⚠ Its LEFT edge is the title's, so the rows hang off the word they belong to.</summary>
+        public static readonly Box AlertPanel = new Box(2961.71f, 410f, 3390f, 1200f);
     }
 }

@@ -871,6 +871,27 @@ public static class PreviewMain
                 DockingCamStandIn = false;
                 ForgetRuntimeImages();
             }
+            // ---- S133 / QC H-05: THE ALERT ACTIVITY PANEL, POPULATED ----
+            // ⛔ The shared fixture is quiet on the FDIR spine, so every other Frame 58 render shows
+            // the panel's empty state - which is worth having and is NOT the state this line is about.
+            // ⭐ This one drives real alerts through the same bands the Vehicle pages use, so the panel
+            // that had 822 px of nothing under its own title finally has something in it.
+            {
+                PageState alr = ps;
+                alr.Cabin.Ppo2Psia = 2.1;      // below Ppo2Alarm 2.0? no - caution band
+                alr.Cabin.Co2MmHg = 6.5;       // above Co2Alarm 6.0
+                alr.Power01 = 0.06;            // a low bus
+                alr.DragonProp01 = 0.11;
+                DisplayList hdl = new DisplayList(Frame58Hud.Commands + 60);
+                Frame58Hud.Build(hdl, CW, CH, alr);
+                if (hdl.Overflowed) Console.WriteLine("  WARNING FRAME58 ALERTS OVERFLOWED at " + hdl.Capacity);
+                string path = Path.Combine(outDir, "frame58_hud_alerts.png");
+                Render(hdl, CW, CH, path);
+                AlertItem[] tmp = new AlertItem[AlertActivity.Max];
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl.Count
+                                  + " commands   " + AlertActivity.Build(alr, tmp) + " alert rows");
+            }
+
             // ---- S132 / H11: THE STOPWATCH RUNNING, and CAMERA reading the OTHER view ----
             // ⛔ Every render above shows the timer at its baked 0s, so the one state a crew creates by
             // pressing START appears in none of them. ⭐ The nose cone is OPEN here too, so this single
