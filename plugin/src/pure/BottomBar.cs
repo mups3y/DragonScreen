@@ -207,6 +207,13 @@ namespace DragonScreen
         /// <summary>CURRENT STATE's caption tile, as a distance LEFT of Rule1X, and its size.</summary>
         const float StateLabelDx = Rule1X - 1287f, StateLabelY = 141f, StateLabelW = 158f, StateLabelH = 22f;
 
+        /// <summary>The CAPTION's own horizontal CENTRE, as a design-px offset left of
+        /// <see cref="Rule1X"/> — 98, i.e. design x 1366, the middle of the `CURRENT STATE` tile's
+        /// 1287..1445 span. ⛔ DERIVED FROM THE TILE, NOT TYPED: it is the tile's own x plus half the
+        /// tile's own width, so if the caption is ever recut or re-placed the value follows it instead
+        /// of drifting off it. That is the whole defect this fixes.</summary>
+        const float StateCentreDx = StateLabelDx - StateLabelW * 0.5f;
+
         /// <summary>POINTING MODE's caption and its baked value, as distances RIGHT of Rule2X.
         /// ⚠ The value is BAKED and its source is [[S147b]]'s held owner question — the registry's
         /// authority is the attitude controller's `Steering` target and `src/Steering.cs` is deleted
@@ -489,8 +496,36 @@ namespace DragonScreen
             // angle in the seat at any render width; nothing here writes its panel-pixel value.
             float size = Typography.BarDesign;
             float top = ValueInkMid - InkCentreOfTop * size;
-            dl.Text(state, r1 - (Rule1X - ValueRight) * k, y + top * k, size * k, TextAlign.Right,
-                    StateInk(s, state));
+            // ---- ⭐ CENTRED UNDER THE CAPTION (owner, 2026-09-07) ----------------------------------
+            // 🟢 OWNER, verbatim: *"orange "ORBITING" needs to be centred bellow "current state" so it
+            // looks neat"*.
+            //
+            // ⛔ SUPERSEDED IN PLACE: IT WAS RIGHT-ALIGNED ON THE ERASED BOX, AND THAT WAS RIGHT ONCE.
+            // C1.16 / G12. `ValueRight` = 1461 is where the BAKED value's ink ended, measured off
+            // component_48 in [[S147]], and matching it was correct while the value was drawn at the
+            // glanceable floor — at 48.07 design px the string was wide enough that its right edge WAS
+            // roughly under the caption. S176 edit 3 dropped it to `BarDesign` (29) on the owner's D2,
+            // and a narrower string pinned by its RIGHT edge slid out from under a caption that is
+            // centred at 1366: `ORBITING` sat 1307..1461 against the caption's 1287..1445, ~18 design
+            // px right of it. Nothing measured that, because nothing was comparing the two.
+            //
+            // ⭐ SO IT IS CENTRED ON THE CAPTION'S OWN CENTRE — and `ORBITING` at 29 is 154.0 design px
+            // wide against the caption's 158, so the two now sit as one stacked pair.
+            //
+            // ⛔ AND IT IS CLAMPED, BECAUSE CENTRING ALONE BREAKS THE LONG STRINGS. The caption's centre
+            // is only 98 design px left of the rule, so any value wider than 196 crosses it: `ORBIT
+            // COAST` is 211.7 at 29 px and would have ended at 1471.9, ink straight through the rule at
+            // 1464. The clamp keeps the value inside the SAME run `ValueRun` already measures — the
+            // last icon on the left, the erased box's right edge on the right — so it is centred
+            // whenever it fits and slides left only when it must. Nothing can leave the run.
+            float capCentre = r1 - StateCentreDx * k;
+            float halfW = 0.5f * Width(state, size) * k;
+            float rightLim = r1 - (Rule1X - ValueRight) * k;
+            float leftLim = MapX(0f, w, h, fit) + ValueRunLeft * k;
+            float cx = capCentre;
+            if (cx + halfW > rightLim) cx = rightLim - halfW;
+            if (cx - halfW < leftLim) cx = leftLim + halfW;
+            dl.Text(state, cx, y + top * k, size * k, TextAlign.Centre, StateInk(s, state));
         }
 
         /// <summary>The five nav-icon tiles, in <see cref="IconX"/> order. Cut by
@@ -552,6 +587,15 @@ namespace DragonScreen
         /// one measurement" applied to itself. The value is identical, so every render is
         /// byte-identical; only the home moved.</summary>
         const float InkCentreOfTop = Typography.CapCentreOfTop;
+
+        /// <summary>A string's width in DESIGN px at `size` design px, through the project's ONE
+        /// measured advance — `MarginAffordance.CapAdvance`. Same function `BarEvent.Width` uses, and
+        /// deliberately the same number: the value and the event box share this bar and must not
+        /// disagree about how wide a string is.</summary>
+        public static float Width(string s, float size)
+        {
+            return (s == null) ? 0f : s.Length * MarginAffordance.CapAdvance * size;
+        }
 
         /// <summary>The design x where CURRENT STATE's clear run begins — the right edge of the last
         /// nav icon's box. Used only to MEASURE the run in the tests; the draw does not need it.</summary>

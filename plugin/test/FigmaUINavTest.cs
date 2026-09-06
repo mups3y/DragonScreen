@@ -2658,9 +2658,25 @@ public static class FigmaUINavTest
         // The value hangs off the RULE now, not off the bar's left end - which is the same number
         // under Frame and the only form that survives the other two fits.
         float vx = BottomBar.MapX(1464f, VW, VH, BarFit.Frame) - 3f * k;
-        Check("the value is right-aligned exactly where the erased box ended",
-              Math.Abs(XOf(a, "Orbit") - vx) < 0.5f,
-              "drawn at " + XOf(a, "Orbit") + ", box right edge " + vx);
+        // ⛔ SUPERSEDED IN PLACE 2026-09-07 (owner: *"orange \"ORBITING\" needs to be centred bellow
+        // \"current state\" so it looks neat"*). C1.16 / G12: the right-edge anchor above is KEPT — it
+        // is still the measured end of the erased box, and it is still the value's RIGHT LIMIT — but it
+        // is no longer where the value is drawn. The value is CENTRED on the caption's own centre and
+        // clamped into the run. So the check becomes the two things that must now be true.
+        float capC = BottomBar.MapX(1464f, VW, VH, BarFit.Frame) - (177f - 158f * 0.5f) * k;
+        Check("the value is CENTRED under its caption",
+              Math.Abs(XOf(a, "Orbit") - capC) < 0.5f,
+              "drawn at " + XOf(a, "Orbit") + ", the caption's centre is " + capC);
+        // ⭐ AND IT STILL CANNOT CROSS THE RULE — the clamp's whole reason. `ORBIT COAST` is the string
+        // that proves it: 211.7 design px at 29, which centred would end 7.9 px PAST the erased box.
+        PageState longest = new PageState();
+        longest.Valid = true; longest.Phase = "ORBIT COAST";
+        DisplayList wide = BarOf(longest, VW, VH);
+        float wideC = XOf(wide, "ORBIT COAST");
+        float wideHalf = 0.5f * BottomBar.Width("ORBIT COAST", Typography.BarDesign) * k;
+        Check("...and a long value is clamped inside the run rather than crossing the rule",
+              wideC + wideHalf <= vx + 0.01f,
+              "right edge " + (wideC + wideHalf) + ", limit " + vx);
         // ⚠ LIVE type, so S153's glanceable floor - the baked value was ~29 design px, 60% of it, and
         // is one of QC R-01's own samples.
         //
@@ -2741,11 +2757,23 @@ public static class FigmaUINavTest
         // answered YES, this band stops being unambiguous and the search must narrow to the row.
         // ⚠ AND THE ANCHOR MOVED: the value hangs off the RULE, which is where the page's own column
         // divider is, so it must be found through the page's own fit and not off the bar's left end.
-        float x = BottomBar.MapX(1464f, w, h, fit) - 3f * k, y0 = by + 110f * k, y1 = by + 225f * k;
+        // ⛔ SUPERSEDED IN PLACE 2026-09-07 — THE VALUE IS NO LONGER PINNED BY ITS RIGHT EDGE.
+        // C1.16 / G12. This used `Math.Abs(c.A - x) < 0.5f` against the erased box's right edge,
+        // which worked only while the value was drawn `TextAlign.Right` at exactly that x. The owner
+        // asked for it CENTRED under its caption (2026-09-07), so `c.A` is now the string's CENTRE and
+        // moves with the string's own width — an exact-x probe reads empty, which is precisely what it
+        // did on the first run of this change, across the whole sweep.
+        //
+        // ⭐ SO IT IS FOUND BY THE BAND IT LIVES IN, NOT BY AN ALIGNMENT. The value is the only drawn
+        // text in the bar LEFT OF THE FIRST RULE — the captions are still tiles (see above), and the
+        // event box's text is centred in the CENTRE CELL, right of that rule. Testing "left of the
+        // rule, in the value's row band" is a property of where the value belongs rather than a copy
+        // of how it happens to be aligned, so the next alignment change will not silently blind this.
+        float rule = BottomBar.MapX(1464f, w, h, fit), y0 = by + 110f * k, y1 = by + 225f * k;
         for (int i = 0; i < dl.Count; i++)
         {
             DrawCmd c = dl.At(i);
-            if (c.Kind == DrawKind.Text && Math.Abs(c.A - x) < 0.5f && c.B >= y0 && c.B <= y1)
+            if (c.Kind == DrawKind.Text && c.A < rule && c.B >= y0 && c.B <= y1)
                 return c.Str;
         }
         return null;

@@ -21042,7 +21042,7 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — edit 3 landed: the bar has its OWN named type floor (29 design px, owner `OVERRIDE`); S176-Q1 and S179-Q2 are CLOSED and D2 is built. The unit stays OPEN for the owner's verdict on the preview and on S176-Q3 (the seven stashed files)** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — edits 3 and 4 landed: the bar has its OWN named type floor (29 design px, owner `OVERRIDE`), and CURRENT STATE's value is now CENTRED under its caption and clamped inside its run (owner, 2026-09-07). S176-Q1/Q3 and S179-Q2 are closed; the unit stays OPEN for the owner's verdict on this preview** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
@@ -21755,6 +21755,76 @@ the floor it needs now exists. It becomes a small change under whichever of Q3's
 
 
 ---
+
+---
+
+#### ⭐ EDIT 4 (OWNER, 2026-09-07) — `ORBITING` IS CENTRED UNDER ITS CAPTION
+
+**🟢 OWNER INSTRUCTION, verbatim (C1.12's evidentiary standard):** *"orange "ORBITING" needs to be
+centred bellow "current state" so it looks neat"*.
+
+**WHAT WAS WRONG, AND IT IS EDIT 3'S OWN SIDE-EFFECT — SAY SO RATHER THAN PRESENT IT AS A NEW DEFECT.**
+The value was drawn `TextAlign.Right` at `ValueRight` = design x 1461, which is where the BAKED value's
+ink ended, measured off `component_48` in [[S147]]. **That was correct while the value was drawn at the
+glanceable floor:** at 48.07 design px the string was wide enough that pinning its right edge left it
+sitting roughly under the caption. ⛔ **Edit 3 dropped it to 29 on the owner's D2, and a narrower string
+pinned by its RIGHT edge slides out from under a caption that is centred.** Measured: `ORBITING` spanned
+design 1307..1461 against the caption's **1287..1445** — about **18 design px** right of it. Nothing in
+the build compared the two, so nothing caught it; the owner did, by eye, which is the point of showing
+him the render.
+
+**THE FIX.** A named constant `BottomBar.StateCentreDx` = `StateLabelDx - StateLabelW * 0.5f` = **98**,
+i.e. design x **1366** — ⛔ **derived from the caption tile's own x and width, never typed**, so if the
+caption is ever recut or re-placed the value follows it instead of drifting off it again. The value
+draws `TextAlign.Centre` there.
+
+⛔ **AND IT IS CLAMPED, BECAUSE CENTRING ALONE BREAKS THE LONG STRINGS — MEASURED, NOT GUESSED.** The
+caption's centre is only 98 design px left of the rule, so any value wider than 196 crosses it.
+`ORBIT COAST` is 211.7 design px at 29, and the mutation that removes the clamp puts its right edge
+**7.24 device px past the erased box's edge** — ink through the rule at 1464. The clamp holds the value
+inside the SAME run `ValueRun` already measures (last nav icon on the left, erased box's edge on the
+right), so it is centred whenever it fits and slides left only when it must. **Nothing can leave the
+run.** Of today's strings only `ORBIT COAST` and `SPLASHDOWN` clamp at all, by 10.9 and 1.2 design px.
+
+**VERIFIED**
+
+- ⭐ **MEASURED ON THE RENDER, AND THE FIRST MEASUREMENT WAS WRONG — WHICH IS WORTH RECORDING.** Ink
+  centres off `ui_cover.png`: `CURRENT STATE` **1000..1098, centre 1049.0**; `ORBITING` **1006..1091,
+  centre 1048.5**. **Offset −0.5 device px.** ⚠ The first pass read **−9.0** and looked like a real
+  defect; the caption's sampling window had swallowed the **vertical rule at x 1115**, which is white
+  and full-height, so the "caption" span ran to the rule rather than to the text. Re-measured with the
+  rule excluded, and cross-checked against the tile itself (`bar_label_current_state.png`: ink 0..157 of
+  158, its own box centre to within 0.5 px), which is what proved the asset was never the problem.
+- **`python plugin/build.py test` → ALL SUITES PASSED, 20 894 checks, 0 failed.**
+- **The R-01 census is UNMOVED: `856 below the floor, 0 page(s) regressed, 0 improved`,** and the bar's
+  own line still reads `26 draw(s) judged against the BAR's own floor`. The value only moved sideways;
+  its SIZE is untouched, so edit 3's ratchet is undisturbed.
+- **`previewdiff`: 98 existing page(s) changed, 0 new, 0 removed, of 127 — 29 unchanged.** The 98 are
+  the 96 that draw this bar plus the two `ui_cover_event_*` pages [[S179]] added, which are now existing
+  rather than new. The 29 unchanged are the same set as [[S175]], [[S176]] and [[S179]] — the pages that
+  do not draw this bar.
+- **4 MUTATIONS, 4 KILLED** — 0 compile errors and 0 crash lines on every one ([[S167]]):
+
+  | | mutation | killed by |
+  |---|---|---|
+  | E1 | the value goes back to RIGHT-aligned on the erased box | `the value is CENTRED under its caption — drawn at 1111.9, centre is 1048.7` |
+  | E2 | centred on the caption's LEFT EDGE rather than its centre | same check, `drawn at 996.1` |
+  | E3 | the clamp is removed | `a long value is clamped [...] right edge 1119.1, limit 1111.9` |
+  | E4 | the clamp uses the RULE instead of the erased box's edge | same check, `1113.9 vs 1111.9` |
+
+- ⛔ **AND THE TEST'S VALUE-FINDER HAD TO CHANGE, WHICH IS A FINDING OF ITS OWN.** `BarValue` located the
+  value by `Math.Abs(c.A - x) < 0.5f` against the right-edge anchor — a copy of HOW IT WAS ALIGNED, not
+  of where it belongs. Centring made `c.A` the string's centre, so the probe read empty and **the whole
+  sweep went blank on the first run** (21 pages "disagreed with the exemption list"). It now finds the
+  only drawn text LEFT OF THE FIRST RULE in the value's row band — the captions are still tiles and the
+  event box's text is centred right of that rule, so that is unambiguous **and is a property rather than
+  a restatement of the alignment.** Marked SUPERSEDED IN PLACE (C1.16 / G12), both there and at the
+  geometry assertion it fed.
+- `install` and glass **SPENT** and untouched. **No `git push`.** `docs/BUILD_PLAN.md` untouched
+  (guarded, G10); `docs/QC_FINDINGS.md` untouched (QC's). §14.4(a) untouched.
+
+**DECLARED OUTPUTS:** `plugin/src/pure/BottomBar.cs` · `plugin/test/FigmaUINavTest.cs` · `REGISTER.md`.
+
 
 
 ### S179 [O] The bottom bar's centre cell is an EVENT DIALOG, and it is why 475 design px of the bar are empty — **DONE 2026-09-07 — the box is re-fitted to the owner's D1 (29 design px, all 40 callouts on ONE line), two provably false comments are corrected in place, and the mutation set went from 1 kill to 6 + 2 proven-equivalent. ⚠ WHICH of the 40 the bar raises is still S179-Q1 and still the owner's; only the 11 gate-driven ones are wired** — [logged by [[S176]] per C1.1, 2026-09-06; owner-supplied source; TIER 2: a whole missing element]
