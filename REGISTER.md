@@ -19384,7 +19384,7 @@ warns that answering them at different times means laying the page out twice.
    twice.
 
 
-### S153d [S] The systems deep-views: raise the type to the floor — **TODO** — [split of [[S153]]; **73** below-floor draws]
+### S153d [S] The systems deep-views: raise the type to the floor — **HELD 2026-09-06 — probed and rendered: the schematic's label/value stacking and the READOUTS column both collide; blocked on S153a-Q1** — [split of [[S153]]; **73** below-floor draws]
 - **Scope:** `SystemsTreePage.cs` (31) · `SystemsPidPage.cs` (42).
 - **Classification:** node labels and their values are LIVE readouts — a straight raise to `MinDesignFor`.
   The schematic's own annotation captions are the only static-reference candidates.
@@ -19393,7 +19393,32 @@ warns that answering them at different times means laying the page out twice.
 - **DONE when:** both pages clear their floors, baselines lowered, and a preview shows the schematic
   still readable as a schematic.
 
-### S153e [S] The plot pages: raise the type over the drawings — **TODO** — [split of [[S153]]; **75** below-floor draws]
+#### ⛔ HELD 2026-09-06 — probed, rendered, reverted
+
+The line predicted the difficulty exactly — *"the type sits inside a drawn graph, so a 1.5–2× raise
+moves nodes, not just glyphs. Budget for geometry, not for a size sweep."* ⭐ **It is right, and the
+render says where.** `SystemsPidPage`'s `Z` helper was wrapped in a lift-to-`MinDesignFor` and the page
+rendered at 2560×1406:
+
+- ⛔ **Every node's VALUE collides with its own LABEL.** The schematic stacks a name over a number
+  inside one box — `CABIN FAN` now has its value drawn through it, and `CABIN` / `CO2 SCRUBBER` /
+  `SUIT LOOP` are each within a pixel or two of the same.
+- ⛔ **The READOUTS column collides with its values**: `CABIN TEMP` runs through `21.8`, `CABIN PRESS`
+  through `14.72 psia`. It is a two-column list whose left column was measured for the smaller type.
+- ✅ The bottom consumables strip (`CO2 CANISTER` / `SUPPRESSANT` / `FIRE` / `CABIN LEAK`) is fine.
+
+**Same wall, same cause, no new question**: the boxes are measured geometry and the raise is ~1.8×.
+Blocked on **S153a-Q1**. ⚠ On these two pages the answer is more than a re-cut — a node box that grows
+moves the pipes drawn between the nodes, so whichever way Q1 goes, this line is the geometry job the
+split warned about.
+
+#### Verified
+
+- Probe applied, preview rendered, `ui_systemspid.png` inspected, probe **reverted**; `build.py test`
+  green with the tree at HEAD. **No code landed.** No `install`, no glass, no `git push`.
+
+
+### S153e [S] The plot pages: raise the type over the drawings — **HELD 2026-09-06 — probed and rendered: the docking clusters' labels overflow their own buttons; blocked on S153a-Q1** — [split of [[S153]]; **75** below-floor draws]
 - **Scope:** `DockingSimPage.cs` (39) · `RendezvousPage.cs` (8) · `AscentPage.cs` (17) ·
   `NavOrbitPlotPage.cs` (11).
 - **Classification:** ⭐ `DockingSimPage`'s **pad captions are named STATIC in the ruling** — and at
@@ -19403,6 +19428,30 @@ warns that answering them at different times means laying the page out twice.
   already in the `Dense`..floor band**, so if they classify STATIC it is nearly done.
 - ⚠ [[S145]] adds range-ring labels to `NavOrbitPlot`; it is un-held and must add them at `MinDesignFor`.
 - **DONE when:** all four pages clear their own floors, baselines lowered, previews inspected.
+
+#### ⛔ HELD 2026-09-06 — probed, rendered, reverted
+
+`DockingSimPage`'s `Z` helper was wrapped in a lift-to-`MinDesignFor` and the page rendered at
+2560×1406:
+
+- ⛔ **The ROTATION and TRANSLATION clusters stop containing their own labels.** `ROLL`, `PITCH`, `YAW`,
+  `FWD`, `BACK`, `LEFT`, `RIGHT`, `UP` and `DOWN` all overflow the button squares they name — `BACK` and
+  `RIGHT` run clear of the cluster entirely.
+- ⛔ The three plates at the foot (`Instructions`, `Reset Positions`, `Settings`) overflow their borders.
+- ✅ The ring's own `ROLL` / `PITCH` / `YAW` readouts and `RANGE` / `RATE` are fine — they sit in open
+  space rather than in a box.
+
+⭐ **The pattern across all six probes is now clear and it is worth stating once:** text in OPEN SPACE
+takes the raise; text in a BOX measured for the smaller type does not. That is what makes this one
+question rather than six, and it is what S153a-Q1 asks.
+
+**No new question. Blocked on S153a-Q1.**
+
+#### Verified
+
+- Probe applied, preview rendered, `ui_docking.png` inspected, probe **reverted**; `build.py test` green
+  with the tree at HEAD. **No code landed.** No `install`, no glass, no `git push`.
+
 
 ### S153f [S] Shared chrome and settings: raise the type to the floor — **TODO** — [split of [[S153]]; ~~**47**~~ → **51** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `MenuPage.cs` (24) · `SettingsAudioPage.cs` (~~12~~ **13**) · `SettingsVideoPage.cs` (9) ·
