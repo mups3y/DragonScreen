@@ -1192,6 +1192,61 @@ public static class LayoutTest
             }
         }
 
+        // ---- ⛔ S153a: AND THE SAME GUARD ON THE *RIGHT* EDGE, WHICH DID NOT EXIST ------------------
+        // The check above pins the BOTTOM of each card and nothing pins the side, so a row could grow
+        // sideways out of its card and off the column with a green build. That is not hypothetical:
+        // [[S153a]] raised these rows to the static floor the owner's R-01 ruling puts them on, and
+        // MEASURED the result off the render - CONTINGENCY's second row ended at design x 1456, past
+        // the card background at 1424 AND past the column divider at 1442, while every existing check
+        // stayed green. ENTRY TIMELINE's widest row landed at 1441: one design pixel inside the
+        // divider, which is a coincidence rather than a fit.
+        //
+        // ⚠ THERE IS NO TEXT-WIDTH FACILITY IN THE PURE LAYER - a grep of `src/pure` and `test` for
+        // TextWidth / MeasureText / AdvanceRatio finds nothing - so a headless check cannot know how
+        // wide a string will draw. What it CAN pin is the thing that made the overflow possible: the
+        // rows must be drawn at a size the card's own geometry was measured for. So this guard is on
+        // the SIZE, and the width claim is made where it can be made honestly, on the render (S153a).
+        //
+        // ⭐ WHY A SIZE GUARD IS THE RIGHT SHAPE HERE. R-01's raise is legitimate and will land; what
+        // must not happen is it landing WITHOUT the re-layout, silently. This check fails the moment
+        // the rows are raised, and its message says where to look - which is the whole difference
+        // between a defect found on the bench and one found on the glass.
+        {
+            const float CoverRefH = 2112f;
+            int cw = 2560, ch = 1406;
+            float csc = ch / CoverRefH;
+            PageState gs = new PageState(); gs.Valid = true;
+            DisplayList gd = new DisplayList(CoverPage.Commands);
+            CoverPage.Build(gd, cw, ch, gs, MapProjection.Default(), 5);   // Reference Content phase
+            int raised = 0, examined = 0; float biggest = 0f; string what = null;
+            for (int i = 0; i < gd.Count; i++)
+            {
+                DrawCmd t = gd.At(i);
+                if (t.Kind != DrawKind.Text || t.A < 240f * csc || t.A > 1427f * csc) continue;
+                if (t.B < 443f * csc || t.B >= 1823f * csc) continue;
+                // ROWS ONLY. The export puts card titles at x 362 and rows at 340, and a title is
+                // legitimately larger than a row - the same geometric discriminator the S123 block
+                // above uses, and for the same reason: it survives a size change, a size match does not.
+                if (Math.Abs(t.A - 340f * csc) > 0.5f) continue;
+                examined++;
+                if (t.C > (CoverPage.RowSize + 0.01f) * csc)
+                { raised++; if (t.C > biggest) { biggest = t.C; what = t.Str; } }
+            }
+            // ⛔ AND IT MUST HAVE ACTUALLY LOOKED AT THEM. Found by mutation Y4: disabling the row
+            // filter above made this examine NOTHING and pass, which is the defect this whole run keeps
+            // meeting - a check that inspects an empty set is indistinguishable from a check that
+            // passed. 15 = CONTINGENCY 4 + PARACHUTES 4 + ENTRY TIMELINE 7, so it also fails if a card
+            // silently loses a row.
+            Check("S153a the card-row guard actually examined all 15 rows", examined == 15,
+                  "examined " + examined + " - a guard that inspects nothing cannot fail");
+            Check("S153a the reference-card rows are still at the size their card was measured for",
+                  raised == 0,
+                  raised + " row(s) drawn larger than RowSize, worst \"" + what + "\" at " + biggest
+                  + " px. ⛔ R-01's raise needs the card GEOMETRY re-cut first - S153a measured "
+                  + "CONTINGENCY's row ending 32 design px past its card and 14 past the column "
+                  + "divider at the static floor. See S153a's write-up before changing this.");
+        }
+
         // ---- FINDING 4: ONE READING OF THE INTERRUPT CRITERIA (S13's residual) ----------------------
         // S13 settled the quantity as ATTITUDE and applied it to DeorbitBurnPrepPage, but the Cover kept
         // showing the baked "altitude" captions, so the two surfaces disagreed on glass (C7.1).

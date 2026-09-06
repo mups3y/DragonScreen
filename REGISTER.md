@@ -17041,6 +17041,25 @@ Two checks close it, and neither could have been reasoned to without running the
 2. **`WorstStateOf` was EXTRACTED from the census loop** so it can be compared against a second, dumber
    maximum computed independently. A picker verified only by the loop that uses it is not verified.
 
+#### ⛔ CORRECTION, SAME DAY, BY [[S153a]] — THE PICKER REPORTED A MAXIMUM IT HAD NOT COMPUTED
+
+The write-up above says the census "reports the WORST state". ⚠ **It reported the winner of a
+LEXICOGRAPHIC order** — most below-Dense first, then most below-floor — **and took BOTH counts from that
+one state.** When the two metrics peak in different states the second number is not a maximum at all.
+
+⭐ **Surfaced within hours, by S153a, on this page.** With the Cover's reference cards raised,
+`phase 0 / cam Map` held the most below-Dense (31) and `phase 5 / cam Map` the most below-floor (48).
+The pair reported was **32 / 31**; the true below-floor maximum, **48**, was never printed. A baseline
+taken from it would have blessed sixteen sub-floor draws — the precise failure this line exists to
+prevent, one level up.
+
+⛔ **The ratchet compares the two counts SEPARATELY, so each must be the maximum of its OWN metric.**
+`WorstStateOf` now returns per-metric maxima and names the state behind each; the `STATE` report and
+the printed baseline show both.
+⭐ **Caught by this line's own `CensusStatesAreReal` independent-maximum check** — the one added because
+S165's first mutation run proved a picker verified by the loop that uses it is not verified. ⚠ It could
+not have fired earlier: until S153a moved the cards, one state maximised both metrics on every page.
+
 #### Verified
 
 - **9 mutations, 9 killed, every kill attributed to `LegibilityFloorTest`** — the suite under test, not
@@ -19088,7 +19107,7 @@ answered"*; it is answered, it was un-withdrawn by the answer, and its action is
 ⚠ [[S160]]'s *"VT-02 is withdrawn, no code owed — do not re-open it from this line"* was correct when
 written and stays correct **for S160**: the work belongs to S153c, not there.
 
-### S153a [S] Cover: raise the type to the two floors — **DOING** — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
+### S153a [S] Cover: raise the type to the two floors — **HELD 2026-09-06 — BUILT, MEASURED, AND REVERTED: this page's baked geometry cannot hold the ruling's type, and re-cutting it is an owner call** — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `plugin/src/pure/CoverPage.cs` only.
 - ⭐ **COUNT DOUBLED BY [[S165]], 2026-09-06 — 24 → 48, and the 24 new ones are ONE CAMERA VIEW.** The
   census rendered only `CoverCam.Earth`; the **MAP** view draws a whole pan/zoom cluster —
@@ -19110,6 +19129,109 @@ written and stays correct **for S160**: the work belongs to S153c, not there.
   below the floor. Raising the floor-side of that comparison is this line's job; read S124 first.
 - **DONE when:** every Cover element clears its own floor, the ratchet baseline for `Cover` is lowered to
   what remains, and a preview shows the reference cards still fit their boxes.
+
+#### ⛔ HELD 2026-09-06 — the raise was BUILT and RENDERED, and the render is the finding
+
+**This line was not blocked before starting; it was blocked by what it measured.** The full raise was
+implemented — both floors, every element in the classification above, plus the map cluster [[S165]]
+found — and rendered at the shipped 2560×1406. ⛔ **It does not fit, and the failures are not marginal.**
+
+| group | raised | measured off the render |
+|---|---|---|
+| top strip captions | 29 → 48.07 | `INERTIAL VELOCITY` **overruns** `ALTITUDE`; `INCLINATION` **runs off the panel** |
+| the seven rail labels | 32 → 48.07 | **every slot overflows** the 178-design-px strip (ink 124–186 px against a 118.5-px box); the selected row's cyan underline **strikes through its own second line** |
+| `CAMERA` + view name | 21/31 → 48.07 | runs **past the right edge of the panel** |
+| map pad labels | 26 → 48.07 | `LEFT` and `RIGHT` **overflow their 104-px squares into `CTR`** |
+| the two interrupt criteria | 32 → 48.07 | fits, but abuts the `FAR FIELD POINTING` leader |
+| ⭐ the three reference cards | 26 → 36.05 (STATIC) | fits **vertically** — and `CONTINGENCY`'s second row ends at design **x 1456**, past its card background (1424) **and past the column divider (1442)** |
+
+⭐ **THE STATIC HALF BREAKS TOO, WHICH IS THE PART I EXPECTED TO LAND.** Before the raise that row ended
+at 1145, well inside. `ENTRY TIMELINE`'s widest row lands at **1441** — one design pixel inside the
+divider, which is a coincidence and not a fit.
+
+#### SO THE FINDING IS NOT "THE TYPE IS TOO SMALL". IT IS THAT THIS PAGE MUST BE RE-LAID OUT.
+
+Every box named above is **measured Figma geometry (§1.4 tier-1)** — `rectangle_183` is 178 design px
+wide, a pad button is 104 square, the six telemetry cells are the export's own. Moving one is a design
+decision about a real screen, not an arithmetic consequence of the ruling. ⛔ **A build chat does not
+make it** (C1.14: the owner's own taste, and §1.4 source-of-truth besides).
+
+⚠ **AND THERE IS NO HEADLESS WAY TO CHECK IT.** A grep of `plugin/src/pure` and `plugin/test` for
+`TextWidth` / `MeasureText` / `AdvanceRatio` / `EstimateWidth` returns **nothing** — the pure layer has
+no text-extent facility at all, so every width figure above was measured off the rendered PNG with an
+ink-extent scan. That is worth knowing before the next line tries to assert a fit.
+
+#### What DID land, because two instrument defects were found on the way
+
+⭐ **1 — [[S165]]'s census picker was reporting a maximum it had not computed, and its own check caught
+it.** The picker ordered states lexicographically (below-Dense first, then below-floor) and reported
+**both** counts from the single winner. On the Cover with the static half raised, `phase 0 / cam Map`
+had the most below-Dense (31) and `phase 5 / cam Map` the most below-floor (48) — so the reported pair
+was **32 / 31 and the true below-floor maximum, 48, was not reported at all.** A baseline taken from
+that pair would have blessed sixteen sub-floor draws. ⛔ **The ratchet compares the two counts
+separately, so each must be the maximum of its own metric**, and it now is. Found by
+`CensusStatesAreReal`'s independent-maximum check — which exists only because S165's own mutation run
+showed that a picker verified by the loop that uses it is not verified.
+⚠ It was invisible until this line, because until now one state maximised both.
+
+⭐ **2 — the card guard only pinned the BOTTOM edge.** `QC6 card N keeps every row inside its slot`
+checks overhang below and nothing sideways, so a row could grow out of its card with a green build —
+which is exactly what happened. There is no width facility to guard with, so the new check guards the
+thing that made it possible: **the rows must still be drawn at the size their card was measured for**,
+and it fails loudly the moment the raise is attempted without the re-cut, naming this line.
+
+#### Verified
+
+- `python plugin/build.py test` → **ALL SUITES PASSED**. `previewdiff` **REFUSED** — correct: what
+  landed touches `plugin/test/` only.
+- **4 mutations, 4 killed.** ⚠ **`Y4` survived the first version** — disabling the guard's row filter
+  made it examine NOTHING and pass. ⭐ That is the same defect this whole run keeps meeting (`S130`'s
+  render that never happened, `S168`'s bare-globe baseline, `S165`'s three survivors): **a check that
+  inspects an empty set is indistinguishable from a check that passed.** The guard now asserts it
+  examined all 15 rows, which also fails if a card silently loses one.
+- The full raise is **not lost**: it is reconstructible from this line's table, and every size it
+  touched is named in the classification above.
+- No `install`, no glass, no `git push`. §14.4(a) untouched. `docs/BUILD_PLAN.md` / `docs/QC_FINDINGS.md` untouched.
+
+## Open questions for the owner (C1.14) — S153a
+
+**Q1 — the Cover's LIVE elements cannot clear the glanceable floor inside their measured Figma boxes.
+Which gives: the geometry, or the floor, for this page?**
+*Situation.* The R-01 ruling ("raise anything LIVE to the floor") is settled and not in question. What
+is in question is what happens when a real screen's own layout cannot hold the result — measured above,
+on four separate element groups, on a rendered page.
+
+1. **Re-cut the boxes.** Widen the rail strip, re-pitch the six telemetry cells, move `CAMERA` inboard,
+   enlarge the pad squares — then apply the raise. ⚠ It changes §1.4 tier-1 geometry on the most
+   reference-faithful page in the build, and the Figma frame stops being the layout source for it.
+2. **Raise only as far as each box allows**, per element, and record the residual against R-01. Keeps
+   the geometry exactly; leaves some LIVE text below the floor, which is what R-01 exists to end.
+3. **Shorten the strings** so the raised type fits the boxes (`INERTIAL VEL`, `Sep Prep`, `L`/`R`).
+   ⚠ §1.4: several are transcribed from the reference and one (`CAMERA`'s heading) is verbatim from
+   `First.vue`.
+4. **Leave the Cover at its export sizes** and close S153a as "not applicable to this page", recording
+   that R-01 cannot be met here without a re-layout.
+
+⭐ **RECOMMENDATION: (1), and it is a real recommendation rather than a shrug.** The measurement says
+the export's type sizes and the seat-measured legibility floor are simply incompatible on this page —
+the Figma frame was drawn for a screen read at a desk, and `Typography`'s 16 px was measured *"from the
+seat"*. Once those disagree, one of them has to move, and the one with a MEASUREMENT behind it is the
+floor. ⚠ **But it is the owner's page**, it is tier-1 geometry, and (2) is a legitimate answer if
+fidelity to the export matters more than glanceability on this particular screen.
+
+**Q2 — does the STATIC half land on its own, or wait for Q1?**
+*Situation.* The three reference cards are a self-contained change that removes **16 draws** from the
+band no content type is allowed to be in (below-Dense 47 → 31). It fits vertically. It overruns the
+column divider by ~14 design px on ONE row of one card.
+
+1. **Wait for Q1** and land the page in one pass. *(recommended: the overhang is small but it is a
+   REGRESSION — that row is inside its card today — and shipping a known one to bank a partial win is
+   the trade this project keeps refusing.)*
+2. **Land it and accept the overhang**, recorded. Gets 16 draws out of the illegal band now.
+3. **Land it for `PARACHUTES` only**, the one card that fits with room. ⚠ Three cards at two sizes.
+
+⛔ **Neither Q1 nor Q2 is decided here, and nothing is half-landed while they are open** — the code is
+reverted to HEAD and only the two instrument fixes remain.
 
 ### S153b [S] The Vehicle family: raise the type to the two floors — **TODO** — [split of [[S153]]; **441** below-floor draws, the largest group]
 - **Scope:** `VehicleOverviewPage.cs` · `VehicleMechPage.cs` · `VehicleSubsystemPage.cs` — eight page-views

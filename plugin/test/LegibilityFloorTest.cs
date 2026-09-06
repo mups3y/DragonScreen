@@ -1880,10 +1880,10 @@ public static class LegibilityFloorTest
                 if (drawn == 0) continue;
                 CensusPick p = WorstStateOf(up, floor, dense);
                 Check("S165 ⭐ the census reports " + up + "'s WORST state, not its first",
-                      p.BelowDense == maxDense && (p.Text - p.Ok) == maxBelow,
-                      "picker says " + (p.Text - p.Ok) + " / " + p.BelowDense + " (state \"" + p.Worst
-                      + "\"), an independent maximum over its " + drawn + " states says "
-                      + maxBelow + " / " + maxDense);
+                      p.BelowDense == maxDense && p.Below == maxBelow,
+                      "picker says " + p.Below + " / " + p.BelowDense + " (states \"" + p.WorstBelow
+                      + "\" / \"" + p.Worst + "\"), an independent maximum over its " + drawn
+                      + " states says " + maxBelow + " / " + maxDense);
                 Check("S165 " + up + " draws in all " + drawn + " of its states",
                       p.StatesDrawn == drawn, "picker saw " + p.StatesDrawn);
             }
@@ -1938,6 +1938,14 @@ public static class LegibilityFloorTest
                                                // ⭐ S165 26,23 -> 48,47: the CAMERA slot's MAP view draws a
                                                // whole pan/zoom cluster (UP/LEFT/CTR/RIGHT/DOWN/+/-/ZOOM) at
                                                // 17-20 px that the default Earth view never showed.
+                                               // ⛔ IT DOES NOT GO TO 0 AND MUST NOT BE EXPECTED TO. The
+                                               // 31 that remain below the static floor are the page's
+                                               // LIVE half, and that needs a RE-LAYOUT rather than a size
+                                               // change: S153a built the raise and MEASURED that this
+                                               // page's baked boxes cannot hold type at the glanceable
+                                               // floor (the top strip collides, the rail overflows its
+                                               // strip, CAMERA runs off the panel). Moving a measured
+                                               // Figma box is an owner call - see [[S153a-ii]].
         B(UiPage.Menu,              24, 24),   // S153f
         // ⭐ S147 PUT THIS PAGE IN THE CENSUS. `UiPage.Cabin` is a flat frame that drew NO text at all,
         // so it was legitimately absent from this table - until the bottom bar started printing
@@ -1986,12 +1994,14 @@ public static class LegibilityFloorTest
     /// because a table of 25 pairs is not something to type from a screenshot.</summary>
     const bool PrintBaselines = false;
 
-    /// <summary>S165: one page's census result - the WORST state's render and its counts.</summary>
+    /// <summary>S165: one page's census result - see WorstStateOf for what "worst" means here.</summary>
     struct CensusPick
     {
-        public DisplayList Dl;
-        public int Text, Ok, Static, BelowDense, StatesDrawn;
-        public string Worst;
+        public DisplayList Dl;            // the below-DENSE-worst state's render, for the regression dump
+        public int Text, Ok, Static;      // from that same state
+        public int Below, BelowDense;     // ⛔ PER-METRIC MAXIMA - possibly from two DIFFERENT states
+        public int StatesDrawn;
+        public string Worst, WorstBelow;  // which state produced each maximum
     }
 
     /// <summary>
@@ -2003,15 +2013,28 @@ public static class LegibilityFloorTest
     /// calls `IMPROVED`. A one-directional guard cannot notice its own measurement shrinking, so the
     /// measurement has to be testable from outside it.
     ///
-    /// WORST = most below the hard (static-reference) floor first, then most below the glanceable one.
-    /// The hard ratchet is the one that fails a build, so it decides which state is reported - and the
-    /// returned DisplayList is that state's, so the regression dump prints the elements that actually
-    /// tripped it rather than the default state's.
+    /// ⛔ "WORST" IS PER METRIC, AND THE TWO MAXIMA CAN COME FROM DIFFERENT STATES. That is not a
+    /// nicety - it is a defect this function had and its own check caught, while [[S153a]] was using it:
+    ///
+    ///     the first version ordered states lexicographically, below-Dense first, then below-floor, and
+    ///     reported BOTH counts from the single state that won that order. On the Cover after S153a's
+    ///     static-half raise, `phase 0 / cam Map` had the most below-Dense (31) and `phase 5 / cam Map`
+    ///     had the most below-floor (48) - so the reported pair was 32/31 and the true below-floor
+    ///     maximum, 48, was NOT REPORTED AT ALL. A baseline taken from that pair would have blessed
+    ///     sixteen sub-floor draws.
+    ///
+    /// ⭐ The ratchet compares the two counts SEPARATELY, so each must be the maximum of its own metric.
+    /// Found by `CensusStatesAreReal`'s independent-maximum check, which exists because a picker
+    /// verified only by the loop that uses it is not verified - see that check's own note.
+    ///
+    /// The returned DisplayList and the Text/Ok/Static counts are the BELOW-DENSE-worst state's, because
+    /// that is the ratchet that fails a build and the dump should print the elements that tripped it.
     /// </summary>
     static CensusPick WorstStateOf(UiPage up, float floor, float dense)
     {
         CensusPick p = new CensusPick();
-        p.Dl = null; p.Worst = "-"; p.StatesDrawn = 0;
+        p.Dl = null; p.Worst = "-"; p.WorstBelow = "-"; p.StatesDrawn = 0;
+        p.Below = -1; p.BelowDense = -1;
         foreach (CensusState state in StatesFor(up))
         {
             DisplayList d2 = new DisplayList(1200);
@@ -2026,13 +2049,15 @@ public static class LegibilityFloorTest
             }
             if (n2 == 0) continue;
             p.StatesDrawn++;
-            if (p.Dl == null || bd2 > p.BelowDense
-                || (bd2 == p.BelowDense && (n2 - ok2) > (p.Text - p.Ok)))
+            if (n2 - ok2 > p.Below) { p.Below = n2 - ok2; p.WorstBelow = state.What; }
+            if (p.Dl == null || bd2 > p.BelowDense)
             {
                 p.Dl = d2; p.Text = n2; p.Ok = ok2; p.Static = st2; p.BelowDense = bd2;
                 p.Worst = state.What;
             }
         }
+        if (p.Below < 0) p.Below = 0;
+        if (p.BelowDense < 0) p.BelowDense = 0;
         return p;
     }
 
@@ -2052,17 +2077,19 @@ public static class LegibilityFloorTest
             CensusPick p = WorstStateOf(up, floor, dense);
             DisplayList dl = p.Dl;
             int n = p.Text, ok = p.Ok, st = p.Static, bd = p.BelowDense;
+            int below = p.Below;              // ⛔ its OWN maximum, not this state's - see WorstStateOf
             string worst = p.Worst;
             int seenStates = p.StatesDrawn;
             if (dl == null || n == 0) continue;
-            if (seenStates > 1 && worst != "default")
+            if (seenStates > 1 && (worst != "default" || p.WorstBelow != "default"))
                 Console.WriteLine(string.Format(
-                    "    STATE      {0,-18} worst of {1,2} states is \"{2}\"   below-floor {3,3}, below-Dense {4,3}",
-                    up, seenStates, worst, n - ok, bd));
-            tT += n; tOk += ok; tStatic += st; tBelowDense += bd; tBelow += (n - ok);
+                    "    STATE      {0,-18} {1,2} states: below-floor {2,3} (\"{3}\"), "
+                    + "below-Dense {4,3} (\"{5}\")",
+                    up, seenStates, below, p.WorstBelow, bd, worst));
+            tT += n; tOk += ok; tStatic += st; tBelowDense += bd; tBelow += below;
             if (PrintBaselines)
-                Console.WriteLine(string.Format("        B(UiPage.{0,-18} {1,3}, {2,3}),   // worst: {3}",
-                                                up + ",", n - ok, bd, worst));
+                Console.WriteLine(string.Format("        B(UiPage.{0,-18} {1,3}, {2,3}),   // worst: {3} / {4}",
+                                                up + ",", below, bd, p.WorstBelow, worst));
 
             int want = -1, wantD = -1;
             for (int i = 0; i < Baseline.Length; i++)
@@ -2091,24 +2118,30 @@ public static class LegibilityFloorTest
                 }
             }
             // ---- THE SOFT ONE: a rise is allowed ONLY into the Dense..floor band ----
-            else if (n - ok > want)
+            else if (below > want)
             {
                 Console.WriteLine(string.Format(
                     "    STATIC+   {0,-18} below-floor {1,3} -> {2,3}, below-Dense unchanged at {3,3}"
                     + "   (new STATIC-reference text; re-baseline in the owning line)",
-                    up, want, n - ok, bd));
+                    up, want, below, bd));
             }
-            else if (n - ok < want)
+            else if (below < want)
             {
                 improved++;
                 Console.WriteLine(string.Format(
                     "    IMPROVED  {0,-18} baseline {1,3} -> {2,3}   lower it in the owning split line",
-                    up, want, n - ok));
+                    up, want, below));
             }
         }
 
         Check("R-01: every baselined page was actually walked", covered == Baseline.Length,
               "table has " + Baseline.Length + ", walked " + covered);
+        // ⚠ S165: THE FOUR TOTALS ARE NOT ALL FROM THE SAME RENDER, and saying so is cheaper than a
+        // reader working it out. `tBelow` and `tBelowDense` sum each page's own PER-METRIC MAXIMUM -
+        // those are the two the ratchet enforces. The other three come from each page's below-Dense
+        // worst state, because that is the render kept for the regression dump. On a page whose two
+        // maxima fall in different states (the Cover, after S153a) the text-draw total is that state's,
+        // not the largest. They are informational; the per-page pair is what is enforced.
         Console.WriteLine(string.Format(
             "    {0} text draws: {1} clear the floor, {2} in the Dense..floor band (static-reference "
             + "only), {3} below even Dense", tT, tOk, tStatic, tBelowDense));
