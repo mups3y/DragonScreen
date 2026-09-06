@@ -19088,7 +19088,7 @@ answered"*; it is answered, it was un-withdrawn by the answer, and its action is
 ⚠ [[S160]]'s *"VT-02 is withdrawn, no code owed — do not re-open it from this line"* was correct when
 written and stays correct **for S160**: the work belongs to S153c, not there.
 
-### S153a [S] Cover: raise the type to the two floors — **TODO** — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
+### S153a [S] Cover: raise the type to the two floors — **DOING** — [split of [[S153]]; ~~**24**~~ → **48** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `plugin/src/pure/CoverPage.cs` only.
 - ⭐ **COUNT DOUBLED BY [[S165]], 2026-09-06 — 24 → 48, and the 24 new ones are ONE CAMERA VIEW.** The
   census rendered only `CoverCam.Earth`; the **MAP** view draws a whole pan/zoom cluster —
