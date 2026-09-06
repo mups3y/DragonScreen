@@ -10255,7 +10255,7 @@ an end state. Neither can be filled without a source: `SCREEN_INVENTORY.md`'s Di
    screen's features are included, and removing paint to avoid deciding what it means is the one thing this
    defect class should not teach.
 
-### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **TODO — UNBLOCKED 2026-09-06: S79-Q1 answered (TIME-TO-DEPLETION), S79-Q2 moot** — [TIER 2: a column that claims a number it never computes]
+### S79 [S] The Vehicle Overview's MARGIN column is a hardcoded dash on every row — **DOING — UNBLOCKED 2026-09-06: S79-Q1 answered (TIME-TO-DEPLETION), S79-Q2 moot** — [TIER 2: a column that claims a number it never computes]
 
 #### ⛔ SESSION DEVIATION FROM C1.1 + C1.7 — RECORDED HERE BECAUSE THIS IS THE FIRST LINE RUN 4 WRITES
 
