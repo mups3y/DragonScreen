@@ -204,6 +204,21 @@ namespace DragonScreen
             float PX(float x) => x * sx;
             float PY(float y) => y * sy;
             float SZ(float v) => v * sy;
+            // ---- S153f: LIVE, AND ONLY FOR TEXT ------------------------------------------------------
+            // The channel names, their values, the seat headings and the scope caption are each either a
+            // live reading or the name of a thing being pressed, so the ruling puts them on the
+            // glanceable floor. ⭐ Probed and rendered before committing: the five-column channel strip
+            // and the seat row both keep their spacing at the floor.
+            //
+            // ⛔ AND IT IS A SEPARATE HELPER FROM `SZ` FOR A MEASURED REASON. `SZ` is this file's
+            // DESIGN→PANEL scaler, not a text-size function: it also carries `SZ(34)`/`SZ(44)` (the
+            // scope ring's radii), `SZ(GlyphHalf)` (the ± half-span) and `SZ(SignalOuter)` (the signal
+            // fan). Lifting `SZ` itself lifted all of those to the TEXT floor - and because `GlyphHalf`
+            // 28 and `SignalOuter` 34.18 both sit below it, they clamped to the SAME number and the
+            // derived relation `SignalOuter = GlyphHalf / sin 55°` was destroyed. [[S134e]]'s own check
+            // caught it: *"...and as wide as they are — ratio 0.85"*. A legibility floor is a statement
+            // about GLYPHS; applying it to a radius is a category error.
+            float TZ(float v) => Typography.LiveDesign(v, w, sy) * sy;
             int St(float rs) => Strokes.Px(rs, sy);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
             // discrete image, undistorted, centred on its design centre-x
             void Img(string key, float x, float y, float wd, float hd) =>
@@ -215,7 +230,7 @@ namespace DragonScreen
                 dl.Rect(left, PY(y), d * sy, d * sy, fill);
                 dl.Box(left, PY(y), d * sy, d * sy, St(3), border);
             }
-            void CTxt(string t, float cx, float y, float size, Rgba c) => dl.Text(t, cx * sx, PY(y), SZ(size), TextAlign.Centre, c);
+            void CTxt(string t, float cx, float y, float size, Rgba c) => dl.Text(t, cx * sx, PY(y), TZ(size), TextAlign.Centre, c);
             void VLine(float x, float y0, float y1, Rgba c) => dl.Line(PX(x), PY(y0), PX(x), PY(y1), St(2), c);
 
             dl.Rect(0, 0, w, h, Bg);

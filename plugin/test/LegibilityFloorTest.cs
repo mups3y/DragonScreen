@@ -1946,23 +1946,36 @@ public static class LegibilityFloorTest
                                                // floor (the top strip collides, the rail overflows its
                                                // strip, CAMERA runs off the panel). Moving a measured
                                                // Figma box is an owner call - see [[S153a-ii]].
-        B(UiPage.Menu,              24, 24),   // S153f
+        B(UiPage.Menu,               0,  0),   // S153f
+                                               // ⭐ S153f 24,24 -> 0,0. The whole page cleared in one
+                                               // change: every label here is a card NAME - how the crew
+                                               // find a page - so there is no static content to argue
+                                               // about, and the cards had the room.
         // ⭐ S147 PUT THIS PAGE IN THE CENSUS. `UiPage.Cabin` is a flat frame that drew NO text at all,
         // so it was legitimately absent from this table - until the bottom bar started printing
         // CURRENT STATE on every page. Its one text draw is at the glanceable floor, so both counts
         // are 0, and the ratchet caught the omission the moment it appeared rather than letting a
         // page slip out of the census.
-        B(UiPage.Cabin,              3,  0),   // S153f (the frame itself is [[S136]]'s)
+        B(UiPage.Cabin,              2,  0),   // S153f (the frame itself is [[S136]]'s)
+                                               // ⭐ S153f 3 -> 2, and the 2 that remain are CORRECT:
+                                               // CABIN LIGHTS and NO PER-ZONE LIGHTING ON THIS VEHICLE
+                                               // are static labels sitting at exactly DenseDesignFor.
+                                               // The one that moved was GroupsText - a LIVE count of
+                                               // this vehicle's light modules, drawn at the STATIC
+                                               // floor because its neighbours are labels.
                                                // ⚠ S165 0 -> 3, and NOT a state effect: this page has one
                                                // state. [[S134d]]'s rebuilt LIGHTING panel added three
                                                // Dense-band draws and the SOFT ratchet only PRINTED it, so
                                                // the stale baseline sat here green. Re-baselined by S165.
         B(UiPage.Hud,                2,  2),   // S153f - MarginAffordance's MANUAL/DOCKING, also QC H-06
-        B(UiPage.Audio,             13, 10),   // S153f
+        B(UiPage.Audio,              0,  0),   // S153f
                                                // ⭐ S165 12 -> 13: THE DEFECT THAT OPENED THAT LINE.
                                                // [[S134c]]'s caveat draws only on a SEAT scope; the census
                                                // rendered CABIN. Worst state: scope 0 (SEAT).
-        B(UiPage.AudioVideo,         9,  7),   // S153f
+                                               // ⭐ S153f 13 -> 0: cleared, SEAT caveat included.
+        B(UiPage.AudioVideo,         0,  0),   // S153f
+                                               // ⭐ S153f 9,7 -> 0,0. The last three on both settings
+                                               // pages were the SHARED tab strip, not the pages.
         B(UiPage.Procedure,         37, 35),   // S153c - the same page file as VrioTest (S110)
         B(UiPage.VrioTest,          37, 35),   // S153c
         B(UiPage.SuitCheck,         54, 51),   // S153c

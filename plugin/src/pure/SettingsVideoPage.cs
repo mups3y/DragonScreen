@@ -30,7 +30,8 @@ namespace DragonScreen
             float sx = w / RefW, sy = h / RefH;
             float PX(float x) => x * sx;
             float PY(float y) => y * sy;
-            float SZ(float v) => v * sy;
+            // ---- S153f: LIVE, for SettingsAudioPage's reason - these name cameras the crew select --
+            float SZ(float v) => Typography.LiveDesign(v, w, sy) * sy;   // ⚠ TEXT ONLY here - see SettingsAudioPage's TZ for why that matters
             int St(float rs) => Strokes.Px(rs, sy);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
             void C(string t, float cx, float y, float z, Rgba c) => dl.Text(t, PX(cx), PY(y), SZ(z), TextAlign.Centre, c);
             void L(string t, float x, float y, float z, Rgba c) => dl.Text(t, PX(x), PY(y), SZ(z), TextAlign.Left, c);

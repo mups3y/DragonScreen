@@ -165,6 +165,37 @@ namespace DragonScreen
         }
 
         /// <summary>
+        /// S153f: a LIVE element's design size, LIFTED to the glanceable floor and never below it.
+        ///
+        /// ⛔ IT LIFTS, IT DOES NOT SET. Math.Max, not assignment - an element already above its floor
+        /// keeps the size the Figma export measured, so the design hierarchy the page was drawn with
+        /// survives and only what is BELOW moves. That is what R-01 asked for and no more.
+        ///
+        /// ⛔ AND IT EXISTS SO THAT NO PAGE WRITES A FLOOR. Every caller passes its own panel width and
+        /// frame scale and gets the answer resolved at the point of comparison - the rule the header
+        /// above states twice, once for R-02 and once for the design frame. A page that computed
+        /// `Math.Max(v, 48.07f)` would be right for one cfg and wrong for the next.
+        ///
+        /// ⚠ WHICH FLOOR APPLIES IS A QUESTION ABOUT THE CONTENT, and neither of these decides it. Use
+        /// this for anything that changes or that matters in a hurry; use RefDesign for a printed table
+        /// the crew lean in to read. Getting it the wrong way round is the one mistake the owner's
+        /// two-floor policy makes possible, so neither has a default and both are named at the call site.
+        /// </summary>
+        public static float LiveDesign(float design, float panelW, float frameScale)
+        {
+            float f = MinDesignFor(panelW, frameScale);
+            return design < f ? f : design;
+        }
+
+        /// <summary>S153f: a STATIC-REFERENCE element's design size, lifted to DenseFor's design form.
+        /// ⛔ NOT a cheaper LiveDesign - see Dense's own docstring for the boundary.</summary>
+        public static float RefDesign(float design, float panelW, float frameScale)
+        {
+            float f = DenseDesignFor(panelW, frameScale);
+            return design < f ? f : design;
+        }
+
+        /// <summary>
         /// The floor for anything that must be read at a glance. MEASURED. Values, alerts, the nav
         /// bar, anything that changes, anything that matters in a hurry.
         /// </summary>

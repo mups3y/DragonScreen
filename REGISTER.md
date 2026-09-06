@@ -19453,7 +19453,7 @@ question rather than six, and it is what S153a-Q1 asks.
   with the tree at HEAD. **No code landed.** No `install`, no glass, no `git push`.
 
 
-### S153f [S] Shared chrome and settings: raise the type to the floor — **DOING** — [split of [[S153]]; ~~**47**~~ → **51** below-floor draws ([[S165]] 2026-09-06)]
+### S153f [S] Shared chrome and settings: raise the type to the floor — **DONE 2026-09-06 — three of four pages now clear the floor COMPLETELY; the one line that could not be seen by the ratchet was a live count on the static floor** — [split of [[S153]]; ~~**47**~~ → **51** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `MenuPage.cs` (24) · `SettingsAudioPage.cs` (~~12~~ **13**) · `SettingsVideoPage.cs` (9) ·
   `MarginAffordance` (the HUD's 2) · ⭐ **`CabinLightingPanel.cs` (3)**.
 - ⚠ **Re-counted 47 → 51 by [[S165]], and the two additions are different in kind:**
@@ -19471,6 +19471,82 @@ question rather than six, and it is what S153a-Q1 asks.
   the bar gets laid out twice.
 - **DONE when:** Menu and both settings pages clear the floor, baselines lowered, and the HUD's residual
   is recorded against H-06 rather than silently left.
+
+#### ⭐ DONE 2026-09-06 — and it is the ONE line of the six that had the room
+
+| page | was | now | |
+|---|---|---|---|
+| `Menu` | 24 / 24 | ⭐ **0 / 0** | every label is a card NAME — no static content to argue about |
+| `Audio` | 13 / 10 | ⭐ **0 / 0** | includes [[S134c]]'s SEAT-only caveat, the draw that opened [[S165]] |
+| `AudioVideo` | 9 / 7 | ⭐ **0 / 0** | |
+| `Cabin` | 3 / 0 | **2 / 0** | ✅ correct — see below |
+
+**Census total 903 → 856.** ⭐ **Three page-views in this build now have NO text below the glanceable
+floor at all**, which was true of none of them this morning.
+
+⚠ **`Cabin`'s remaining 2 are the right answer, not a residual.** `CABIN LIGHTS` and `NO PER-ZONE
+LIGHTING ON THIS VEHICLE` are static labels sitting at **exactly** `DenseDesignFor`. Verified element by
+element off the render, not inferred from the count.
+
+#### ⛔ THE FINDING: A LIVE COUNT WAS BEING DRAWN AT THE STATIC FLOOR, AND NOTHING COULD SEE IT
+
+`CabinLightingPanel` already used both floors — [[S134d]] applied the policy when it built the panel —
+but it drew `GroupsText` at the **static** one. ⭐ `GroupsText` reads `s.LightCount` and dashes when the
+feed is invalid: **it is a count OF THIS VEHICLE**, not a printed label. It was on the label floor
+because the three lines around it are labels and it sits between them. ⚠ **The classification is about
+the CONTENT, not about the neighbours** — which is the one mistake the owner's two-floor policy makes
+possible.
+
+⛔ **AND THE RATCHET IS STRUCTURALLY BLIND TO IT.** Moving a LIVE element DOWN to the static floor leaves
+its below-Dense count unchanged, so the hard ratchet stays green. `LegibilityFloorTest`'s own header says
+so in terms — *"what this deliberately CANNOT catch is a LIVE element placed at the static floor.
+Telling those apart needs a per-element classification, which S153 left to the per-page split lines."*
+⭐ **This is a split line, so this is where that classification belongs**, and it is now a named check in
+`CabinLightingTest` rather than a count.
+
+#### ⚠ AND A BUG OF MY OWN, CAUGHT BY AN EXISTING TEST — WORTH THE SPACE
+
+The first version lifted each page's `SZ` / `Z` helper. ⛔ **That is not a text-size function.** In
+`SettingsAudioPage`, `SZ` is the file's DESIGN→PANEL scaler and also carries `SZ(34)`/`SZ(44)` (the scope
+ring's radii), `SZ(GlyphHalf)` (the ± half-span) and `SZ(SignalOuter)` (the signal fan). Lifting it
+lifted all of those to the TEXT floor — and because `GlyphHalf` **28** and `SignalOuter` **34.18** both
+sit below it, **they clamped to the SAME number** and the derived relation
+`SignalOuter = GlyphHalf / sin 55°` was destroyed.
+
+⭐ **[[S134e]]'s own check caught it** — *"…and as wide as they are — glyph 93.7 px vs ± 110.4 px, ratio
+0.85"* — and only at `@4416×1406`, the second aspect that suite sweeps. At 2560 it passed. **A single-
+aspect check would have shipped it.**
+⛔ **A legibility floor is a statement about GLYPHS; applying it to a radius is a category error.** The
+lift is now a separate `TZ` helper used only at the text draw, with that reasoning written beside it, and
+mutation `V6` puts the bug back and is killed.
+
+#### What did NOT change, and why
+
+- ⛔ **`MarginAffordance` is untouched**, exactly as this line instructed. Raising `MANUAL`/`DOCKING`
+  means WIDENING THE MARGIN, which is **QC `H-06` / `Q8`, an open owner design question**. Its
+  `FitsLegibly` still returns false at both widths and `LegibilityFloorTest` still pins that it does.
+  ⭐ **That is this line's DONE-when clause 3 met** — recorded, not silently left.
+- **`Cabin`'s tab strip is BAKED into `frame66` and did not move**, so it is now visibly smaller than the
+  drawn strip on the Audio and Video pages. Logged as [[S169]] rather than fixed here (C1.1).
+- ⚠ [[S147]]'s sequencing warning is **spent**: that line is `DONE 2026-09-06`, so the bottom bar is not
+  laid out twice.
+
+#### Verified
+
+- `python plugin/build.py test` → **ALL SUITES PASSED**; census `856 below the floor, 0 regressed,
+  0 improved` with all four baselines lowered.
+- **`previewdiff`: 8 existing pages changed, 0 new, 0 removed, of 124** — the three audio renders, the
+  three video renders, `ui_cabin.png` and `ui_menu.png`. Exactly the scope and nothing else.
+- **PNGs inspected**: the Menu's 21 card labels sit comfortably inside their cards; the audio page's
+  five-column channel strip keeps its spacing; the cabin panel reads `CABIN LIGHTS / ON / SINGLE CABIN
+  LIGHT GROUP / NO PER-ZONE LIGHTING ON THIS VEHICLE` and stays centred in its box.
+- **The tab strip was MEASURED, not eyeballed**: at the raised size the three labels span design
+  1529–1637, 1659–1766 and 1788–1896 — **22 design px of clear air between each**, and the 120-px accent
+  underline still contains its 108-px label.
+- **6 mutations, 6 killed**, including `V4` (the live count demoted back to the static floor — killed by
+  the new named check) and `V6` (the geometry-scaler bug — killed by S134e at the second aspect).
+- No `install`, no glass, no `git push`. §14.4(a) untouched. `docs/BUILD_PLAN.md` / `docs/QC_FINDINGS.md`
+  untouched.
 
 ### S154 [O] Frame 58's HUD is one raster and every readout in it is baked — **SPLIT 2026-09-06 into [[S154a]]–[[S154d]]; the mapping is step one and is scouted below** — [H10 + QC `H-02`; split out of [[S50]] 2026-09-06; TIER 2: *"the largest liveness gap in the build"* — the audit's own words]
 
@@ -19967,3 +20043,22 @@ costs one `git diff --name-only`; (2) is the honest form of the rule but caches 
 edit invalidates, and a stale cache in a verification instrument is this file's recurring defect.
 ⛔ **NOT DONE HERE**: C1.3 is a build-protocol rule in `CLAUDE.md`, a guarded file (C1.12 / G10), so a
 build chat does not change it. This is a proposal.
+
+
+### S169 [S] The Cabin page's settings tab strip is BAKED, so it no longer matches the two drawn ones — **TODO** — [logged by [[S153f]] per C1.1, 2026-09-06; TIER 4: consistency]
+- **The finding.** `SettingsTabStrip.Draw` now lifts its labels to the glanceable floor ([[S153f]]), so
+  the `Audio / Cabin / Video` strip on the **Audio** and **Video** pages draws at 48.07 design px. ⛔ The
+  **Cabin** page does not call `Draw` at all — its strip is pixels inside `frame66.png`, placed by
+  `FigmaFramePage` — so it stays at the export's 28 design px.
+- ⚠ **One control, two sizes, depending on which of its own three tabs you are on.** Nothing is illegible
+  and nothing collides; it is a consistency defect, which is why it is TIER 4 and not TIER 2.
+- ⭐ **The route is already worked out on a sibling.** [[S134d]] painted over `frame66`'s baked LIGHTING
+  panel and redrew it, and recorded exactly when that is cheap: *"this panel is a solid opaque box on a
+  flat ground, so it can simply be painted over."* ⚠ **Whether the strip's own band is** — it sits over
+  the cabin illustration, not over flat ground — **is the thing to measure first**, with a fill scan, the
+  way S134d measured its panel. If it is not, this is [[S134a]]'s case instead and the answer is
+  different.
+- ⚠ **`SettingsTabStrip.IsLetterboxed` already knows this page is the odd one** and the hit test already
+  handles it (QC `F-04`), so the geometry is understood; only the ink is baked.
+- **DONE when:** the three tabs are one size on all three pages, or a measurement shows the baked band
+  cannot be patched and that is recorded with the reason.

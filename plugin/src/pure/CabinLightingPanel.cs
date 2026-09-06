@@ -84,8 +84,16 @@ namespace DragonScreen
             dl.Text(StateText(s), ox + cx * sc, y * sc, live * sc, TextAlign.Centre, StateInk(s));
 
             // ---- what is actually bindable, by count ----
+            // ⛔ S153f: THIS IS A LIVE READOUT AND IT WAS DRAWN AT THE STATIC FLOOR. `GroupsText` reads
+            // `s.LightCount` and dashes when the feed is invalid - it is a count OF THIS VEHICLE, not a
+            // printed label - so the owner's R-01 policy puts it on `live`, where `StateText` above
+            // already is. It was on `label` because the three lines around it are labels and it sits
+            // between them; the classification is about the CONTENT, not about the neighbours.
+            // ⚠ The block height below uses `label` for this line's advance and is deliberately left
+            // alone: the centring maths is a LAYOUT rule, and changing it would move the whole block
+            // rather than fix the size. If the block later reads as off-centre, that is its own edit.
             y += live * 1.8f;
-            dl.Text(GroupsText(s), ox + cx * sc, y * sc, label * sc, TextAlign.Centre,
+            dl.Text(GroupsText(s), ox + cx * sc, y * sc, live * sc, TextAlign.Centre,
                     DragonPalette.Text6);
 
             // ⛔ AND WHY THERE ARE NO PER-ZONE ROWS. Said on the glass, because the baked panel

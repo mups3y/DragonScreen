@@ -93,7 +93,15 @@ namespace DragonScreen
             float sx = w / RefW, sy = h / RefH;
             float PX(float x) => x * sx;
             float PY(float y) => y * sy;
-            float SZ(float v) => v * sy;
+            // ---- S153f: EVERY LABEL ON THIS PAGE IS LIVE, and the ruling says so by description ----
+            // A Menu card label is how the crew FIND a page. There is no static reference content here
+            // at all - no printed table, no caption over a value - so the whole page lifts to the
+            // glanceable floor and nothing on it takes the static one.
+            // ⭐ MEASURED BEFORE COMMITTING: the raise was probed and rendered first, and every one of
+            // the 21 card labels still sits comfortably inside its card. This page has the room the
+            // Cover's rail and the Vehicle family's tables do not - see [[S153a]] for what that
+            // difference costs elsewhere.
+            float SZ(float v) => Typography.LiveDesign(v, w, sy) * sy;   // ⚠ TEXT ONLY here - see SettingsAudioPage's TZ for why that matters
             int St(float rs) => Strokes.Px(rs, sy);   // ONE rule, in Strokes.cs - rounds UP (R-02 family)
 
             dl.Rect(0, 0, w, h, DragonPalette.Background);

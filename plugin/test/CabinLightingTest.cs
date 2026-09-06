@@ -53,6 +53,38 @@ public static class CabinLightingTest
               CabinLightingPanel.GroupsText(dead) == Dashes.None,
               CabinLightingPanel.GroupsText(dead));
 
+        // ---- ⛔ S153f: THE COUNT IS A LIVE READOUT AND MUST BE DRAWN AT THE LIVE FLOOR --------------
+        // It was on the STATIC floor, because the three lines around it are labels and it sits between
+        // them. The classification is about the CONTENT: `GroupsText` reads `s.LightCount` and dashes
+        // when the feed is invalid - the checks directly above are the proof of that - so the owner's
+        // R-01 policy puts it with `StateText`, not with `CABIN LIGHTS`.
+        //
+        // ⚠ THIS CHECK EXISTS BECAUSE THE RATCHET CANNOT SEE IT. `LegibilityFloorTest`'s R-01 census
+        // counts draws below each floor; moving a LIVE element DOWN to the static floor leaves its
+        // below-Dense count unchanged, so the hard ratchet stays green and the soft one only PRINTS.
+        // The census header says so in terms - *"what this deliberately CANNOT catch is a LIVE element
+        // placed at the static floor. Telling those apart needs a per-element classification"*. This is
+        // that classification, for this element, and a mutation putting it back is killed HERE or
+        // nowhere: verified by running exactly that mutation.
+        {
+            const int W2 = 2560, H2 = 1406;
+            float sc = H2 / 2112f;
+            float live = Typography.MinDesignFor(W2, sc), dense = Typography.DenseDesignFor(W2, sc);
+            DisplayList dl = new DisplayList(64);
+            CabinLightingPanel.Draw(dl, W2, H2, on);
+            float got = -1f;
+            for (int i = 0; i < dl.Count; i++)
+            {
+                DrawCmd c = dl.At(i);
+                if (c.Kind == DrawKind.Text && c.Str == CabinLightingPanel.GroupsText(on)) got = c.C / sc;
+            }
+            Check("S153f the light-group COUNT is drawn at the LIVE floor, not the static one",
+                  got > 0f && Math.Abs(got - live) < 0.01f,
+                  "drawn at " + got.ToString("F2") + " design px; live floor is " + live.ToString("F2")
+                  + ", static floor " + dense.ToString("F2")
+                  + " - it is a count OF THIS VEHICLE, so it belongs on the live one");
+        }
+
         // ---- ⛔ AND NOTHING ON IT CLAIMS TO BE TAPPABLE ------------------------------------------
         // The baked panel's caption was "Tap to disable display / or" — an instruction to tap on a page
         // with no hit test, which QC calls the strongest form of the dead-control defect. It must not

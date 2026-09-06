@@ -112,7 +112,8 @@ namespace DragonScreen
             if (dl == null || w <= 0 || h <= 0) return;
             float sx = w / RefW, sy = h / RefH;
             for (int i = 0; i < Labels.Length; i++)
-                dl.Text(Labels[i], Cx[i] * sx, LabelY * sy, LabelSize * sy, TextAlign.Centre,
+                dl.Text(Labels[i], Cx[i] * sx, LabelY * sy,
+                        Typography.LiveDesign(LabelSize, w, sy) * sy, TextAlign.Centre,
                         (i == active) ? DragonPalette.White : DragonPalette.Text6);
             if (active >= 0 && active < Labels.Length)
                 dl.Rect(UnderX[active] * sx, UnderY * sy, UnderW * sx, UnderH * sy, DragonPalette.Accent);
