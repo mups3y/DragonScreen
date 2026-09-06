@@ -20374,3 +20374,93 @@ build chat does not change it. This is a proposal.
   power (negative while draining) and splits it 0.55 / 0.45, and those are separate facts from the scale.
 - **DONE when:** one named constant, in `src/pure`, with the other two reading it, and a check that fails
   if a fourth copy appears.
+
+
+---
+
+# 🟢 RUN 4 — SESSION RECORD, 2026-09-06. Where the continuous build chat got to, and how to resume.
+
+Written on the owner's instruction (*"save where you are at"*). ⚠ **This section is a CHECKPOINT, not a
+task line** — it records state so the next chat does not have to reconstruct it from 22 commits. Every
+claim in it is checkable against the line it names.
+
+**Session:** the continuous build chat, **run 4**, owner directive 2026-09-06 (*"restart the run from
+s165"*), continuing *"make sure it loops until all tasks are complete committing and reading the rules
+etc in between jobs"*. C1.1 and C1.7 were overridden **for that session only**; the deviation is recorded
+on [[S79]], the first line the run wrote. **Every other rule held** — no `install`, no glass, no
+`git push`, no edit to `docs/BUILD_PLAN.md` or `docs/QC_FINDINGS.md`, no owner question decided.
+
+**State at the checkpoint:** working tree **clean**, `python plugin/build.py test` **green**,
+`previewdiff` and `harnesscheck` both green, census **856 below the floor, 0 regressed, 0 improved**.
+Last commit `a595ea4`. **22 commits**, first `58b0c1e`.
+
+## What closed
+
+| line | outcome |
+|---|---|
+| **JOB ZERO** | [[S162]] **DONE** (ruled; application is S153c's), [[S163]] **DONE** (leave it, no code), [[S79]] unblocked |
+| [[S165]] | **DONE** — census sweeps page STATES; 868 → **903** (the 868 was a lower bound) |
+| [[S153f]] | **DONE** — Menu / Audio / AudioVideo now have **zero** text below the floor |
+| [[S79]] | **DONE** — MARGIN column reads time-to-depletion; every dash computed |
+| [[S154b]] · [[S154c]] | **DONE** — all twelve of QC `H-02`'s baked numbers are live |
+| [[S166]] | **DONE** — settled from the export: two slips corrected, one confirmed and left |
+| [[S167]] · [[S168]] | landed in run 3; both instruments used throughout run 4 and both found real defects |
+
+## What is HELD, and on what
+
+⛔ **[[S153a]]-Q1 governs six lines at once** — [[S153a]], [[S153b]], [[S153c]] (in part), [[S153d]],
+[[S153e]], [[S154d]]. It is **ONE question**, posed once, and no line re-poses it.
+
+⭐ **The finding, in one sentence:** *text in OPEN SPACE takes the raise; text in a BOX measured for the
+smaller type does not.* Probed and rendered on six page families before it was written down.
+
+| line | measured wall |
+|---|---|
+| [[S153a]] Cover | top strip collides, all seven rail labels overflow the 178-px strip, `CAMERA` runs off the panel; **the static half breaks too** (a card row crosses the column divider) |
+| [[S153b]] Vehicle | the CONSUMABLES row labels run straight through the QTY column |
+| [[S153c]] procedures | ✅ the checklist **body takes the raise** — held on its OWN Q1 instead |
+| [[S153d]] systems | every node's value collides with its own label; the READOUTS column runs through its values |
+| [[S153e]] plots | the docking clusters' labels overflow the buttons they name |
+| [[S154d]] Frame 58 | every candidate site is **36–42 design px** against a **48.07** floor |
+
+**Also held / blocked, unchanged by this run:** [[W9]] (its own header: blocked on the booster core and
+the host) · [[S135c]] and [[S155]] (each needs a definition or an owner call) · [[S160]] (marked do-last)
+· the run's standing exclusions (T18–T22, T15b, BB8, S98, S10b, S18, S37, S42, S47, LZ1, S81, S82).
+
+## The next free work, in register order
+
+[[S135b]] (⭐ [[S166]] has already measured its speaker rings off the export — start there) ·
+[[S142]] · [[S143]] · [[S146]] · [[S150]] · [[S151]] · [[S169]] · [[S170]].
+
+## Every open question this run collected
+
+⚠ **Six, plus one pre-existing.** All are written up in full under their own lines; this is the index.
+
+| id | line | what it decides |
+|---|---|---|
+| **S153a-Q1** | [[S153a]] | the geometry wall — **governs six lines** |
+| **S153a-Q2** | [[S153a]] | does the Cover's STATIC half land alone, or wait for Q1 |
+| **S153c-Q1** | [[S153c]] | where the LIVE/STATIC line runs **through** a checklist row |
+| **S153c-Q2** | [[S153c]] | is `VrioTestPage` laid out once, or twice |
+| **S168-Q1** | [[S168]] | how to replace the three `assets/` folders run 3 destroyed |
+| **S168-Q2** | [[S168]] | should `previewdiff` join the C1.3 DONE gate |
+| **S75-Q1** | [[S75]] | *(pre-existing)* what `SHOW MARGINS TO` targets — it blocks the last clause of S79 |
+
+⛔ **NONE of these was decided by a build chat**, and [[S154d]] records the one place the temptation was
+explicit and refused: a status line at `DenseDesignFor` fits every gap on Frame 58 and would have been
+wrong, because the state is LIVE and taking the static floor **because it fits** is the §1.4 inversion
+the whole R-01 policy exists to prevent.
+
+## Three method notes worth carrying forward
+
+1. ⭐ **THE PROBE.** One wrapper on a page's shared text helper, one `build.py preview`, one look. It
+   turns *"the type is too small"* into a measured statement about what breaks, and it is why the six
+   S153 lines are one question instead of six guesses.
+2. ⛔ **EIGHT MUTATIONS SURVIVED FIRST DRAFTS, AND EVERY ONE WAS A CHECK THAT WAS TOO LOOSE** — a patch
+   counter satisfied by the page's own background rect; a placement check testing only `x`; a guard that
+   examined an empty set and passed; a patch count covering only the boxes someone remembered. **A check
+   that cannot distinguish the defect from the correct render is not a check**, and only running the
+   mutation tells you which one you wrote.
+3. ⚠ **TWO MEASUREMENTS WERE DISCARDED BEFORE USE** — a naive SVG path scan that mis-parses `H`/`V`/`A`,
+   and a preview fixture that printed `18 %` beside `0.0 h`. Both were caught by looking at the output
+   rather than by trusting the method that produced it.
