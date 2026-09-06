@@ -19233,7 +19233,7 @@ column divider by ~14 design px on ONE row of one card.
 ⛔ **Neither Q1 nor Q2 is decided here, and nothing is half-landed while they are open** — the code is
 reverted to HEAD and only the two instrument fixes remain.
 
-### S153b [S] The Vehicle family: raise the type to the two floors — **DOING** — [split of [[S153]]; **441** below-floor draws, the largest group]
+### S153b [S] The Vehicle family: raise the type to the two floors — **HELD 2026-09-06 — the SAME wall as [[S153a]], measured on this family too; blocked on S153a-Q1, which governs all six** — [split of [[S153]]; **441** below-floor draws, the largest group]
 - **Scope:** `VehicleOverviewPage.cs` · `VehicleMechPage.cs` · `VehicleSubsystemPage.cs` — eight page-views
   (`Vehicle` 80, `VehicleMech` 32, `VehicleCrew`/`Power`/`Avionics`/`Gnc`/`Thermal` 43 each,
   **`VehiclePropulsion` 114 — the worst page-view in the build**).
@@ -19244,6 +19244,40 @@ reverted to HEAD and only the two instrument fixes remain.
   constants rather than the call sites. Current sizes cluster at `SZ(23)`/`SZ(26)` (**48 % / 54 %**).
 - **DONE when:** all eight page-views clear the glanceable floor, their baselines are lowered, and a
   preview shows the eight-tab strip and the row tables still fit.
+
+#### ⛔ HELD 2026-09-06 — probed, rendered, reverted. It is [[S153a]]'s wall, not a second question.
+
+**Probed rather than assumed, and cheaply**: `VehicleOverviewPage`'s three text helpers (`L`/`C`/`R`)
+were wrapped in a lift-to-`MinDesignFor` and the page rendered at the shipped 2560×1406. ⛔ **The result
+is the same failure as the Cover's, on a page with a completely different layout:**
+
+- ⭐ **The CONSUMABLES table stops being a table.** The row labels overrun the QTY column — `Power Unit
+  1 Energy` runs straight through `18%`, `Usable Deorbit Fuel` through `1.4 kg` — so the two columns the
+  table exists for are unreadable. ⚠ **This is the table [[S79]] is about to fill.**
+- The `CONSUMABLE QTY MARGIN` header reaches the panel's right edge.
+- `CABIN MICS:` collides with `MISSING` in the CONNECTIONS block.
+
+**Why it is the same wall and not a new one.** These pages draw in the same 3427×2112 design frame as the
+Cover, and their below-floor sizes cluster at design **23 / 24 / 25 / 26 / 28** px (panel 15.3–18.6)
+against a **48.07** design floor. So the raise is **1.7×–2.1×** inside boxes whose columns were measured
+for the smaller type. ⛔ **That is a re-layout, and every column involved is measured Figma geometry
+(§1.4 tier-1)** — which is exactly [[S153a]]'s **Q1**, and answering it once unblocks this line too.
+
+⚠ **NO SEPARATE QUESTION IS POSED HERE, deliberately.** Two lines asking the owner the same thing in
+two places is how a decision gets made twice and differently. This line is blocked on **S153a-Q1**; when
+that is answered, this is the largest of the six to apply it to (441 draws, `VehiclePropulsion` alone at
+114 — the worst page-view in the build).
+
+⭐ **AND THE PROBE IS THE METHOD, not a one-off.** One wrapper on a page's shared text helper, one
+`build.py preview`, one look. It costs a couple of minutes and it turns "the type is too small" into a
+measured statement about what breaks. The remaining `S153` lines should each run it rather than
+inheriting this verdict — the mechanism is general, but whether a given page has room is not.
+
+#### Verified
+
+- Probe applied, `build.py preview` rendered 124 pages, `ui_vehicle.png` inspected, probe **reverted**.
+- `python plugin/build.py test` → **ALL SUITES PASSED** with the tree back at HEAD.
+- **No code landed from this line.** No `install`, no glass, no `git push`. §14.4(a) untouched.
 
 ### S153c [S] The procedure pages: raise the type, and settle where the LIVE/STATIC line runs — **TODO** — [split of [[S153]]; ~~**208**~~ → **215** below-floor draws ([[S165]] 2026-09-06)]
 - **Scope:** `SuitCheckPage.cs` (~~47~~ **54**) · `VrioTestPage.cs` (37, drawn by BOTH `Procedure` and
