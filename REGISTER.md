@@ -20871,3 +20871,21 @@ Logged, not done: it is not this line's declared output.
 ([[S171]]) and were not touched; preview-only stands. `docs/QC_FINDINGS.md` untouched (QC's own file). No
 flight control wired (§14.4(a)). **Declared outputs, and the commit is exactly these two files:**
 `docs/BUILD_PLAN.md` + `REGISTER.md`.
+
+
+### S175 [O] PER-PAGE REBUILD, STEP 0 — land the 303 per-element exports as a repo input, and swap `component_48.png` for the CLEAN export — **DOING**
+
+**🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
+completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
+it or as for more edits. Only then do we move onto the next page."* This is the programme's **STEP 0** —
+the one that clears the C7 flag [[G13]] raised, before any page or the bottom bar is rebuilt. **No page is
+rebuilt here and the bar is NOT rebuilt here** (that is unit 1, its own line).
+
+**WHY IT IS A UNIT OF ITS OWN.** [[G13]] wrote the conformance rule and, at its end, flagged that the rule
+is not yet actionable: *"The 319 per-element PNGs are **not in the repo tree** as of this commit"*, and C7
+says a build input that is not in the repo is a STOP. This line resolves that, and does the one asset swap
+the owner named in the same directive.
+
+**DONE-WHEN:** the per-element exports are in the tree under `assets/figma/`, the manifest that survives
+the gitignore is written, `component_48.png` is the clean export with the [[S147]] erase re-applied,
+`build.py test` green, `previewdiff` reports only pages that draw the bar, preview shown to the owner.
