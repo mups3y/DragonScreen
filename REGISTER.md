@@ -22657,7 +22657,7 @@ this one. **No `git push` — the owner pushes from GitHub Desktop.**
 
 ---
 
-### S184 [S] Land the owner's original NASA reference art, keyed to transparency and hashed — **DOING** — [owner directive, 2026-09-07; TIER 2: a build INPUT, landed and recorded]
+### S184 [S] Land the owner's original NASA reference art, keyed to transparency and hashed — **DONE 2026-09-07 — four files landed and hashed; and TWO OF THEM WERE NOT WHITE-ON-BLACK, so keying them as directed would have destroyed them** — [owner directive, 2026-09-07; TIER 2: a build INPUT, landed and recorded]
 
 🟢 **OWNER, 2026-09-07, verbatim (C1.12's evidentiary standard):** *"I also have the original nasa art we can
 use for pages. Put these in the resources stash"* — and, on extraction quality, verbatim: *"I do not mind
@@ -22694,3 +22694,129 @@ of the photographs the ruling was made in the absence of is therefore reachable.
 added to the repo … and I do the element-by-element pass as ruled"*. ⛔ **NOT DONE HERE, DELIBERATELY:** the
 file was not fetched, not opened, not landed, and `S162` was not re-opened. Reversing a settled decision is
 **C1.14 category 2 — the owner's `OVERRIDE` alone** (C1.8). Marked for him; a build chat decides none of it.
+
+
+#### ✅ DONE 2026-09-07 — what landed, with the numbers
+
+Four files under `assets/reference/nasa/`, recorded in the new `docs/reference/NASA_REFERENCE_ART.md`
+with source path, source md5, source and landed dimensions, crop origin, opaque %, landed md5 and byte
+size — the same contract `docs/reference/FIGMA_ELEMENT_EXPORTS.md` provides, and the one that made the
+[[S180]] recovery possible.
+
+| landed file | source | src w×h | landed w×h | crop @ | **opaque % (src)** | opaque % (crop) | landed md5 |
+|---|---|---:|---:|---|---:|---:|---|
+| `crew_dragon_outline.png` | `crew_dragon_outline.jpg` | 3238×1692 | 1890×1326 | (700, 167) | **4.350 %** | 9.510 % | `fa57b08c` |
+| `crew_dragon_profile.png` | `crew_dragon_profile.jpg` | 3242×1696 | 2645×1326 | (279, 167) | **6.509 %** | 10.204 % | `7deffa3b` |
+| `interface_1630x941.png` | `Interface.png` | 1630×941 | 1601×926 | (15, 15) | **94.708 %** | 97.985 % | `f3bd735b` |
+| `interface_1950x1260.png` | `Interface (1).png` | 1950×1260 | 1908×1219 | (21, 21) | **93.041 %** | 98.288 % | `579622dc` |
+
+⭐ **The outline reproduces this line's own stated verification exactly** — 4.35 % opaque, bbox
+(700,167)–(2590,1493) (written inclusive-max above as (700,167)–(2589,1492); same rectangle). The key is
+therefore the key the prompt specified, not a different one that happened to land.
+
+**Ringing: gone.** 32,874 px (outline) and 65,470 px (profile) were non-zero in the source and are zero
+here, killed by the `alpha <= 6` floor. The owner said *"I do not mind having a halo"*; there is none to
+mind. Verified visually as well — both keyed files composited over mid-grey and over the `#111B52` ground,
+no margin box, no haze.
+
+⚠ **Only 0.231 % / 0.162 % of the landed ink is fully opaque.** These are thin antialiased strokes.
+Anything drawing them must composite with alpha; a 1-bit threshold would erase most of the drawing.
+
+#### ⛔ THE FINDING: THIS LINE'S OWN PREMISE WAS FALSE FOR TWO OF THE FOUR FILES
+
+The task said *"All four are white-on-PURE-BLACK, verified — corners `(0,0,0)`"* and directed that all four
+be keyed. **The two JPEGs are. The two `Interface` PNGs are not**, and keying them was destructive:
+
+- they are **`RGBA` already**, with a real alpha channel — 103 and 60 distinct alpha values, 5.3 % / 7.0 %
+  fully transparent, 66.6 % / 70.8 % fully opaque;
+- they are **full-colour renders of a VEHICLE OVERVIEW page** on a dark navy ground `#1A1C48`, with a
+  rounded card and a drop shadow — **the transparency IS that card's corners and shadow**;
+- **RGB under their fully-transparent pixels goes up to 255**, so `alpha = max(r,g,b)` would have turned
+  transparent regions opaque.
+
+⭐ **The corner check is what mis-read them.** Their corners are `(0,0,0)` in RGB because they are
+*transparent* there — RGB reads black under every transparent pixel regardless of what the file means.
+Reading corners after discarding alpha cannot distinguish "black" from "absent", and that is the whole
+mistake. **Run as directed, the key gave 90.8 % and 87.9 % "opaque"** — a near-solid white haze over the
+frame, colour and alpha both gone. That number is what exposed it, which is exactly why this line was told
+to report opaque % per file.
+
+**So they were landed preserving their own RGBA verbatim**, cropped only to their own (fully transparent)
+alpha margin, with RGB zeroed under alpha-0 pixels so the crop composites identically on any ground.
+⚠ Their `opaque %` in the table is *their own alpha*, not a computed key — it and the JPEGs' figures
+measure different things, and the manifest says so in as many words.
+
+⚠ **A NAMING NOTE, under §1.4.** The owner's word was *"the original nasa art"*. The two JPEGs fit plainly
+— labelled engineering cutaways (`FORWARD HATCH` · `WINDOWS` · `SIDE HATCH` · `SUPER DRACOS` · `DRACOS` ·
+`HEATSHIELD` · `TRUNK` · `LAUNCH ESCAPE FINS`) and a three-view sheet. **The two `Interface` files are UI
+mock-up renders of the reference interface**, the same family as the `assets/figma` exports. The directory
+carries the owner's phrase and his phrase is quoted; **no NASA authorship is asserted for any individual
+file**. Establishing what the `Interface` renders are belongs to the unit that first wants one — named as
+a question, not closed, on the `FIGMA_ELEMENT_EXPORTS.md` model.
+
+#### Verification
+
+- **`python plugin/build.py test` — green** (13 sections, 416 report lines, 136 clean report lines,
+  `SELFTEST OK`). ⚠ **No code changed in this task**, so this proves only that nothing regressed; per C1.3
+  a task with no code change may skip it, and it was run anyway because it is cheap.
+- **No preview run and none owed** — no page, no `pure/` file, no cfg was touched, and nothing draws this
+  art. `previewdiff` would have nothing to compare.
+- **Landed md5s re-read from disk after writing** and they match the manifest's four rows exactly.
+- **None of the four sources was already in the tree** — md5 across every `.png`/`.jpg` under `assets/`
+  and `plugin/GameData/`, 0 matches each. New inputs, not re-drops.
+
+#### What this line did NOT do
+
+- ⛔ **Nothing was wired to anything.** No page, no `pure/` file, no cfg references this art.
+- ⛔ **Nothing went to `plugin/GameData/DragonScreen/art/`** — C7.1: `assets/` is REFERENCE, and shipped
+  art is the choosing unit's call, not this one's.
+- ⛔ **[[S183]] was not solved.** `assets/reference/` is gitignored at `.gitignore:12`, exactly as
+  `assets/figma/` is at `:82`; whether these inputs get a durability contract beyond a hash manifest is
+  his decision, not a build chat's. This line only refused to land anything unhashed.
+- ⛔ **`crew_dragon_trunk.png` (155,239 B, 2026-09-04) also sits in `Downloads` and was NOT landed** — this
+  line names four files and it is not one of them (C1.1: noted, not done).
+- ⛔ **`discovery7.jpg` was not fetched, opened, landed, or acted on**, and [[S162]] was not re-opened —
+  see the block above.
+
+**Commits:** `db90363` (DOING + the `discovery7` log) · this one. **No `git push` — the owner pushes from
+GitHub Desktop.**
+
+## Open questions for the owner (C1.14) — S184
+
+**Q1 — `discovery7.jpg` exists, and [[S162]]'s ruling was made because it did not. Reverse it? (category 2 — needs `OVERRIDE`.)**
+
+[[S162]] established, four ways, that `REAL_SPACEX_SCREENSHOTS/` and every `discovery*.jpg` were absent from
+the repository, and on that absence the owner ruled the `VT-02` default: *absent tier-1 photographs, the
+seven elements take `frame59`'s alignment and layout as a MARKED tier-2 fill*. [[S153c]] applied it, and
+`VT-02` closed. **`C:\Users\User\Downloads\discovery7.jpg` exists** (137,386 B, 2026-09-06 22:10) — so at
+least one of the photographs is reachable, and the ruling's own option (a) was *"the photograph folder added
+to the repo … and I do the element-by-element pass as ruled"*.
+
+⛔ **This build chat did not fetch it, open it, or re-open `S162`** — C1.8/C1.12: reversing a settled
+decision is the owner's `OVERRIDE` alone.
+
+1. **Leave it.** The tier-2 fills are marked in the code and honest; the seven elements stay as laid.
+2. **Land `discovery7.jpg` (and any siblings) as a new register line**, then re-open `VT-02` under
+   `OVERRIDE` and do the element-by-element pass on tier-1 evidence.
+3. **Land the photographs as reference now, decide `VT-02` later** — the evidence stops being reachable
+   only from `Downloads`, and the question stays open on a known input rather than a remembered one.
+
+**Recommendation: (3).** It is the only option that is cheap, reversible, and does not lose the evidence —
+`Downloads` is precisely where `assets/` was lost from twice. It also needs no `OVERRIDE`, because it
+changes no decision; it only stops the evidence evaporating before the decision is made. ⚠ **But even (3)
+is a new register line and an owner call, not this chat's**, and whether `discovery7` actually resolves
+alignment and type size for the seven elements is unknown until someone opens it.
+
+**Q2 — do the two `Interface` renders belong under a `nasa/` directory at all?**
+
+They are UI mock-ups of the reference interface, the same family as `assets/figma`, not engineering art;
+the two JPEGs are the ones that fit *"the original nasa art"*. They are landed together because the owner
+supplied them together and his phrase is the provenance on record.
+
+1. **Leave them.** One drop, one directory, one quote — the manifest states plainly what each file is.
+2. **Move the two renders to `assets/reference/interface/`** (or into the `assets/figma` family), keeping
+   the manifest as one file that names both locations.
+
+**Recommendation: (1)** — the split costs a move and a stale-path risk, and buys only a tidier name; the
+manifest already prevents anyone mistaking a render for a cutaway. ⚠ **This is taste and it is his**
+(C1.14 category 3).
