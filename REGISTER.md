@@ -16819,7 +16819,7 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
 - **DONE when:** the census covers each page's meaningful states, or its header records precisely which
   states it does and does not see so the count is not read as complete.
 
-### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 4 of 5 of [[S134]]; QC `F-03`]
+### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **DOING** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
   `ModuleColorChanger`. [[S135]] already draws the honest version of this on the CABIN settings tab (*"the
   count of lights actually found"*), so the answer exists; this is the same fix on Frame 66's own panel.
