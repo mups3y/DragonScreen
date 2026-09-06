@@ -23229,7 +23229,7 @@ are tier-2 like `Overview.vue`, or something weaker.
 
 ---
 
-### S192 [O] UNIT 3b — the owner's marked-up edits to the VEHICLE OVERVIEW page — **DOING** — [owner directive on the [[S185]] preview, 2026-09-07; supersedes/absorbs [[S186]] and [[S188]] and parts of [[S189]]]
+### S192 [O] UNIT 3b — the owner's marked-up edits to the VEHICLE OVERVIEW page — **DONE 2026-09-07 — all five built, the tab icons HARVESTED from his own render on a second instruction, and one draw-and-hit collision on a sibling page found by eye and guarded** — [owner directive on the [[S185]] preview, 2026-09-07; supersedes/absorbs [[S186]] and [[S188]] and parts of [[S189]]]
 
 🟢 **OWNER, 2026-09-07, verbatim**, on a marked-up copy of the [[S185]] preview with green boxes over the
 areas to edit:
@@ -23263,3 +23263,121 @@ mock's own CONNECTIONS x, and CABIN MICS centred on the page — which is [[S189
 - **DONE when:** the five named items are built, the two forced moves are reported, `test` is green and
   mutation-proved, `previewdiff`'s changed list is reported in full **including the sibling pages the
   shared tab strip reaches**, and the owner has seen the preview.
+
+#### ➕ A SECOND OWNER INSTRUCTION, MID-TASK — the icons are HARVESTED, not drawn
+
+🟢 **OWNER, 2026-09-07, verbatim**, on the first render of the rebuilt strip:
+
+> *"that strip looks shit. Harvest the icons as asset from the example screen"*
+
+⛔ **THE FIRST PASS DREW THEM FROM PRIMITIVES AND ITS REASONING WAS HALF RIGHT.** `art/cover/` holds no
+subsystem icons — its twelve `ic_*` / `bi_*` / `gridicons_*` files are a tick, a circle, a dash, an eye,
+a grid, two refreshes, two back-arrows, a subtract, a stop and a short arrow — so eight new PNGs would
+have been art with no source (§1.4). **The premise was right and the conclusion was wrong: there IS a
+source, and it is the owner's own render of this page. They did not have to be invented, only cut out.**
+
+⭐ **AND THEY WERE CUT FROM A THIRD RENDER, NOT THE ONE ALREADY LANDED.** `Crew Dragon Flight Control
+UI.png` (2352×1410) is the same page with **no outer bezel**, so its card is **2352 px wide against
+`interface_1950x1260.png`'s 1708** — 1.38× the resolution, which put the icons at **40–45 px instead of
+30**. Landed and hashed as `assets/reference/nasa/interface_2352x1410.png`.
+
+- **Keyed** off the tab panel's uniform ground `(26,28,72)` by per-channel excess, **each normalised so
+  its own 99th percentile reaches full alpha** — without that step the two icons the source draws in RED
+  (Overview, Life) would have keyed at ~80 % and rendered visibly faded beside the white ones.
+- **Written WHITE**, because `VehicleTabBar` tints every icon to its tab's own colour at draw time (T5
+  severity) — the same idiom `ic_check` already ships with.
+- **Centred on SQUARE canvases** (the source glyphs are not square: Power 21×40, Avionics 45×44) and
+  drawn with the same scalar on both axes, so a glyph-bearing asset **cannot** be stretched (QC `C-04`).
+- ⚠ **The source strip has NINE tabs and this build's has EIGHT.** Its Overview/Life/Comms map onto
+  All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; **its Comms wifi glyph was not
+  harvested** — there is no Comms tab, and T9's eight are confirmed-real and not changed to suit an icon.
+- ⛔ **THESE ARE THE FIRST FILES IN `NASA_REFERENCE_ART.md` THAT SHIP.** [[S184]] recorded the rule and
+  why it did not apply to it — *"shipped art is chosen by the unit that uses it"* — and this is that unit,
+  on the owner's direct instruction. The manifest row exists anyway because the SOURCE is untracked and
+  without it nobody could re-cut them.
+
+#### ⚠ TWO FORCED MOVES AND ONE COLLISION — none of them named by the owner, all reported
+
+**The two moves his own changes make unavoidable.**
+- **CONNECTIONS → design x932.** The enlarged capsule spans x1405..2022 and CONNECTIONS' values sat at
+  x1400. 932 is the mock's own **0.2722 of width** and lands on LOOP A's column, exactly as the mock
+  does (its CONNECTIONS left 0.2722 against its LOOP A centre 0.2749). Its rows also moved up, because
+  the tab strip's new panel starts at y1682. **This closes [[S189]]'s CONNECTIONS item.**
+- **CABIN MICS → centred on the page, y1622.** Its old y1748 is now *inside* the panel. Both sources
+  centre it; [[S189]] measured this build at 0.3729 — **−0.127 of width, the largest single divergence
+  left on the page**. Now 0.4975 against the mock's 0.5003. ⛔ It is drawn RIGHT-aligned label +
+  LEFT-aligned state about one anchor, because the block is two tints and its second word changes width
+  with the feed: centring on the live string would make the block jump left when the feed died.
+
+**⛔ AND A COLLISION ON A SIBLING PAGE, FOUND BY EYE ON A RENDER AND NOT BY ANY TEST.** The new pills at
+x124..884, y1700..1851 sat on top of `VehicleSubsystemPage`'s FUNCTIONS | ALERTS toggle at x150..530,
+y1736..1820. It was a **draw AND a hit** collision — `FigmaUI` routes the pills for every vehicle page
+while `ScreenPainter` routes the toggle, so one touch resolved two ways — and it surfaced only as a stray
+`"S"` painted behind the SYS P&ID pill on `ui_vehiclepower.png`. The toggle moved up to y1536..1620
+(the left checklist above it ends near y1330), and a guard now checks the two do not overlap.
+
+#### STEP D — verification
+
+- **`python plugin/build.py test` GREEN.** `VehicleGeometryTest`: **53 checks, 0 failed**. `SELFTEST OK`.
+- **MUTATION-PROVED, 9 of 9 killed** — capsule height `970→760` (1 fail) · capsule top `630→760` (1) ·
+  small inner `430→407` (4) · small outer `778→755` (4) · small row cy `1000→900` (1) · toggle back onto
+  the pills (2) · pills widened past the tab strip (1) · pills pushed under the bottom bar (2) · capsule
+  aspect `ArtW 294→340` (3).
+- ⭐ **TWO MUTATIONS SURVIVED FIRST, AND BOTH EXPOSED A MISSING CHECK RATHER THAN A BAD MUTATION.**
+  (1) The overlap guard compared **two sets of literals**, so moving the pills straight back on top of
+  the toggle went unnoticed: literals on both sides test that the *design* does not overlap, never that
+  the *code* still matches the design. ⚠ **This is the one place in this suite where reading the code
+  under test is CORRECT** — a collision check has to ask where the two things actually are — so it now
+  calls `VehicleDeepViewLinks.Rect` and sweeps `ToggleHit` for its real band. (2) Nothing checked that
+  the pills clear the global bottom bar at y1877; a mutation pushing them to 1740..1891 was legal by
+  every existing check and half-hidden on the glass. Both gaps are now checks, and both mutations died.
+- **`previewdiff` vs a clean HEAD checkout: `21 CHANGED`, 106 unchanged, 0 new, 0 removed.** ⚠ **Every
+  one is Vehicle-family** — the three Overview views, the six subsystem sub-tabs' views, and the Mech
+  page. **That is the blast radius of a SHARED tab strip and a SHARED button pair, and it is intended:**
+  the strip must look the same on all eight pages. Reported in full rather than trimmed to this page's
+  three, because "only this page's views" no longer describes the change the owner asked for.
+- **R-01 census: `856 below the floor, 0 page(s) regressed, 0 improved`.** ⚠ **The CONSUMABLES type is
+  bigger and the census still reads 0 improved, which is not a contradiction:** 34 design px is **22.6
+  device px** at 2560×1406 against a **32 px** floor, so the rows rose from 48 % to 71 % of the floor
+  without crossing it. Nothing regressed, and **[[S153b]]'s question stands** — this moved 27 draws of
+  its 441 and answered none of them.
+- **TRAP 1 / QC `C-04`, run BOTH ways on all eight new assets.** Every canvas is exactly square
+  (aspect 1.000); the draw box is `SZ(s)` on both axes; and measured on the render, the Avionics icon's
+  ink is **48×48 = 1.000** against its source ink's 1.023. ⛔ Nothing on this page is stretched any
+  more — the capsule included, which is the whole of item 2.
+- ⛔ **`install` and glass NOT used** ([[S171]] spent them) — judged on the PNG. **No `git push`.**
+
+## Open questions for the owner (C1.14) — S192
+
+**Q1 — the SYSTEMS pill is lit, but the white cannot MOVE yet. Finish it, or leave it?**
+*Situation.* Your description was *"clicking cabin switches the white to that side and switches to the
+cabin screen and vice versa"*, and your instruction for the left pill was visual — *"keep "SYSTEMS" the
+same as in green box"*, where it is a solid white pill. So SYSTEMS is lit, and what the light MEANS here
+is "you are in the systems half of the UI", which on a Vehicle page is true. ⛔ **But the second half of
+your sentence is only half-built:** `SystemsTreePage` and `SystemsPidPage` do not draw this pair, so
+pressing SYS P&ID takes you to a page with no pair to move the white onto. The `active` parameter exists
+and nothing pretends otherwise.
+1. **Add the pair to the two deep-view pages** so the white genuinely moves both ways. *(recommended: it
+   is what you described, it is two Draw calls and a routing line, and it makes the lit state a real
+   toggle rather than a label.)*
+2. **Leave it.** The lit pill still says something true, and the two deep-views have their own layouts
+   that may not want a pair bolted on.
+
+**Q2 — should the whole Vehicle family get the reference's gauge construction now?** ([[S187]], reopened here)
+*Situation.* This unit put the reference's tab strip on all eight vehicle pages, so the family has
+already moved together once. The gauges are the remaining piece: both sources say the bottom gap is
+**92.6°, not 60°**, the track is a **dotted hairline at ~1 % of the diameter** rather than a solid band at
+8 %, and the **label belongs inside the ring**. `Gauge` is copied verbatim into `VehicleSubsystemPage`, so
+it is one change across seven page-views — exactly the shape this unit just did for the strip.
+1. **Do it as its own line, all seven views at once.** *(recommended: the family has just been through
+   one such change and the second is cheaper while the first is fresh. ⚠ The dotted track needs a new
+   `DisplayList` primitive both renderers must agree on — that is the real cost, not the page edit.)*
+2. **Do the two cheap thirds** — the 92.6° gap and the label inside the ring — and leave the dotted track.
+3. **Leave the gauges alone.** The heavy ring is legible at seat distance in a way a 1 %-of-diameter
+   dotted track may not be; the reference was drawn for a monitor, not for IVA glass.
+
+**Q3 — [[S185]] Q1 is still open and is now worth more.** The proven 771×1232 replacement for
+`dragon_crew` is landed and hashed. This unit has just made the capsule **1.31× larger**, so the upscale
+it currently suffers is worse than when Q1 was written, and the swap is still one file copy. ⚠ It touches
+the same seven page-views this unit has already touched, so the objection that stopped [[S185]] doing it
+no longer costs anything extra.
