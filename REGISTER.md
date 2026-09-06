@@ -16819,11 +16819,60 @@ the caveat only draws on the four seats. It failed only when a mutation moved th
 - **DONE when:** the census covers each page's meaningful states, or its header records precisely which
   states it does and does not see so the count is not read as complete.
 
-### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **DOING** — [split 4 of 5 of [[S134]]; QC `F-03`]
+### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **DONE 2026-09-06 — rebuilt over the baked one, which takes all four art faults with it** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
   `ModuleColorChanger`. [[S135]] already draws the honest version of this on the CABIN settings tab (*"the
   count of lights actually found"*), so the answer exists; this is the same fix on Frame 66's own panel.
 - **DONE when:** the panel draws what is bindable, and a preview shows it.
+
+#### ⭐ DONE 2026-09-06 — and the art faults go with the rebuild
+
+QC's plan says faults 1–4 *"cannot be fixed in code — they are pixels in `frame66.png`"* and offers two
+routes: a Figma re-export, or an element rebuild with the baked panel skipped. ⭐ **The second turned out
+to be cheap here**, for a reason [[S134a]] could not use one panel over: this panel is a **solid opaque
+box on a flat ground**, so it can simply be painted over.
+
+**Measured, not assumed.** A fill scan of `frame66.png` puts the panel at design **x 1008–2420,
+y 1157–1815**, uniformly `DragonPalette.Background` — first full-width row at 1160, last at 1812.
+⭐ **The word LIGHTING sits ABOVE that box, on the illustration**, so the heading — which is correct —
+survives untouched, and QC's *"the cabin illustration behind it stays"* holds because the patch is
+exactly the panel's own rectangle.
+
+⚠ **`S134a`'s tab strip was the opposite case** and it is worth having both on record: embedded in
+artwork, surrounded by solid bands, unpatchable — which is why that line fixed the hit test's coordinate
+space instead. Same page family, opposite answers, and the raster decides which.
+
+#### What replaced fifteen dead rows
+
+`SettingsPage`'s own recorded finding, which is already in the code: *"the pod carries exactly ONE
+ModuleColorChanger… Drawing eight buttons where seven do nothing is the dead-control failure this project
+refuses."* So the panel now says **CABIN LIGHTS · ON/OFF · the count of modules actually found · and why
+there are no per-zone rows** — the last because the baked version promised fifteen and a crew who saw it
+will look for them.
+
+⛔ **A READOUT, NOT A CONTROL.** No border, no plate, no instruction to tap. The page has no hit test for
+it, and a bordered button here would re-commit the same defect in a tidier font. ⚠ `Tap to disable
+display / or` is gone: QC calls an instruction to tap on an untappable page *"the strongest form of the
+dead-control defect — it does not merely look interactive, it says it is"*, and a check now fails on the
+word TAP appearing anywhere on the panel.
+
+⚠ **Making the toggle live is NOT done here** and is not smuggled in — it needs a hit test and a painter
+branch, which is a separate line rather than a silent addition.
+
+#### Verified
+
+- **7 mutations, 7 killed.** ⚠ **Y4 — the patch box grown 85 px past the panel's bottom edge — survived
+  at first**, because every check located the box with the same constants it mutated, while the patch
+  would in fact have painted over the cabin illustration. Fixed by pinning the four measured numbers
+  independently. ⭐ That is the fifth tautology this run has found by mutation rather than by reading.
+- ⭐ **Mutation Y5 also trips [[S153]]'s R-01 ratchet** (`Cabin gained text below even the static floor,
+  baseline 0, now 3`) — the rebuilt panel's type is derived from `DenseDesignFor`, so it clears the floor
+  by construction rather than by matching the export.
+- **New suite `CabinLightingTest`, 18 checks** · `build.py test` green.
+- **Preview: 1 page changed — `ui_cabin.png`**, and nothing else. Inspected: the LIGHTING heading is
+  kept, the four faults are gone with the panel, and the content is centred in the box rather than hung
+  from its top (which read as truncated, the very impression the baked caption already gave).
+- comment-loss **0** · no `install`, no glass, no `git push`.
 
 ### S134e [S] The audio page's dividers and its signal glyph — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
 - `A-03`: the dividers' five equal cells do not contain AUX's value or two of the four button clusters.

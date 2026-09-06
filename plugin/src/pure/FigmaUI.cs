@@ -218,7 +218,13 @@ namespace DragonScreen
                 // ⛔ The enum value stays and is NOT renumbered (UiPage's own rule: the int persists per
                 // screen), so a save written on page 3 reopens on the same screen it always meant.
                 case UiPage.Procedure:   VrioTestPage.Build(dl, w, h); break;
-                case UiPage.Cabin:     FigmaFramePage.Build(dl, w, h, "frame66"); break;
+                // S134d / QC F-03: the frame, then the LIGHTING panel rebuilt over its baked one.
+                // The baked panel draws fifteen per-zone rows and an instruction to tap them, on a page
+                // with no hit test, where the pod carries exactly ONE bindable light module.
+                case UiPage.Cabin:
+                    FigmaFramePage.Build(dl, w, h, "frame66");
+                    CabinLightingPanel.Draw(dl, w, h, s);
+                    break;
                 // S31: the page's suit model is assembled HERE, from the same PageState every other
                 // page reads, so the one thing the painter has to own is the run seed. suitPopup is
                 // also "the run produced a result", which is what decides whether a leaking suit has

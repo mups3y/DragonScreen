@@ -55,7 +55,8 @@ public static class TestMain
         bad += AlertActivityTest.Run();
         bad += SettingsTabStripTest.Run();
         bad += VideoCamRowsTest.Run();
-        bad += AudioScopeTest.Run();      // S134c / QC A-01: the audio page's five scopes    // S134b / QC VV-02: the Video page's camera rows are touchable // S134a / QC F-04: one strip geometry, two projections   // S133 / QC H-05: Frame 58's ALERT ACTIVITY panel // S132 / H11: Frame 58's FRAME, CAMERA and stopwatch      // S130 / H7: the Figma UI's alarm channel finally has a consumer       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
+        bad += AudioScopeTest.Run();
+        bad += CabinLightingTest.Run();   // S134d / QC F-03: Frame 66's LIGHTING panel, rebuilt      // S134c / QC A-01: the audio page's five scopes    // S134b / QC VV-02: the Video page's camera rows are touchable // S134a / QC F-04: one strip geometry, two projections   // S133 / QC H-05: Frame 58's ALERT ACTIVITY panel // S132 / H11: Frame 58's FRAME, CAMERA and stopwatch      // S130 / H7: the Figma UI's alarm channel finally has a consumer       // S128: what the Cover's four action rows do, and cannot do       // S154a: Frame 58's element geometry (research only - draws nothing)
 
         // ---- PART B RECOVERY, WAVE A (W1, §B12.8) - the collision-free pure support layer ----
         // Recovered from `8b81816^` with their modules. The fixtures are as they were: ConicTest and
