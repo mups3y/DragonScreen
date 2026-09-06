@@ -16696,26 +16696,26 @@ asked for the previews to show three identical strips — which they do not, and
 rebuild. ⭐ Recorded here rather than quietly dropped: the correctness half is done and the appearance
 half belongs with `F-02`.
 
-### S134b [S] The video page's camera rows draw a selection whose only writer is stranded — **TODO (blocked: [[S134a]])** — [split 2 of 5 of [[S134]]; H12 + QC `VV-02` (part-closed)]
+### S134b [S] The video page's camera rows draw a selection whose only writer is stranded — **DOING** — [split 2 of 5 of [[S134]]; H12 + QC `VV-02` (part-closed)]
 - **The finding.** The camera rows draw a live selection and the only thing that WRITES it is unreachable
   behind `FigmaMode` — the fixture renders, so the drawing is right and the state never moves.
 - ⚠ `VV-02` is **part-closed**: the render half was answered, the stranded writer was not.
 - **DONE when:** the selection has a reachable writer or the rows honestly show that they cannot change,
   with a test that the drawn selection and the written one are the same value.
 
-### S134c [S] The settings page has five layouts and can render exactly one, forever — **TODO (blocked: [[S134a]])** — [split 3 of 5 of [[S134]]; QC `A-01`]
+### S134c [S] The settings page has five layouts and can render exactly one, forever — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 3 of 5 of [[S134]]; QC `A-01`]
 - Five layouts, one reachable. ⚠ Read [[S121c]] first: that line gave this file its RefPanelW pass, so
   the geometry has moved since QC measured it.
 - **DONE when:** every layout is reachable or the unreachable ones are removed with their reasoning kept
   in place (C1.16), and a preview shows each.
 
-### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **TODO (blocked: [[S134a]])** — [split 4 of 5 of [[S134]]; QC `F-03`]
+### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 4 of 5 of [[S134]]; QC `F-03`]
 - ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
   `ModuleColorChanger`. [[S135]] already draws the honest version of this on the CABIN settings tab (*"the
   count of lights actually found"*), so the answer exists; this is the same fix on Frame 66's own panel.
 - **DONE when:** the panel draws what is bindable, and a preview shows it.
 
-### S134e [S] The audio page's dividers and its signal glyph — **TODO (blocked: [[S134a]])** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
+### S134e [S] The audio page's dividers and its signal glyph — **TODO (UNBLOCKED 2026-09-06 by [[S134a]])** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
 - `A-03`: the dividers' five equal cells do not contain AUX's value or two of the four button clusters.
 - `A-04`: the signal glyph is drawn below its own button and too small to read as one.
 - ⚠ Both are layout on a page [[S135]] and [[S121c]] have both touched since QC measured them — re-measure
