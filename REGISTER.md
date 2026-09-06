@@ -20784,13 +20784,90 @@ untracked reference art, is not in this task's scope and was not modified here �
 this task's seven files. Flagged so it is not lost quietly.
 
 
-### G13 [O] The Figma-export conformance rule: build from the export where one exists, and change nothing where one does not — **DOING**
+### G13 [O] The Figma-export conformance rule: build from the export where one exists, change nothing where one does not — **DONE 2026-09-06** — [GUARDED FILE — `docs/BUILD_PLAN.md` §14.2a + the §0a ledger row; a RULE only, no page rebuilt and no code touched]
 
-**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12 evidentiary standard):** *"are we going to be
+**🟢 OWNER AUTHORISATION, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"are we going to be
 building all the elements of the pages correctly now? the way they were intended? The elements we have
 invented for pages not on this figma website will have to stay the same"* — and, authorising this task:
-*"write that governance prompt"*. No other authority is claimed and none is inferred.
+*"write that governance prompt"*. **No other authority is claimed, and none is inferred: the two quotes
+above are the whole of it.**
 
-**Scope:** writes a RULE into the guarded `docs/BUILD_PLAN.md` (a `G`-line is authorised to, per C1.12's
-GUARDED-FILE STANDARD). It does **NOT** do the conformance work — no page rebuilt, no asset swapped, no
-code touched. Declared outputs: `docs/BUILD_PLAN.md` + this file, nothing else.
+**WHAT THIS LINE IS.** A `G`-line, so it is authorised to write into `docs/BUILD_PLAN.md`, which C1.12's
+GUARDED-FILE STANDARD otherwise closes to a build chat. **It writes a RULE and does NOT do the conformance
+work** — no page rebuilt, no asset swapped, no code changed. The work the rule governs is other lines'.
+
+**WHAT WAS WRITTEN — `docs/BUILD_PLAN.md` §14.2a**, inserted between §14.2's source-tier map and §14.3, so
+it sits beside the tier map it refines. ⛔ **Nothing in §14 or §1.4 was edited and nothing was renumbered**
+(C1.16 / G12): the diff is **86 insertions, 0 deletions**, and it changes no tier — it governs how the
+tiers are APPLIED to the drawn pages. Two clauses, both binding:
+
+1. **AN ELEMENT PRESENT IN THE EXPORT IS BUILT FROM THE EXPORT** — sliced from its own per-element PNG or
+   drawn from its own vector path, and layered. Never traced from a screenshot, never re-measured by eye,
+   **never left flattened into a whole-frame raster once its own export exists**. Text the export renders
+   as text is **TYPED, not imported as pixels**, because only typed text can go live: a baked number is a
+   permanent literal, the same number typed is a readout §14.4(f) can fill.
+2. ⛔ **AN ELEMENT ABSENT FROM THE EXPORT STAYS EXACTLY AS IT IS — its absence is NEVER grounds for
+   changing or removing it**, and pages not in the Figma at all keep their construction entirely. **This is
+   the clause that protects settled decisions, and the section names the failure mode outright:** a chat
+   holding a complete-looking export will be tempted to read *"not in the Figma"* as *"should not exist"*
+   and delete our additions as non-conforming. Several are §1.4 **tier-3 inventions settled BY DISCUSSION
+   WITH THE OWNER** — the alarm-channel tint ([[S130]]), the LZ coordinates (§B16.9), the honest-dash
+   policy (§14.4(e)/(f)) — and **removing one needs an `OVERRIDE` (C1.8)** like any settled decision.
+   [[S130]]'s own reasoning is quoted as the governing one, verbatim from its line: *"The Figma pages have
+   no alert element and **`First.vue` has none either**, so adding one would be invention (§1.4). Tinting
+   an element that is already there is not."* Absence bounds what may be ADDED; it says nothing about what
+   must be REMOVED.
+
+**AND THE NEXT QUESTION IS ANSWERED IN THE RULE, NOT LEFT TO THE FIRST CHAT THAT HITS IT.** The five
+bottom-bar nav icons have **no individual export** — checked across all seven zips; every PNG ≤200×200 is
+`heroicons-solid_view-grid`, `bytesize_eye`, or a `Vector` fragment — and exist only inside
+`Component 48.png`. Clause (1) is still satisfiable: they sit on a **uniform flat `#111B52` ground** at
+design x **`50-121`, `182-245`, `315-364`, `434-505`, `564-631`**, so **a build-time slice out of the clean
+export is exact and repeatable and is a legitimate way to satisfy clause (1); eyeballing the same icon off
+a screenshot is not.** The test is whether the result is derived from the export by a repeatable operation.
+
+**THE EVIDENCE IS RECORDED IN §14.2a SO IT IS NEVER RE-DERIVED** (C1.16's own argument):
+- ⭐ **This is not a new direction — the build already said it, in the code that does the flattening.**
+  `plugin/src/pure/FigmaFramePage.cs`'s header: *"far too intricate to rebuild element-by-element right
+  away, so this shows the frame's exact Figma export as one image while we decide which parts to make live
+  … Live overlays … and the fill-to-the-edges reflow replace it per page as we build each one out
+  properly."* The flattened raster was **always scaffolding**; this rule makes that binding and defines
+  *"properly"*. **Verified at the file, not quoted from the prompt.**
+- **Only THREE flattened cases remain**, each verified at the cited site: `frame66` (the sole page still
+  routed through `FigmaFramePage.Build` — `plugin/src/pure/FigmaUI.cs:225`), `frame58`
+  (`plugin/src/pure/Frame58Hud.cs:34` draws the whole frame as one image; already being unpicked by
+  [[S154a]]–[[S154d]]), and `component_48` (the bottom bar — a flattened COMPONENT on all 35 pages).
+- **319 unique per-element PNGs across seven zips** supplied by the owner 2026-09-06, plus the `Frame 67`
+  vector SVG; **the element names match the build's own asset keys one-for-one** (`Rectangle 178.png` ↔
+  `rectangle_178` — confirmed present at `plugin/GameData/DragonScreen/art/cover/rectangle_178.png`).
+- ⛔ **Flattening has already cost a SHIPPED defect, which is the rule's whole argument, measured.** The
+  active-tab marker is wrapped in `<g filter="url(#filter10_dd_1_2133)">` — a **drop shadow**. Rasterised,
+  it baked into `component_48.png`, and erasing a soft gradient with no edge is not possible: [[S103]]
+  tried twice and the shipped file still carries **466 residual glow pixels** (QC `C-12`, the owner's
+  *"white smudge"*). The owner's fresh export of the same component has **31**. A defect that survived two
+  erase attempts **disappears entirely when the element is not baked**.
+
+⚠ **A C7 FLAG RAISED, NOT ACTED ON — and it is the first thing the first conformance line must clear.**
+The 319 per-element PNGs are **not in the repo tree** as of this commit: `assets/figma/` holds only the
+nine frame SVGs and is gitignored as *"exports of the REFERENCE UI's design, not ours to republish"*;
+`assets/reference/` holds `dragon2-ui-assets` and no Figma elements. C7: *"If a build input isn't in the
+repo, STOP and flag it."* So **the line that actually slices an element must resolve where the export lives
+— and under what licence its slices may ship — before it slices anything.** §14.2a governs HOW to build
+from the export; it does not by itself make the export a repo input. G13 reads no element asset, so the
+flag belongs here rather than in an action.
+
+**§0a — THE PLAN AMENDMENT LEDGER carries this edit's row**, because §0a's own rule is *"an entry in this
+table, or the edit was not authorised."* Added: `2026-09-06 | (this commit) | G13 | yes | yes`, with the
+owner quotes and a one-line statement of both clauses. The commit hash is the `*(this commit)*` placeholder
+the ledger's own rows use for the commit that adds them (G11's was later resolved by G12 the same way).
+
+⚠ **NOTICED, NOT TOUCHED (C1.1):** **`G12`'s ledger row still reads `*(this commit)*`** — G12 resolved
+`G11`'s placeholder to `ac5117e` but could not know its own hash. It is resolvable from
+`git log --oneline --follow -- docs/BUILD_PLAN.md` by any later `G`-line, exactly as G12 resolved G11's.
+Logged, not done: it is not this line's declared output.
+
+**Verified (C1.3).** **Governance/docs only — no code changed, so the build/preview gate does not apply**
+(C1.3's own carve-out); no `build.py test`, no preview, and none is owed. `install` and glass are SPENT
+([[S171]]) and were not touched; preview-only stands. `docs/QC_FINDINGS.md` untouched (QC's own file). No
+flight control wired (§14.4(a)). **Declared outputs, and the commit is exactly these two files:**
+`docs/BUILD_PLAN.md` + `REGISTER.md`.

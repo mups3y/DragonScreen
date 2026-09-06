@@ -86,6 +86,7 @@ this file, oldest first:
 | 2026-09-05 | `f91e7ca` | G10 | **yes** | yes |
 | 2026-09-05 | `ac5117e` | G11 | **yes** | yes — owner authorisation quoted on the register line. *(Written as "(this commit)" by `G11` itself, which could not know its own hash; resolved from `git log --oneline --follow -- docs/BUILD_PLAN.md` by `G12`, 2026-09-06 — a correction of fact, no other change to the row.)* |
 | 2026-09-06 | *(this commit)* | **G12** | **yes** | yes — owner authorisation quoted verbatim on the `G12` register line and in this commit's message: *"give me a batched prompt in the order you suggest for one chat to fix all whilst reading its rules etc between jobs"*, answering the overseer's four-item order, of which this rule change is item 4 and was named in the batch as the item that edits guarded files. Extends **C1.16** to reasoning wherever it lives, code comments included; adds a paragraph and edits no existing text; renumbers nothing. Byte-identical with `CLAUDE.md`, proven by extracting a fixed 50-line slice from each at the `16. **RESEARCH IS NEVER DELETED.**` anchor and diffing (4634 bytes each, empty diff, `cmp` clean) |
+| 2026-09-06 | *(this commit)* | **G13** | **yes** | yes — owner authorisation quoted verbatim on the `G13` register line and in this commit's message: *"are we going to be building all the elements of the pages correctly now? the way they were intended? The elements we have invented for pages not on this figma website will have to stay the same"*, and, authorising the task, *"write that governance prompt"*. Adds **§14.2a**, the Figma-export conformance rule, beside §14.2's tier map: an element PRESENT in the export is built FROM the export (its own per-element PNG or its own vector path, layered, with text TYPED and not rasterised); an element ABSENT from the export stays exactly as it is, and its absence is never grounds for changing or removing it — removing a tier-3 invention still needs an `OVERRIDE` (C1.8). Adds one subsection, edits no existing text, renumbers nothing, changes no tier |
 
 **Discrepancy against the overseer's Assess #23 reading, as `G10` was asked to check.** The overseer's stated
 list of authorised lines was `G0, G1, G2, G4, G5a, G7, G8, G9`. This ledger finds the true history LARGER
@@ -2055,6 +2056,91 @@ items flagged for the JOINT owner discussion §1.4 requires. Nothing is invented
   entry-mode specifics — §4 INFERRED list); (c) the **Reference Content + Menu** pages (DARK — no imagery AND
   no data structure, §3/§7 HOLD); (d) the reconstructed Suit-Leak FAIL branch. (The [EST] B11 numbers are
   MEASURED-in-sim, not invented — a separate class, resolved by the §B5 tune, not by discussion.)
+
+### 14.2a The Figma-export conformance rule (added 2026-09-06 by `G13`, owner-authorised)
+
+**🟢 OWNER AUTHORITY, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"are we going to be building
+all the elements of the pages correctly now? the way they were intended? The elements we have invented for
+pages not on this figma website will have to stay the same"* — and, authorising the `G`-line that wrote
+this subsection: *"write that governance prompt"*. No other authority is claimed here and none is inferred.
+
+This rule sits BESIDE §14.2's source-tier map and refines how that map is APPLIED to the drawn pages. **It
+changes no tier and edits nothing in §14 or §1.4.** It has **TWO clauses. Both are binding.** The second is
+the one that is easy to lose, and it is the one that protects settled decisions.
+
+#### (1) An element PRESENT in the Figma export is BUILT FROM the export
+
+Sliced from its **own per-element PNG**, or drawn from its **own vector path**, and **layered** — one
+element, one asset or one path, positioned at the export's own coordinates. Never traced from a screenshot.
+Never re-measured by eye. **Never left flattened into a whole-frame raster once its own export exists.**
+
+**Text that the export renders as TEXT is TYPED, not imported as pixels** — because only typed text can go
+live. A number baked into a raster is a permanent literal; the same number typed is a readout that §14.4(f)
+can fill from a real source. This is why the flattened frames are the liveness problem and not merely a
+fidelity one.
+
+#### (2) An element ABSENT from the export STAYS EXACTLY AS IT IS — its absence is NEVER grounds for changing or removing it
+
+Pages that are **not in the Figma at all** keep their construction **entirely**. Nothing about holding the
+export licenses a sweep through what the export does not mention.
+
+⛔ **THIS IS THE FAILURE MODE, AND IT IS WORTH NAMING BECAUSE IT IS THE TEMPTING ONE.** A chat holding a
+complete-looking export will be tempted to read *"not in the Figma"* as *"should not exist"*, and to delete
+our own additions as non-conforming. **Several of those additions are §1.4 TIER-3 inventions settled BY
+DISCUSSION WITH THE OWNER**, and a build chat does not reverse a settled decision — the alarm-channel tint
+(`S130`), the LZ coordinates (§B16.9), and the honest-dash policy (§14.4(e)/(f)) among them. **Removing a
+tier-3 invention needs an `OVERRIDE` (C1.8), exactly like any other settled decision.**
+
+`S130`'s own reasoning is the reasoning that governs here, verbatim from its register line: *"The Figma
+pages have no alert element and **`First.vue` has none either**, so adding one would be invention (§1.4).
+Tinting an element that is already there is not."* Absence in the export bounds what may be **ADDED**. It
+says nothing whatever about what must be **REMOVED**.
+
+#### Where an element has NO individual export: slicing from a flat ground is legitimate; eyeballing is not
+
+The per-element exports do **not** include the five bottom-bar nav icons individually — checked across all
+seven zips supplied on 2026-09-06 (every PNG ≤200×200 is `heroicons-solid_view-grid`, `bytesize_eye`, or a
+`Vector` fragment). They exist only inside `Component 48.png`.
+
+Clause (1) is still satisfiable, and this is how: the five icons sit on a **UNIFORM FLAT `#111B52` ground**
+at known design x-ranges — **`50-121`, `182-245`, `315-364`, `434-505`, `564-631`** — so a **build-time
+slice out of the clean export is exact and repeatable**, and it is a legitimate way to satisfy clause (1).
+**Eyeballing the same icon off a screenshot is not**, and neither is hand-drawing a lookalike. The test is
+whether the result is derived from the export by a repeatable operation, not whether it looks close.
+
+#### The evidence this rule was written from (recorded here so it is not re-derived)
+
+- ⭐ **THIS IS NOT A NEW DIRECTION — THE BUILD ALREADY SAID IT, IN THE CODE THAT DOES THE FLATTENING.**
+  `plugin/src/pure/FigmaFramePage.cs`'s own header: *"far too intricate to rebuild element-by-element right
+  away, so this shows the frame's exact Figma export as one image while we decide which parts to make live
+  … Live overlays (the navball, readouts) and the fill-to-the-edges reflow replace it per page as we build
+  each one out properly."* The flattened raster was **always scaffolding**. This rule makes that intent
+  binding and says what *"properly"* means.
+- **ONLY THREE FLATTENED CASES REMAIN** (measured 2026-09-06, not estimated): **`frame66`** — the sole page
+  still routed through `FigmaFramePage.Build` (`plugin/src/pure/FigmaUI.cs:225`); **`frame58`** — the whole
+  frame drawn as one image at `plugin/src/pure/Frame58Hud.cs:34`, already being unpicked by `S154a`–`S154d`;
+  and **`component_48`** — the bottom bar, a flattened COMPONENT carried on all 35 pages. Every other page
+  already composes from named element assets and typed text.
+- **THE EXPORTS EXIST** — the owner supplied **seven Figma zips on 2026-09-06** holding **319 unique
+  per-element PNGs**, plus the `Frame 67` vector SVG. **The element names match the build's own asset keys
+  one-for-one** (`Rectangle 178.png` ↔ `rectangle_178`), which is why they slot straight in.
+- ⛔ **AND FLATTENING HAS ALREADY COST US A SHIPPED DEFECT — this is the rule's whole argument, measured.**
+  The active-tab marker is wrapped in `<g filter="url(#filter10_dd_1_2133)">` — **a drop shadow**.
+  Rasterised, that shadow baked into `component_48.png`, and erasing a soft gradient with no edge is not
+  possible: `S103` tried twice and the shipped file still carries **466 residual glow pixels** (QC `C-12`,
+  the owner's *"white smudge"*). The owner's fresh export of the same component has **31**. **A defect that
+  survived two erase attempts disappears entirely when the element is not baked.**
+
+#### ⚠ C7 FLAG — where those exports live, which the first conformance line must settle before it slices
+
+As of this commit the **319 per-element PNGs are not in the repo tree**: `assets/figma/` holds only the nine
+frame SVGs (`Frame 58/59/66/67`, the five settings frames) and is gitignored as *"exports of the REFERENCE
+UI's design, not ours to republish"*; `assets/reference/` holds `dragon2-ui-assets` and no Figma elements.
+C7 is explicit — *"If a build input isn't in the repo, STOP and flag it"* — so **the first line that
+actually slices an element must resolve where the export lives, and under what licence its slices may ship,
+before it slices anything.** This rule governs HOW to build from the export; it does not by itself make the
+export a repo input. `G13` writes the rule only and reads no element asset, so the flag is raised here
+rather than acted on.
 
 ### 14.3 Tier-3 items needing the joint owner decision (per §1.4, before any build)
 Clusters (a)–(d) above are the ONLY elements with no real and no other-user basis. Per §1.4 each needs an owner
