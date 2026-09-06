@@ -6253,6 +6253,36 @@ the scaled-space texture. ⛔ **Not investigated here** — C1.1, and this line 
 Africa, Arabia, India, Europe and South America. ⇒ either a second path finds a map after this warning
 fires, or the warning outlives the condition it reports. Whoever takes S42 must start by reconciling
 those two facts; see [[S197]], which measures the globe that IS being drawn.
+
+✅ **THAT CONTRADICTION IS NOW RESOLVED — by [[S197]], 2026-09-07, and the answer is the SECOND of the
+two options this line named: the warning OUTLIVES the condition it reports.** Traced, not guessed:
+- **It was not a second render path.** The live scaled-space camera **cannot have drawn it**: [[S62]]
+  proves `PageState.PlanetCamLive` can never become true (`FigmaMode` is a `const true`, so
+  `ScaledPlanetRenderer.Request(...)`'s only call site is dead), and both reachable globes —
+  `CoverPage.cs:397` and `ManualChuteDeployPage.cs:197` — call the 4-arg `NavPage.Planet`, i.e.
+  `live: false`. ⇒ **the only thing that can paint continents on that disc is `ImageId.BodyMap` through
+  `NavPage.Globe`.**
+- ⇒ **`ImageStore.BodyMap()` therefore RETURNED A TEXTURE after the 05:12:00.850 warning fired** — the
+  drawn Earth is itself the proof, no log needed. And the code allows exactly that: **failure is not
+  cached** (`mapTexture` stays null, so every frame re-queries the material) while the **warning is
+  latched once per body+shader** by `LogGate`. A one-shot warning about one frame reads, in the log, as
+  a standing statement about the session. It is not one.
+- ⚠ **WHAT IS STILL OPEN, and it is now the whole of S42:** *why* the texture was absent at that instant
+  and present later. The slot dump (`_MainTex=4x4`, every surface slot `null`) is the shape of a
+  scaled-space map **not yet loaded** rather than one hiding in an odd slot — Kopernicus/RSS on-demand
+  loading is the obvious candidate — but the 05:06 log is gone and **that is a capsule question, not a
+  repo one**. ⇒ the fallback this line was going to build may be needed only for a WINDOW during load,
+  not for the whole session, which changes what it should do.
+- ⭐ **AND S42 NOW OWNS A SECOND, SEPARATE DEFECT, handed over by [[S197]] with its arithmetic done:**
+  when the texture IS found, **it is drawn a quarter turn out**. `NavPage.Globe` assumes texel `u=0`
+  holds longitude **-180**; the pad capture puts the disc centre ~**90° east** of where the code thinks
+  it is, consistent with a real origin of **-90** (u shifted 0.25). The **handedness is correct** (east
+  on the right, on the disc and in the overlay) so it is a ROTATION, not a mirror, and **the marker is
+  not at fault** — all proved by `plugin/test/NavGlobeLongitudeTest.cs`. That suite states the
+  convention in ONE constant (`TextureOriginLonDeg`) and **has been trial-run against the candidate fix:
+  change `NavPage.Globe` and that constant together and it is green (36/0).** ⛔ Still owner-gated and
+  still needing the glass — the repo cannot see KSP's texture, and the preview's stand-in satisfies the
+  wrong assumption by construction.
 Logged by the same pass (finding **C**), and **deliberately NOT claimed as fixed** — the brief said escalate,
 and the escalation is right. Evidence is S40's log line: under RSS the planet wears
 **`Custom/HapkeScaled`**, whose texture slots are not the stock ones, so `ImageStore.BodyMap`'s
@@ -24040,7 +24070,7 @@ statement of what he reported.
 - **DONE when:** row 0 either carries a value or is declared ineligible for these columns, and a run
   closes with **0** coverage defects.
 
-### S197 [S] On the pad the NAV globe put the vessel marker ~90° from where the vessel was — **DOING** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a live readout that may be WRONG rather than absent]
+### S197 [S] On the pad the NAV globe put the vessel marker ~90° from where the vessel was — **DONE — reading (2): the MARKER IS RIGHT, the MAP is rotated a quarter turn → [[S42]]** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a live readout that may be WRONG rather than absent]
 
 - **How it was found.** [[S194]] was verifying that the Cover's live elements really were live
   (finding 3). Every other element checked out. **This one did not** — and a readout that is wrong is
@@ -24066,6 +24096,69 @@ statement of what he reported.
   its numbers so it can be refuted, not asserted as a defect. **Not fixed here (C1.1).**
 - **DONE when:** the marker's longitude is proved against a known lat/lon by a test, and either it is
   correct and the map is at fault (→ [[S42]]) or it is fixed.
+
+⭐ **ANSWERED, 2026-09-07 — READING (1) IS DEAD AND READING (2) SURVIVES. The marker is CORRECT; the
+map is rotated. Nothing was fixed here — the defect is [[S42]]'s (C1.1).** New suite
+`plugin/test/NavGlobeLongitudeTest.cs`, 36 checks, wired into `TestMain` after `GlobeProjectionTest`.
+
+- **WHY THE CAPTURE COULD NEVER HAVE DECIDED IT, which is the first thing found.** The globe FOLLOWS the
+  vehicle: `NavPage.PlanetBody` sets `lonCentre = s.Longitude + view.PlanetRotDeg`, and the vessel marker
+  is then projected against that same centre ⇒ **`dlon = 0`, so the marker lands on the disc's centre
+  meridian at EVERY longitude, by design.** A correct marker at the view centre and a longitude-blind
+  marker at the view centre are **the same pixel**. ⇒ the 12-px measurement is confirmation of
+  `NavPage.cs:439-440`'s stated design, **not evidence of a longitude fault**, and no amount of further
+  looking at the PNG would have separated the two readings. Pinned as its own check
+  (`MarkerFollowsTheView`).
+- **HOW THEY WERE SEPARATED.** `PlanetRotDeg` (the crew's manual spin) enters `lonCentre` ADDITIVELY, so
+  setting it to `-s.Longitude` **pins the globe at longitude 0 while leaving the vehicle at the Cape** —
+  the vessel is no longer at the view centre, and a marker that honours longitude must leave the
+  centreline. It does: at `lat 28.620268, lon -80.604992` it lands at
+  `cx + cos(lat)·sin(lon)·r = cx - 0.8663·r`, matched to 0.75 px, and it tracks `sin(lon)` monotonically
+  across the near hemisphere. **`GlobeProjection.Project` honours longitude. Reading (1) is refuted.**
+- **THE MAP AND THE MARKER DO NOT DISAGREE WITH EACH OTHER.** Recovered from the `BodyMap` quads the
+  globe actually emitted (not from intent): the disc paints `lonCentre` at its own centre, across the
+  seam split as well — so **the ~90° cannot be attributed to a mismatch between our two pure paths.**
+  ⚠ Verified AT THE VIEW CENTRE. Away from it the strips map screen-x LINEARLY to longitude while the
+  overlay uses `sin` — `NavPage.Globe` documents that approximation and accepts it; it is not the 90°.
+- ⭐ **IT IS A ROTATION, NOT A MIRROR — and that halves S42's search.** The disc's own strips run
+  west-left to east-right (`left edge = lonCentre-90`, `right edge = lonCentre+90`, asserted), and the
+  capture agrees: **South America (west) on the left, India (east) on the right.** A mirrored texture
+  would have reversed them. ⇒ the handedness is right and only the ORIGIN is wrong.
+- **THE ARITHMETIC, pinned so it cannot drift while S42 carries it.** The code paints texel
+  `u = (lonCentre+180)/360` at the disc centre, i.e. it assumes **u=0 holds longitude -180**. If KSP's
+  scaled-space texture actually starts at **-90** (u shifted 0.25 — a quarter turn), that same texel
+  holds `lonCentre+90`, so the pad view paints **9.4° E** at its centre. The capture's continents put it
+  near **10° E**. ⇒ the discrepancy is a quarter turn, to within the identification.
+  ⚠ Corroboration, **not proof**: 10° E is a continent identification off a PNG, not a pixel
+  measurement, so it is checked to 5° and labelled as such in the test.
+- **MUTATION-PROVED, and every kill confirmed to come from THIS suite (`S167`).** Six mutations of the
+  production source, each applied alone, run, and reverted: **M1** marker ignores longitude (reading (1)
+  made real) → 4 checks fail; **M2** marker ignores the view centre → 3; **M3** marker ignores latitude
+  → 2; **M4** globe strips mirrored → 3; **M5** u origin shifted a quarter turn → 11; **M6** hemisphere
+  widened to a full turn → 1. **All six killed by `NAV globe longitude tests (S197)`'s own FAIL lines.**
+- ✅ **AND THE SUITE IS A LOCK, NOT A FENCE AROUND THE BUG — proved, not asserted.** The texture
+  convention is stated ONCE on the test side (`TextureOriginLonDeg = -180.0`). Applying the candidate
+  quarter-turn fix to `NavPage.Globe` **and** flipping that constant together was run: **36 checks, 0
+  failed.** So S42 can fix the globe and this suite goes green on the new convention — what it forbids
+  is moving one and leaving the other behind. **That trial run also caught a defect in the test itself**:
+  a seam check hard-coded at `lonCentre 175` silently stops testing the seam once the origin moves, so
+  the seam is now FOUND by sweep instead of assumed.
+- ⚠ **NOTHING IN THE PREVIEW CAN EVER CATCH THIS, and that is why it reached the glass.**
+  `PreviewMain.LoadStandIn` feeds `ImageId.BodyMap` an ordinary equirectangular Earth from `assets/`,
+  which satisfies the code's `u=0 → -180` assumption **by construction**. So the globe renders correctly
+  in every PNG and wrongly in game, and the 2026-08-29 "confirmed in the PNG preview" note at
+  `NavPage.Globe` was confirming the stand-in, not KSP's texture. **The remaining step is the glass.**
+- **VERIFY:** `python plugin/build.py test` → **ALL SUITES PASSED**; S197 suite **36 checks, 0 failed**;
+  64 suite report lines. `previewdiff` **REFUSED** — *"no render input differs between HEAD and the
+  working tree"* — which is the **correct** result: the change is test-only, no draw call was touched,
+  and S168's refusal proves that rather than computing a hollow "0 pages changed".
+- ⛔ **C7 FLAG — a build input is not in the repo.** `DragonScreen_capture/screen1..3.png` and the
+  05:06 `KSP.log` **do not exist in the tree** (checked). The capture could not be re-measured here, so
+  every glass number above is [[S194]]'s as recorded in this line, used as evidence and labelled as
+  such — not re-taken. If those captures still exist on the owner's disk they are worth landing in the
+  repo before [[S42]] is worked, because S42's remaining step is a comparison against them.
+- **Not done here (C1.1):** the fix itself, and the flat-map-vs-globe convention conflict, which is
+  already **QC C-09 / Q2**'s and is untouched — `PageTest.NavTexture` still pins both conventions.
 
 ### S198 [S] The legibility floor has never been re-derived at the shipped 2560 — **TODO (needs a glass pass; owner-gated)** — [logged by [[S194]] per C1.1, 2026-09-07; TIER 2: a standing rule enforced on a stale premise]
 

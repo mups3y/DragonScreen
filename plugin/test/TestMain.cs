@@ -134,6 +134,7 @@ public static class TestMain
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
         bad += Suite(PanelTest.Run);
         bad += Suite(GlobeProjectionTest.Run);  // screens: orthographic globe projection + occlusion (NAV 3D)
+        bad += Suite(NavGlobeLongitudeTest.Run); // screens: the 3D globe's longitude - marker vs texture (S197)
         bad += Suite(PlanetGeomTest.Run);       // screens: scaled-space camera framing/projection/occlusion (S10a)
         bad += Suite(OrbitalTest.Run);          // shared display math: orbit readouts
         bad += Suite(VehiclePartsTest.Run);     // screens: part classification for the systems display
