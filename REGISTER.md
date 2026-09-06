@@ -22823,7 +22823,7 @@ manifest already prevents anyone mistaking a render for a cutaway. ⚠ **This is
 
 ---
 
-### S185 [O] UNIT 3 — the VEHICLE OVERVIEW page, measured against the owner's own rendered mock — **DOING** — [the overseer's per-page rebuild programme, unit 3; §14.2a (G13) clause (2) governs the WHOLE page]
+### S185 [O] UNIT 3 — the VEHICLE OVERVIEW page, measured against the owner's own rendered mock — **DONE 2026-09-07 — the centre block is on the page centreline at last, the higher-resolution 3D render is found, keyed and PROVEN, and the conformance walk turned up eleven measured divergences of which one was fixed and ten are written up** — [the overseer's per-page rebuild programme, unit 3; §14.2a (G13) clause (2) governs the WHOLE page]
 
 🟢 **OWNER, 2026-09-07, verbatim:** *"assess then vehicle overview page next"*, and on the art
 *"Vehicle overview page gets the 3d render"*, with the line-art sheets explicitly excluded — *"they are
@@ -22887,3 +22887,342 @@ page's own sources, and the **mock** — which did not exist when any of those f
   written up under clause (2); the capsule-render question is resolved or explicitly left with its
   reason; `test` is green and mutation-proved; `previewdiff` shows this page's views alone; the R-01
   census reads 0 regressed; and the owner has been shown the PNG.
+
+#### STEP B — THE CONFORMANCE WALK. Every divergence measured as a fraction of width, on the render
+
+⚠ **HOW THE FRACTIONS ARE TAKEN, so the two are comparable.** The mock is measured against **its own card
+frame** — raster-scanned at `(99,99)`–`(1806,1117)` of the landed `interface_1950x1260.png`, i.e. 1708×1019,
+aspect 1.6762. Ours is the whole 2560×1406 render (this page is full-bleed, QC's category B). Both are then
+expressed as fractions of their own frame, which is the only way an aspect difference cannot fake a delta.
+`Overview.vue`'s column is the CSS resolved as fractions of `#inner-screen`.
+
+| # | element | `Overview.vue` CSS | mock (measured) | build BEFORE | build AFTER | verdict |
+|---|---|---|---|---|---|---|
+| 1 | title centre x | 0.500 | 0.5000 | 0.5000 | 0.5000 | ✅ agrees |
+| 2 | **big-gauge cluster centre x** | **0.500** | **0.5007** | **0.5384** | **0.4998** | ⭐ **FIXED** — was +0.0377 off, now −0.0009 |
+| 3 | **capsule slot centre x** | **0.500** | **~0.50** | **0.5311** | **0.5000** | ⭐ **FIXED** — and 1453 is `VehicleSubsystemPage`'s own literal |
+| 4 | **small-gauge cluster centre x** | **0.500** | **0.4952** | **0.5311** | **0.4998** | ⭐ **FIXED** — was +0.0359 off, now +0.0046 |
+| 5 | big-gauge pitch | 0.1375 | 0.1225 | 0.1313 | 0.1313 | ⛔ **sources DISAGREE** → not picked (C1.14) |
+| 6 | small gauges: structure | one ROW of four (0.25/0.35/0.65/0.75) | one ROW of four (0.2749/0.3762/0.6139/0.7155) | two columns of two | unchanged | ➡ **[[S186]]** — both sources agree against us |
+| 7 | gauge ring bottom gap | **92.6°** (computed from the clip-path) | ~90°, visible | **60°** | unchanged | ➡ **[[S187]]** — both agree against us |
+| 8 | gauge ring track | 1.5/140 of diameter = **1.07 %**, DOTTED (`dasharray "0 4"`) | fine dots | **8 %** of diameter, SOLID | unchanged | ➡ **[[S187]]** — ~7.5× heavier |
+| 9 | gauge label position | INSIDE the ring (`#first-heading top:30%`) | inside the ring | ABOVE the ring (`cy − r − 44`) | unchanged | ➡ **[[S187]]** |
+| 10 | **capsule slot aspect (device)** | 0.438 | ~natural | **0.768** vs the art's **0.624** | unchanged | ➡ **[[S188]]** — a **22.2 % horizontal stretch of a glyph-bearing PNG**, QC `C-04` |
+| 11 | CABIN MICS block centre x | **0.500** | **0.5003** | **0.3729** | unchanged | ➡ **[[S189]]** — **−0.127 of width**, the largest single delta left |
+| 12 | CABIN MICS y | 0.825 | 0.8454 | **0.8277** | unchanged | ✅ within 0.003 of the CSS |
+| 13 | CONNECTIONS left x | 0.300 | 0.2722 | 0.3297 | unchanged | ➡ **[[S189]]** — +0.030 vs CSS, +0.058 vs mock |
+| 14 | CONNECTIONS heading rule | `border-bottom: 0.5px rgba(255,255,255,0.5)` | drawn | **absent** | unchanged | ➡ **[[S189]]** — both sources have it |
+| 15 | `Connected` value colour | `rgba(255,255,255,1.0)` = WHITE | white | **`Go` green** | unchanged | ➡ **[[S189]]** — colour; both sources agree |
+| 16 | checklist label left x | 0.060 | 0.0597 | 0.0438 | unchanged | ➡ **[[S189]]** — −0.016 of width |
+| 17 | checklist first row cy | ~0.04 | 0.1124 | 0.1511 | unchanged | ➡ **[[S189]]** — +0.039 of height |
+| 18 | checklist row pitch | 0.110 | 0.0974 | 0.0946 | unchanged | ⛔ sources disagree; ours is closer to the MOCK |
+| 19 | right column left x | 0.800 | 0.8015 | 0.8054 | unchanged | ✅ within 0.004 — the CONSUMABLES column sits on the reference's own column |
+| 20 | right column right x | 1.000 | 0.9640 | 0.9804 | unchanged | ⚠ +0.016; ours over-runs the mock's |
+| 21 | gauge CARD PLATES | **NONE** (`#sub-slot` has no background; its border is commented out) | **drawn**, rounded rects | none | unchanged | ⛔ **sources DISAGREE** → not picked (Q4) |
+| 22 | capsule ground shadow | `#shadow` radial-gradient at 50 % / 86 % | drawn | none | unchanged | ⛔ an ADDITION — clause (2) bounds what may be added |
+| 23 | `Manual Rings` / `Manual Rigs` | **"Manual Rings"** | **"Manual Rigs"** | "Manual Rings" | unchanged | ⛔ **sources DISAGREE on COPY** — §1.4, not picked (Q4) |
+| 24 | right column CONTENT | 6 orbit-telemetry rows + bars | same | CONSUMABLES, 3 columns × 8 | unchanged | ✅ **settled by T5** on DillonBaird's real Vehicle render |
+| 25 | bottom-left cluster | SYSTEMS / CABIN + MORE + "Power, Engine, Comms" | same, **plus a 9-icon tab strip** | `VehicleTabBar` (8) + `VehicleDeepViewLinks` | unchanged | ✅ settled by T5 |
+| 26 | `RECORDING` colour | `#d12c30` red | red | `Go` green | unchanged | ✅ **settled by [[S104]] / QC `V-02`** — §14.4(a), no red for a non-fault |
+
+⭐ **THE HEADLINE.** Of the twenty-six rows, **three were one defect** — the centre block did not sit on its
+own centreline, and its two halves did not even agree with each other. The four big gauges centred on 1845,
+the capsule and the small gauges on 1820, and the title above them on **1713**. Three independent sources put
+all of it on 1713, and the third of them is **our own sibling page**: `VehicleSubsystemPage.cs:290` draws the
+SAME asset in the SAME 520×760 slot at `PX(1453)`, slot centre exactly 1713, while this page had it at 1560.
+One asset, one slot, two pages, **107 design units apart**. Fixed as a pure translation — the 450-unit pitch,
+the 175/120 radii, the slot and the ±590 symmetry are untouched. **Max per-gauge delta against the mock fell
+from 0.0510 to 0.0141 of width; the cluster-centre delta from 0.0377 to 0.0009.**
+
+#### ⛔ THE 3D RENDER — the higher-resolution copy EXISTS, is keyed, is PROVEN, and is NOT swapped
+
+The unit's branch was conditional and **the condition is met**: `C:\Users\User\Downloads\crew_capsule.jpg`
+(2667×1500) is **the same SpaceX render this page already draws** — same pose, same markings, same framing.
+The shipped `art/cover/dragon_crew.png` is a **294×468** crop of it; the subject in the source measures
+**771×1232**, i.e. **2.62× the linear resolution**, against a slot that draws it at 388×506 device px. **The
+shipped art is upscaled today and this one would not be.**
+
+⛔ **AND THE KEYING RECIPE THE UNIT WAS HANDED IS WRONG FOR THIS FILE — the same shape as [[S184]]'s own
+finding, one file later.** *"alpha = max(r,g,b), threshold ~10"* is right for a white-on-black line drawing
+and destructive for a full-colour render with dark regions. Measured, not argued: the shipped
+`dragon_crew.png` has **1,605 FULLY OPAQUE pixels below luminance 40**, down to luminance 0 — the skirt, the
+window recesses, the shadowed trunk flutes — so it was never luminance-keyed; and run as directed the recipe
+makes **3,346 subject pixels fully transparent** and **118,217 less than 50 % opaque**. It punches holes
+through the vehicle. **The matte was therefore taken by CONNECTIVITY** (flood fill of luminance ≤ 8 inward
+from the four borders; everything the fill cannot reach is subject and is opaque), with luminance used
+**only** in the 2 px boundary band, un-premultiplied so the crop composites the same on any ground.
+
+⭐ **PROVEN AGAINST GROUND TRUTH, NOT ASSERTED.** The shipped 294×468 asset is an existing correct matte of
+the same subject, so it is a test. Downscaled to its own ink crop (287×460): **aspect 0.6258 vs 0.6239**
+(0.3 % apart — the same crop), **alpha mean |Δ| 1.6/255, median 0, 98.6 % of pixels within 24**, and RGB
+where both are opaque (92,541 px) **mean |Δ| 4.6/255, 95.6 % within 24** (JPEG artefacts account for most).
+
+⛔ **NOT SWAPPED, on a fact this unit discovered rather than a preference.** `dl.Asset("dragon_crew", …)` is
+called from **`VehicleOverviewPage.cs:200` AND `VehicleSubsystemPage.cs:290`**, and the second serves the six
+subsystem sub-tabs — so replacing the shipped PNG changes **seven page-views**, six of them outside unit 3,
+and this unit's own verification criterion is that `previewdiff` reports *this page's views alone*. The unit
+prompt assumed the swap would be local; it is not, and that is new information rather than a preference.
+**Landed as reference and hashed** (`assets/reference/nasa/dragon_crew_hi_771x1232.png`, md5 `bbaeb251`, in
+`docs/reference/NASA_REFERENCE_ART.md`) so the evidence cannot evaporate from `Downloads` — which is where
+`assets/` has been lost from twice ([[S183]]). **The swap is one file copy and it is Q1 below.**
+
+⛔ **AND THE OTHER CANDIDATES WERE CHECKED AND REJECTED WITH REASONS,** so the search is not re-run:
+`dragon_threeview.png` (2645×1326, md5 `7c8361ac`) is the three-view LINE-ART sheet — the same pixel size as
+[[S184]]'s `crew_dragon_profile.png` under a different key — and **the owner excluded line art from this
+page**; ⭐ **`crew dragon with trunk.jfif` (800×1303) is a white-on-black LINE-ART elevation of this exact
+view** and belongs to `PropSchematic`, whose header already calls for *"capsule + trunk line-art"* — logged
+against that line as **[[S190]]**, per the owner's own instruction, and **not used here**;
+`crew_dragon_trunk.png` (213×347) and `crew_bottom_view.png` (132×147) are **lower** resolution than what
+ships; `Crew Dragon Flight Control UI.png` (2352×1410) is a UI reference, not vehicle art.
+
+#### STEP C — the Step A list, walked. Every row closed or explicitly left open
+
+| # | item | outcome | how it was verified / why it is open |
+|---|---|---|---|
+| 1 | QC `V-01` ≡ H14/H15 ≡ [[S35]] | ✅ **verified still closed** | All eight rings take `GC(Alarms.Band(…, CabinLimits.…))`; CABIN TEMP renders **green** at 21.8 °C on `ui_vehicle.png`, agreeing with the P&ID. Re-read in source this session |
+| 2 | QC `V-02` | ✅ **verified still closed** | `RECORDING` is drawn `valid ? Go : Dim`; no alarm red anywhere on the page |
+| 3 | QC `V-03` | ✅ **closed, and superseded twice** | `S109` corrected the fix plan (the column is right to dash); [[S79]] then FILLED it with time-to-depletion. `MarginColumnTest` 49 checks, 0 failed — a fixture-A-vs-B suite a constant cannot pass |
+| 4 | QC `V-04` ≡ H18 ≡ H39 | ⛔ **stays HELD** on [[S140]] | Re-checked: `LsMargins` carries Food/Water/Oxygen days and **none of this column's eight rows is food, water or oxygen**. Both halves §1.4-blocked. Not touched |
+| 5 | H17 ≡ `S-04` ≡ `MP-03` | ⛔ **stays HELD** on [[S139]] | A policy surface, not a page defect. This unit added no dash and removed none |
+| 6 | QC `MP-01` + `MP-02` | ⛔ **stays HELD** on [[S149]] | The two surfaces disagree because the two REFERENCE CAPTURES disagree; the copy is not ours to edit (§1.4). Untouched |
+| 7 | QC `R-01` | ⛔ **stays HELD** on [[S153b]] | Census reads **856 below the floor, 0 page(s) regressed, 0 improved**. ⭐ `VehicleGeometryTest` also pins the gauge label size as a literal `24`, so a size change on this page is caught here as well as by the census |
+| 8 | [[S79]] | ✅ **verified and EXTENDED, not redone** | Verified in source and by its own suite. Extended: the column's page is now pinned as centred, and the MARGIN column's own x (3360) is untouched — `previewdiff` proves the right column did not move |
+| 9 | [[S81]] Q2 | ⛔ **still blocked: owner design call** | S81-Q2 asks whether the CONSUMABLES table needs a layout mechanism at all and recommends leaving it alone. This unit did not answer it and moved no CONSUMABLES row. ⚠ Its evidence is now better: row 19 shows the column's left edge is within **0.004 of width** of the reference's own right-menu edge |
+| 10 | [[S170]] | ➡ **still TODO, not this page's** | The three copies of `120.0` live in `VesselData`, `CabinEnvironment` and `Depletion`. Nothing here changed them, and [[S79]] already pins that the MARGIN column is invariant to the value |
+| 11 | [[S177]] | ⛔ **not taken** | S177 scopes the design frame's border to the Cover/Menu units (C1.1). Unchanged |
+| 12 | H45 | ✅ **verified still closed** by [[S148]] | `ValueTint` dims a dash; every dashed CONSUMABLES cell renders `Dim` and every live one `White` on `ui_vehicle.png` |
+| 13 | H16 | ✅ closed by [[S137]] | Not this page — the ALERTS view lives on the subsystem pages. Not redone |
+
+⚠ **§2's duplicate pairs were checked, so nothing was fixed twice and closed once.** This page's are
+`V-01` ≡ `S-01` ≡ H14/H15 ≡ [[S35]] (four names, one defect, all closed) · `V-04` ≡ H18 ≡ H39's margin half
+→ [[S140]] · `S-04` ≡ H17 ≡ `MP-03` → [[S139]]. **Counted once each.**
+
+#### STEP D — verification
+
+- **`python plugin/build.py test` GREEN.** New suite **`VehicleGeometryTest`: 40 checks, 0 failed**.
+  `SELFTEST OK — 13 sections, 416 report lines`.
+- **MUTATION-PROVED, 10 of 10 killed**, and every kill came from the suite's own summary line rather than a
+  crash above it (S167): capsule `1453→1560` (3 fails) · big gauge 0 `1038→1170` (2) · big gauge 3
+  `2388→2520` (2) · LOOP column `1123→1230` (3) · NET PWR column `2303→2410` (3) · pitch `450→460` (3) ·
+  slot width `520→560` (2) · **gauge label size `24→26` (8)** · big radius `175→170` (1) · title centre
+  `1713→1750` (1).
+  ⭐ **EVERY NUMBER IN THE SUITE IS A LITERAL** typed from the three sources, and none is read off the page —
+  the exact failure [[S176]]'s two edits hit twice.
+  ⚠ **AND THE FIRST MUTATION RUN WAS THROWN AWAY, WHICH IS RECORDED RATHER THAN HIDDEN.** The restore chain
+  captured a *mutated* file as its baseline, so every result in that run was measured against a page that
+  already had the capsule at 1560. It was caught because `build.py test` then went red on a tree that was
+  supposed to be clean. The battery was rebuilt with the baseline **asserted on every iteration** — a grep
+  for the post-fix capsule x before each mutation — and re-run from a verified-green tree. The numbers above
+  are the second run's.
+- **`previewdiff` against a clean-checkout baseline: `3 CHANGED` — `ui_vehicle.png`, `ui_vehicle_alarm.png`,
+  `ui_vehicle_nofeed.png`. 124 unchanged, 0 new, 0 removed.** This page's three views and nothing else.
+- **R-01 census: `856 below the floor, 0 page(s) regressed, 0 improved`.** No text size moved in either
+  direction. [[S153b]] stays HELD and untouched.
+- **TRAP 1 / QC `C-04`, run rather than assumed.** No asset was touched, and the one asset on this page is
+  drawn `520 * sx, 760 * sy` — a box whose **device aspect is 0.768 against the art's own 0.624**, a
+  **22.2 % horizontal stretch**, computed two independent ways (analytically from `sx`/`sy` at 2560×1406, and
+  measured on the render as an ink bbox of 376×493 against the source's 287×460). ⛔ **This unit did not
+  change it** — the prompt ruled the slot aspect *"a real question — write it up, do not do it quietly"* —
+  and it is **[[S188]]** and Q2 below.
+- **TRAP 3, checked rather than assumed.** Nothing that moved has a hit rect: `FigmaUI.HitTest` routes only
+  `VehicleTabBar.HitTest` and `VehicleDeepViewLinks.HitTest` for `UiPage.Vehicle`, and neither touches the
+  gauges or the capsule. Draw, hit and marker did not need to move together because there is no hit and no
+  marker on anything that moved.
+- **TRAP 4, checked.** No live readout was corrected back to a reference's baked value. Every number on this
+  page comes from `PageState` (T13a) and the mock's numbers (2.69, 2.41, 14.00, 0.07, 26.53, 20.00, 0.00,
+  0.00) are frozen decoration — the render still shows the fixture's own 2.86, 21.8, 14.72, 1.64, 26.4,
+  20.1, −59, −49, and that difference is **correct**.
+- **TRAP 5 / C1.16 + G12, observed.** No reasoning was deleted. The T5 and T13a findings in this file's
+  header are untouched, and the S104/V-01 block the new comment sits above is intact — the new material was
+  added ABOVE it, and the heading it used to open with is still over its own body.
+- ⛔ **`install` and glass NOT used** ([[S171]] spent them) — judged on the PNG. **No `git push`.**
+
+- **DONE when:** ✅ Step A walked with an outcome per row · ✅ every divergence measured as a fraction of
+  width and either fixed or written up · ✅ the capsule-render question resolved (found, keyed, proven, and
+  explicitly not swapped, with the reason) · ✅ `test` green and mutation-proved · ✅ `previewdiff` this
+  page's views alone · ✅ R-01 0 regressed · **owner shown the PNG — his reply is the last clause and it is
+  not yet given.**
+
+---
+
+### S186 [S] The four small gauges are a 2×2 stack; both of this page's sources put them in ONE ROW of four — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 3: fidelity]
+- **The finding, measured.** `Overview.vue` places all four `#sub-sub-slot` divs at one `top: 77.5%` with
+  `left` 0 % / 20 % / 80 % / 100 % of `.circular-progess-menu` — i.e. **one row of four at 0.25 / 0.35 /
+  0.65 / 0.75 of screen width**, two either side of the capsule. The owner's mock renders exactly that, at
+  **0.2749 / 0.3762 / 0.6139 / 0.7155** — a pitch of **0.1013–0.1016**, against the CSS's 0.100. ⭐ **The
+  two sources agree to 1.5 % on the pitch and to 0.005 on the centre**, which is as close as anything in
+  [[S185]]'s twenty-six-row walk came.
+- **This build stacks them 2×2 instead**: LOOP A over LOOP B in one column, NET PWR1 over NET PWR2 in the
+  other. After [[S185]] the two columns sit at **0.3277 and 0.6720**, symmetric about the centreline.
+- ⛔ **NOT DONE IN [[S185]], deliberately.** Converting a stack to a row is a relayout, not a translation:
+  it needs a row `y` that neither source gives unambiguously (the CSS resolves to 0.4875 of height, the
+  mock's labels sit at 0.395), and it changes how the CONNECTIONS block below sits under it.
+- **DONE when:** the four small gauges are one row of four, the chosen row `y` is derived from a named
+  source rather than picked, `VehicleGeometryTest` is extended to pin it, and `previewdiff` shows this
+  page's views alone.
+
+### S187 [S] The gauge ring diverges from BOTH sources three ways — and `Gauge` is shared verbatim across SEVEN page-views — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: the most visible remaining difference from the reference]
+- **Three divergences, each agreed by `Overview.vue` AND the mock against this build:**
+  1. **The bottom gap is 60°; the reference's is 92.6°.** Computed exactly, not eyeballed: the reference
+     clips a circle `r=70` at `(75,75)` with a `clipPath` circle `cx=0 cy=150 r=162.5`, which leaves the
+     arc visible for `θ` outside `(−91.32°, +1.32°)`, and `#meter-svg { transform: rotate(135deg) }` puts
+     that 92.6° gap centre exactly at the bottom. Ours is `ArcBand(…, −150, 150, …)`.
+  2. **The track is a solid band 8 % of the diameter; the reference's is a DOTTED hairline at 1.07 %**
+     (`stroke-width: 1.5` on a 150 viewBox with `r=70`, `stroke-dasharray: 0 4`, round caps = dots).
+     Ours is **~7.5× heavier** and solid. ⚠ A dotted arc is a new `DisplayList` capability and both
+     renderers would have to agree on it — that is the real cost of this item, not the page edit.
+  3. **The label sits ABOVE the ring; both sources put it INSIDE**, near the top (`#first-heading
+     { top: 30% }` of the slot). The mock shows PPO2 inside the ring, above the number.
+- ⛔ **NOT DONE IN [[S185]] because it is not this page's to change alone.** `VehicleSubsystemPage.cs:147`
+  carries a **verbatim copy** of the same `Gauge`, and its own comment says so — *"the overview's gauge"*.
+  Changing one splits a matched pair across seven page-views ([[S181]]'s Q1 reasoning, on a bigger surface).
+- **DONE when:** the owner has answered [[S185]] Q3, and if the answer is the reference's construction it is
+  done on ALL SEVEN page-views in one line, with `previewdiff` reporting all of them and the reason.
+
+### S188 [S] The capsule slot stretches a glyph-bearing PNG by 22.2 % — QC `C-04`'s own rule, on two pages — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: a standing rule broken in the build's most-looked-at picture]
+- **The finding, measured two ways.** `dragon_crew.png` is **294×468**, ink aspect **0.6244**. Both pages
+  draw it `520 * sx, 760 * sy` — and because this page maps x through `sx` and y through `sy`, the box's
+  **device** aspect at the shipped 2560×1406 is **0.7678**, a **22.2 % horizontal stretch**. Confirmed on
+  the render: the drawn ink bbox is 376×493, aspect 0.7632, against the source's 287×460 at 0.6239.
+- ⛔ **AND IT IS A GLYPH-BEARING PNG** — SPACEX and DRAGON wordmarks, the NASA meatball, the US flag. QC
+  `C-04`'s rule, restated in [[S185]]'s own prompt: *"Never stretch a glyph-bearing PNG."*
+- ⚠ **The device aspect is RESOLUTION-DEPENDENT**, which is why a fixed design box cannot fix it: an
+  undistorted draw has to compute its width from its height and `sy/sx` at draw time, the way
+  `Images.FitHeight` and `BarFit` already do (the pattern [[S103]] used for the bottom bar).
+- ⚠ **The sources disagree about the slot**, so "conform to the reference" is not available: `Overview.vue`
+  makes it `13.5% × 50%` — a box aspect of ~0.44, which squeezes the art HARDER than ours stretches it —
+  while the mock renders it at roughly its natural shape.
+- ⛔ **NOT DONE IN [[S185]]**: its prompt ruled the slot aspect *"a real question — write it up, do not do
+  it quietly"*, and the same slot is drawn by `VehicleSubsystemPage.cs:290`. It is [[S185]] Q2.
+- **DONE when:** the owner has chosen between leaving it, letterboxing the art inside the slot at its own
+  aspect, and re-cutting the slot; it is applied to both call sites; and a test pins the drawn aspect
+  against the art's own.
+
+### S189 [S] The elements the reference places INDEPENDENTLY of the centre block — five measured divergences [[S185]] did not take — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 3: fidelity]
+- ⭐ **CABIN MICS is the largest single delta left on this page.** `#dragon-main-heading { left: 50%;
+  transform: translate(-50%,-50%) }` centres it, and the mock renders it centred at **0.5003**; this build
+  draws it left-aligned at 1130 so the block centres at **0.3729** — **−0.127 of width**. ⚠ Its `y` is
+  already right (0.8277 against the CSS's 0.825). ⚠ And it is not a one-line move: the block is two draws
+  with two tints and its second word changes width with the feed, so centring it needs an anchoring rule,
+  not a shifted x.
+- **CONNECTIONS' heading has no rule under it.** `#connections-heading { border-bottom: 0.5px solid
+  rgba(255,255,255,0.5) }`, and the mock draws it. Ours draws none.
+- **`Connected` is drawn `Go` green; both sources make it WHITE** (`#connections-sub-sub-heading { color:
+  rgba(255,255,255,1.0) }`). ⚠ Colour, so it wants doing with whoever owns this block's tints, not inside a
+  geometry unit.
+- **CONNECTIONS' left edge** is 0.3297 against the CSS's 0.300 and the mock's 0.2722.
+- **The left checklist sits lower and further left than both sources**: label left **0.0438** vs 0.060 /
+  0.0597 (−0.016 of width); first row centre **0.1511** vs ~0.04 / 0.1124 (+0.039 of height). ⚠ Its row
+  pitch (0.0946) is a source DISAGREEMENT — the CSS says 0.110 and the mock renders 0.0974 — and ours is
+  closer to the mock, so the pitch is not part of this item.
+- **DONE when:** each of the five is fixed or refused with its reason, `VehicleGeometryTest` is extended,
+  and `previewdiff` shows this page's views alone.
+
+### S190 [S] `PropSchematic`'s capsule + trunk line-art exists, in `Downloads`, and is unlanded — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: a build INPUT the owner has already supplied]
+- 🟢 **OWNER, 2026-09-07, verbatim**, excluding the line art from the Vehicle Overview: *"they are for the
+  other page with line art like those already on it, so we can show the rcs port locations clearer etc"*.
+- **What exists.** `C:\Users\User\Downloads\crew dragon with trunk.jfif` — **800×1303, white-on-black LINE
+  ART**, the capsule-and-trunk front elevation, i.e. **exactly the view `PropSchematic`'s own header calls
+  for** (*"capsule + trunk line-art"*, from a tier-1 NASA JSC photo). Also `dragon_threeview.png`
+  (2645×1326, md5 `7c8361ac`), a differently-keyed copy of the three-view sheet [[S184]] landed as
+  `crew_dragon_profile.png`.
+- ⛔ **NOT LANDED AND NOT USED BY [[S185]]** — the owner's instruction sends it to another page, and C1.1
+  says log it there rather than do it here.
+- ⚠ **`Downloads` is where `assets/` has been lost from twice** ([[S183]]). Landing it with a hashed
+  manifest row, on [[S184]]'s pattern, is the cheap half and commits nobody to drawing it.
+- **DONE when:** the file is keyed and landed under `assets/reference/nasa/` with a hashed row in
+  `docs/reference/NASA_REFERENCE_ART.md`, and `PropSchematic`'s line records that its art is now in-repo.
+  ⚠ **It is white-on-black line art, so [[S184]]'s luminance key IS the right one here** — unlike the
+  full-colour render [[S185]] had to matte by connectivity.
+
+### S191 [S] `VehicleSubsystemPage`'s big-gauge row is off its OWN page's centreline by the same +132 [[S185]] fixed here — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 3: consistency]
+- **The finding.** `VehicleSubsystemPage.cs:199` draws `float[] gx = { 1170f, 1620f, 2070f, 2520f }` —
+  centre **1845** — while the same file's capsule at `:290` is `PX(1453)`, slot centre **1713**, and its
+  title is centred at 1713 too. So that page has exactly the internal mismatch [[S185]] removed from the
+  Overview, and it has it on **six sub-tabs**.
+- ⛔ **NOT FIXED BY [[S185]]** (C1.1: pages 20–25 are not unit 3's). This line does not pre-empt those
+  pages' own unit — it records the number so the defect is not re-derived from scratch.
+- **DONE when:** the six sub-tabs' gauge row is centred on 1713 (i.e. `1038 / 1488 / 1938 / 2388`), or the
+  divergence is recorded as deliberate with a reason.
+
+## Open questions for the owner (C1.14) — S185
+
+**Q1 — swap in the higher-resolution 3D render? It is found, keyed and proven, and it reaches seven page-views.**
+*Situation.* You said *"Vehicle overview page gets the 3d render"*. The page already draws the right render;
+the defect is that it is **294×468 upscaled into a 388×506 slot**. `crew_capsule.jpg` in `Downloads` is the
+same render, and its subject is **771×1232 — 2.62× the linear resolution**, so the slot would downscale
+instead of upscale. The key is landed and **proven against the shipped asset itself**: same framing to 0.3 %,
+alpha agreeing to a mean of 1.6/255 with 98.6 % of pixels within 24. ⛔ The reason [[S185]] did not simply do
+it is that `dragon_crew` is drawn by **`VehicleOverviewPage` AND `VehicleSubsystemPage`'s six sub-tabs** —
+seven page-views — and unit 3's own rule is that its `previewdiff` shows this page's views alone. **No gate,
+no `OVERRIDE`; it is a scope call.**
+1. **Swap it as its own small line covering all seven views.** *(recommended: it is one file copy, it is
+   proven, and the improvement is identical on every page that draws it. The line exists so that the
+   seven-page `previewdiff` is expected rather than alarming.)*
+2. **Swap it inside a later Vehicle-family unit**, when that unit is already touching those pages anyway.
+3. **Leave it.** The upscale shows mainly on the capsule's markings, and the art is landed and hashed either
+   way, so nothing is lost by waiting.
+
+**Q2 — the capsule slot stretches the art 22.2 %. Which way out?** ([[S188]])
+*Situation.* The slot is `520 × 760` design units drawn `520 * sx, 760 * sy`, so at 2560×1406 its **device**
+aspect is 0.768 against the art's own 0.624 — a 22.2 % horizontal stretch of a PNG carrying the SPACEX, NASA
+and DRAGON wordmarks, which is what QC `C-04` forbids. ⚠ The sources do not settle it: `Overview.vue` squeezes
+the art *harder* than we stretch it (a 0.44 box), and the mock draws it at roughly its natural shape.
+1. **Letterbox the art inside the existing slot at its own aspect**, computing the width from the height and
+   `sy/sx` at draw time — the pattern `Images.FitHeight` and [[S103]]'s `BarFit` already use. *(recommended:
+   it obeys `C-04`, it moves no other element, and it needs no new geometry decision — the art simply becomes
+   narrower inside a box that stays where it is.)*
+2. **Re-cut the slot** to the art's aspect. Visually similar, but it is a page-geometry change on two pages
+   and it changes what the slot means.
+3. **Leave it.** The reference distorts it too, in the other direction. ⚠ This is the only option that leaves
+   a standing rule of this build broken in its most-looked-at picture.
+
+**Q3 — the gauge ring: take the reference's construction, or keep ours?** ([[S187]]) — **taste, and it is yours**
+*Situation.* `Overview.vue` and your mock agree against this build on three things at once: the bottom gap is
+**92.6°, not 60°**; the track is a **dotted hairline at ~1 % of the diameter**, not a solid band at 8 %; and
+the **label sits inside the ring**, not above it. ⛔ The catch is that `Gauge` is copied **verbatim** into
+`VehicleSubsystemPage`, so this is a **seven-page-view** change, and the dotted track needs a new drawing
+primitive both renderers must agree on.
+1. **Leave it to the Vehicle-family unit** that reaches pages 20–25, and do all seven together.
+   *(recommended: it is the only option that does not split the idiom, and the dotted track is renderer work
+   rather than page work.)*
+2. **Do the two cheap thirds now** — the 92.6° gap and the label inside the ring — on all seven views, and
+   leave the dotted track to whoever adds the primitive.
+3. **Keep ours.** The heavy ring is legible at seat distance in a way a 1 %-of-diameter dotted track may not
+   be, and that is a real argument rather than a shrug — the reference was drawn for a monitor, not for IVA
+   glass at 0.2844 m across.
+
+**Q4 — when `Overview.vue` and your mock disagree, which one governs this page?** — **the single most useful ruling here**
+*Situation.* Four of the twenty-six rows are straight disagreements between the page's declared source and
+your rendered mock, and each was left alone because [[S185]] was told not to pick: the **gauge card plates**
+(the CSS has none at all — `#sub-slot` has no background and its border is commented out — while the mock
+draws a rounded plate behind every gauge); the **big-gauge pitch** (CSS 0.1375 of width, mock 0.1225, ours
+0.1313); the **checklist row pitch** (CSS 0.110, mock 0.0974, ours 0.0946); and a **copy** difference — the
+CSS says **"Manual Rings"**, which is what we draw, and the mock says **"Manual Rigs"**.
+⚠ **And the mock is demonstrably NOT a render of `Overview.vue`.** It carries a nine-icon tab strip
+(Overview / Life / Comms / Prop / Mech / Power / Avionics / GNC / Thermal) that appears **nowhere in the
+reference app's source** — grepped across every file — and it puts the title at 0.054 of height where the CSS
+says 0.005. It is a **redesign of the same page**, not a screenshot of that code.
+1. **The mock governs; `Overview.vue` becomes a tie-breaker.** *(recommended: it is the newer artefact, it is
+   the one you supplied for this page, and on the things that can be checked independently it is the more
+   careful of the two — the reference CSS contains an outright typo ("Apogle"), repeats `id="sub-slot"` four
+   times, and labels both coolant loops "LOOP A", which [[S20]] already had to overrule.)*
+2. **`Overview.vue` governs**, because it is the source this page's header names and the one the page was
+   built from; the mock is decoration.
+3. **Rule per row**, here and now, on these four only.
+⚠ **Whichever way this goes it settles a class rather than four rows** — every later Vehicle-family unit hits
+the same fork.
+
+**Q5 — what ARE the two `Interface` renders? ([[S184]] Q2 left this to "the unit that first wants one", and this is it.)**
+*Situation.* [[S184]] landed them under `assets/reference/nasa/` because you supplied them with the NASA art,
+and flagged that they are **UI mock-ups, not NASA engineering art**, with the naming left open. [[S185]] can
+now say more from evidence: they render **this page**, with the reference's own copy, but with a tab strip and
+gauge plates the reference app does not contain. **They are a redesign of the reference UI** — the same family
+as `assets/figma`, not the same family as the two cutaway JPEGs. ⛔ What [[S185]] cannot establish in-repo is
+**who made them** (C7 forbids going outside the repo for it), and that matters for §1.4 tiering: whether they
+are tier-2 like `Overview.vue`, or something weaker.
+1. **Tell us where they came from**, and the tier follows. *(recommended: it is one sentence from you, and it
+   is the input Q4 actually turns on.)*
+2. **Treat them as tier-2 alongside `Overview.vue`** and move them to `assets/reference/interface/`, keeping
+   the manifest as one file naming both locations — [[S184]] Q2's option (2).
+3. **Leave the naming as it is** — [[S184]] Q2's option (1), which it recommended.
