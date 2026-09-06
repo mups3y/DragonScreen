@@ -19834,13 +19834,60 @@ gives, and Z read as centred. · `build.py test` green · `build.py preview` 119
 module references no `DisplayList` and draws nothing**, which was the line's hard constraint ·
 comment-loss check **0**.
 
-### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **DOING (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
+### S154b [S] Frame 58: the attitude block — ROLL / PITCH / YAW and their rates — **DONE 2026-09-06 — six of QC H-02's twelve baked numbers are live, and the dead-feed patch is the check that matters** — [H10 + QC `H-02`]
 - Six readouts, all live and pre-formatted already: `RollDegText`, `PitchDegText`, `YawDegText`,
   `RollRateText`, `PitchRateText`, `YawRateText`. **Zero new data, zero new model** — `DockingSimPage`
   draws the same fields today.
 - ⚠ QC `H-02`: **8 of the 12 baked numbers contradict live state in the same frame.** These are the worst
   of them, because an attitude readout is what the HUD is for.
 - **DONE when:** the six read live at the mapped boxes, at `MinDesignFor`, with a dead-feed preview.
+
+#### ⭐ DONE 2026-09-06 — and the line's own promise held: zero new data, zero new model
+
+All six fields were already published and already formatted, and `DockingSimPage` draws the same six —
+so this is a DRAWING change and the two surfaces cannot disagree about the vehicle's attitude (C7.1).
+The block is patched and redrawn through `Frame58Hud.Readout`, at `Typography.MinDesignFor`, centred on
+the ink boxes [[S154a]] measured.
+
+⚠ **The colour split is the drawing's own and was checked, not matched by eye:** the values are green
+`#1FE327` and the rates cyan `#20FBFD`, and those are `DragonPalette.Go` and `.Accent` **exactly** —
+pinned by reconstructing both from their hex, so a near-miss fails.
+
+#### ⛔ THE CHECK THAT MATTERS IS THE PATCH ON A **DEAD** FEED
+
+Drawing live text over a raster has a failure mode that a normal liveness check cannot see. With no
+value there is nothing to draw, so the obvious implementation returns early — **and leaves the BAKED
+number showing.** The page would then print a confident attitude *at the exact moment it has none*,
+which is strictly worse than a blank because it looks right. That is `E4` ([[S147]]) applied to a raster
+instead of to a string.
+⭐ So the patch is counted on **both** renders, and `frame58_hud_nofeed.png` exists to show it: **six
+dashes, no baked numbers.**
+
+#### ⚠ TWO OF SEVEN MUTATIONS SURVIVED THE FIRST VERSION, AND BOTH WERE MY CHECKS BEING TOO LOOSE
+
+- **`X2` — deleting `Patch` entirely left the suite GREEN.** The patch counter asked "is there a
+  Background rect covering this box", and `Build`'s opening `dl.Rect(0, 0, w, h, Background)` covers
+  every box on the frame. ⛔ **A check that any covering rect exists is a check that the page has a
+  background.** The rect must now also be BOUNDED to the box it claims to patch.
+- **`X7` — anchoring every readout at its box's TOP instead of its centre also passed**, because the
+  placement check only tested `x`. That walks all six numbers upward by half the difference between the
+  baked size and the floor — about 11 design px — and nothing noticed. The `y` is checked now.
+
+⭐ **Both are the same lesson this run keeps meeting**: a check that cannot distinguish the defect from
+the correct render is not a check, and only running the mutation shows which one you wrote.
+
+#### Verified
+
+- `python plugin/build.py test` → **ALL SUITES PASSED**. New suite **`Frame58AttitudeTest`, 42 checks**.
+- **7 mutations, 7 killed**, every kill attributed to `Frame58AttitudeTest` — including the two above
+  after the checks were tightened, and `X5` (drawing at the baked 26 px), which is killed by
+  [[S165]]'s ratchet as well: *"Hud gained text below even the static floor — baseline 2, now 8"*.
+- **`previewdiff`: 6 existing pages changed, 1 new, 0 removed** — the five `frame58_hud*` renders plus
+  `ui_hud.png`, and the new `frame58_hud_nofeed.png`.
+- **PNGs inspected**, and the one tight spot **measured rather than eyeballed**: the pitch rate's cyan
+  ink ends at design **x 2256** and the vertical `PITCH` label starts at **2270** — **14 design px
+  clear**, with zero cyan pixels at or past the label.
+- No `install`, no glass, no `git push`. §14.4(a) untouched — this block reads and commands nothing.
 
 ### S154c [S] Frame 58: the translation block — X / Y / Z, RANGE, RATE, ACCELERATION — **TODO (UNBLOCKED 2026-09-06 by [[S154a]]; boxes are in `Frame58Map`)** — [H10 + QC `H-02`]
 - `OffXText`, `OffYText`, `OffZText`, `RangeText`, `RateText`, `AccelPosText` — again all live and drawn

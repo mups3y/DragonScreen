@@ -942,6 +942,25 @@ public static class PreviewMain
                                   + ", CAMERA " + Frame58Controls.CameraText(ps));
                 ps.HudTimerSeconds = 0.0;
             }
+
+            // ---- S154b: THE DEAD FEED, WHICH IS THE HALF A LIVE RENDER CANNOT SHOW ----------------
+            // ⛔ The six attitude readouts are drawn OVER baked ink, so the failure mode this render
+            // exists to catch is specific and invisible everywhere else: if the patch were skipped when
+            // there is no value, the BAKED number would still be showing and the page would print a
+            // confident attitude at the exact moment it has none. That is worse than a blank, and it is
+            // the `E4` rule ([[S147]]) applied to a raster rather than to a string.
+            // ⚠ So what this picture has to show is SIX DASHES, not six absences.
+            {
+                PageState dead = ps;
+                dead.Valid = false;
+                dead.Steps.NoseConeOpen = false;
+                DisplayList hdl = new DisplayList(Frame58Hud.Commands + 60);
+                Frame58Hud.Build(hdl, CW, CH, dead);
+                string path = Path.Combine(outDir, "frame58_hud_nofeed.png");
+                Render(hdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl.Count
+                                  + " commands   no feed: the six attitude readouts must all dash");
+            }
             ps.Steps.NoseConeOpen = savedNose;
         }
 

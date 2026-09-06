@@ -51,6 +51,7 @@ namespace DragonScreen
             // the vessel, the snapshot or the reference — see `Frame58Controls`' header. The baked row
             // is correct, and redrawing a correct constant would only add a way to get it wrong.
             DrawBottomRow(dl, w, ox, sc, s);
+            DrawAttitudeBlock(dl, w, ox, sc, s);
             DrawAlertActivity(dl, w, ox, sc, s);
 
             // "MANUAL DOCKING" entry in the letterbox margin (screen-space, so it never overlaps the
@@ -125,6 +126,69 @@ namespace DragonScreen
             dl.Text(Frame58Controls.TimerText(s.HudTimerSeconds),
                     ox + (TimerPatchX0 + TimerPatchX1) * 0.5f * sc, ty * sc, live * sc,
                     TextAlign.Centre, DragonPalette.White);
+        }
+
+        /// <summary>
+        /// ⭐ [[S154b]] / QC `H-02` / H10: THE ATTITUDE BLOCK, LIVE.
+        ///
+        /// ⛔ WHAT WAS WRONG, AND WHY IT IS THE WORST OF THE TWELVE. QC `H-02` found that 8 of the 12
+        /// baked numbers on this frame contradict live state IN THE SAME FRAME. Six of them are here —
+        /// ROLL / PITCH / YAW and their rates — and an attitude readout contradicting the vehicle's
+        /// actual attitude is the single worst case on a page whose whole job is attitude. The bowl
+        /// beside them has been live since T5; the numbers under it were a picture of someone else's
+        /// docking.
+        ///
+        /// ⭐ ZERO NEW DATA AND ZERO NEW MODEL. All six fields are already published and already
+        /// pre-formatted, and `DockingSimPage` draws the same six today — so this is a DRAWING change,
+        /// not a telemetry one, and the two surfaces cannot disagree about the vehicle's attitude
+        /// because they read the same fields (C7.1).
+        ///
+        /// ⚠ THE COLOUR SPLIT IS THE DRAWING'S OWN, and it is how value was told from rate when
+        /// [[S154a]] measured the boxes: the values are green (`#1FE327`) and the rates cyan
+        /// (`#20FBFD`). Those are `DragonPalette.Go` and `DragonPalette.Accent` EXACTLY — checked, not
+        /// approximated — so the live text lands in the frame's own two inks.
+        ///
+        /// ⛔ AND THE BAKED INK IS COVERED FIRST. `Patch` erases each box in the ground it sits on,
+        /// which S154a measured as flat `DragonPalette.Background` over every one of them. Drawing over
+        /// baked ink without erasing it is how you get two numbers in one box, which is worse than
+        /// either.
+        /// </summary>
+        static void DrawAttitudeBlock(DisplayList dl, int w, float ox, float sc, PageState s)
+        {
+            // The floor, in this frame's design units — the same call `DrawBottomRow` uses, and for the
+            // same reason: the row clears [[S153]]'s legibility floor by construction rather than by
+            // matching whatever size the export happened to bake (which was ~26 design px, 54 %).
+            float live = Typography.MinDesignFor(w, sc);
+
+            Readout(dl, ox, sc, live, Frame58Map.RollValue,  s.Valid ? s.RollDegText   : null, DragonPalette.Go);
+            Readout(dl, ox, sc, live, Frame58Map.PitchValue, s.Valid ? s.PitchDegText  : null, DragonPalette.Go);
+            Readout(dl, ox, sc, live, Frame58Map.YawValue,   s.Valid ? s.YawDegText    : null, DragonPalette.Go);
+            Readout(dl, ox, sc, live, Frame58Map.RollRate,   s.Valid ? s.RollRateText  : null, DragonPalette.Accent);
+            Readout(dl, ox, sc, live, Frame58Map.PitchRate,  s.Valid ? s.PitchRateText : null, DragonPalette.Accent);
+            Readout(dl, ox, sc, live, Frame58Map.YawRate,    s.Valid ? s.YawRateText   : null, DragonPalette.Accent);
+        }
+
+        /// <summary>
+        /// One baked box replaced by one live value, centred where the baked ink was.
+        ///
+        /// ⚠ A NULL OR EMPTY VALUE DRAWS THE DASH, DIMMED — and it still PATCHES first, which is the
+        /// part that is easy to get wrong. Skipping the patch on a dead feed would leave the baked
+        /// number showing, so the page would print a confident attitude exactly when it has none. That
+        /// is the [[S147]] rule (`E4`: never state a value the vehicle has not supplied) applied to a
+        /// raster instead of to a string.
+        ///
+        /// ⚠ CENTRED ON THE BOX'S OWN CENTRE, not hung from its top-left: the box is an INK bounding
+        /// box (see `Frame58Map`'s header), so its centre is where the number looked centred in the
+        /// export, and the replacement is a different size. Anchoring at the top would walk every value
+        /// upward by half the size difference.
+        /// </summary>
+        static void Readout(DisplayList dl, float ox, float sc, float size,
+                            Frame58Map.Box b, string text, Rgba ink)
+        {
+            Patch(dl, ox, sc, b);
+            bool have = !string.IsNullOrEmpty(text);
+            dl.Text(have ? text : Dashes.None, ox + b.Cx * sc, (b.Cy - size * 0.5f) * sc, size * sc,
+                    TextAlign.Centre, have ? ink : DragonPalette.Text6);
         }
 
         /// <summary>Reused across frames - the draw path allocates nothing.</summary>

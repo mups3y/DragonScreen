@@ -341,6 +341,12 @@ public static class TestMain
         // column was one literal on eight rows; this proves it is computed, and pins the two rows that
         // dash BY DESIGN for most of a mission in both directions - dash while coasting, countdown
         // during a burn - which is the only shape that can tell a computed dash from a printed one.
+        // S154b / QC H-02: Frame 58's six attitude readouts, drawn live OVER their baked ink. The
+        // sharp check is the PATCH COUNT on a DEAD feed - a version that returns early when there is
+        // no value leaves the baked number showing, so the page prints a confident attitude at the
+        // exact moment it has none.
+        bad += Suite(Frame58AttitudeTest.Run);
+
         bad += Suite(MarginColumnTest.Run);
 
         bad += Suite(MechHostTest.Run);
