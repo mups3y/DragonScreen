@@ -4727,7 +4727,7 @@ crew still poll before the transfer *(recommended for flight 1)*; (2) hold the p
 is inside 7.5 km, which means the chain runs in `Phasing` and contradicts §B12.3; (3) re-word the gate.
 ⛔ **(2) changes the plan and needs the owner (C1.12 / G10).**
 
-### T20 [O] Docking hand-off + speedLimit ladder — **TODO**
+### T20 [O] Docking hand-off + speedLimit ladder — **DOING**
 - **Read:** §B10.3 / §B14.  **DONE when:** dock in-sim.
 
 ### T21 [O] Deorbit/entry/chutes + abort wiring — **TODO**
