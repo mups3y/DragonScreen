@@ -166,6 +166,10 @@ public static class TestMain
         // header for why (S176's two edits each had the mattering mutation survive a suite that
         // derived its expectations from the value under test).
         bad += Suite(VrioGeometryTest.Run);
+        // S185 / unit 3: VehicleOverviewPage's centre block sits on the page centreline. Same rule
+        // as the suite above - every number is a literal, typed from Overview.vue's CSS, the owner's
+        // rendered mock and VehicleSubsystemPage's own capsule x, never read off the page.
+        bad += Suite(VehicleGeometryTest.Run);
         bad += Suite(Frame58MapTest.Run);
         bad += Suite(CoverActsTest.Run);
         bad += Suite(BarEventTest.Run);

@@ -129,6 +129,44 @@ namespace DragonScreen
                 L(T(ChkState[i]), 150, y + 48, 26, sc);
             }
 
+            // ---- S185 / UNIT 3: THE CENTRE BLOCK IS CENTRED ON THE PAGE, BECAUSE EVERY SOURCE SAYS SO ----
+            //
+            // ⛔ WHAT WAS WRONG, MEASURED RATHER THAN ASSERTED. This page's centre block did not sit on
+            // its own centreline and its two halves did not agree with each other either. The four big
+            // gauges ran 1170..2520, centre 1845; the capsule slot ran 1560..2080 and the small gauges
+            // 1230/2410, centre 1820. The page's centreline is 1713 (= RefW/2, the value `C("VEHICLE
+            // OVERVIEW", 1713, …)` on the line above has always used). So the big row sat +132 design
+            // units right of the title above it, the rest sat +107, and the two were 25 units apart.
+            //
+            // ⭐ THREE INDEPENDENT SOURCES PUT ALL OF IT ON THE CENTRELINE, AND THEY WERE CHECKED, NOT
+            // REMEMBERED:
+            //   1. `Overview.vue`'s own CSS — `.circular-progess-menu { left: 50%; transform:
+            //      translate(-50%,-50%) }` and `#dragon-crew { left: 50% }`. This page's declared source
+            //      (see the file header), in-repo at assets/reference/dragon2-ui-assets/.
+            //   2. The owner's rendered mock of THIS page, landed and hashed by [[S184]] at
+            //      `assets/reference/nasa/interface_1950x1260.png`. Measured on the render: the four big
+            //      gauge labels centre at 0.5007 of frame width, the four small ones at 0.4952, the
+            //      capsule at ~0.50, all against a page centreline of 0.5000.
+            //   3. ⭐ OUR OWN SIBLING PAGE. `VehicleSubsystemPage.cs` draws the SAME asset in the SAME
+            //      520x760 slot at `PX(1453)` — slot centre exactly 1713. This page had it at 1560.
+            //      Two pages, one asset, one slot, 107 design units apart; one of them was on the
+            //      centreline and it was not this one.
+            //
+            // ---- WHAT MOVED, AND WHAT DELIBERATELY DID NOT ------------------------------------------
+            // Every x below is the old value minus a single per-group offset that lands the group's own
+            // centre on 1713 — big gauges −132, capsule and small gauges −107. ⛔ NO COORDINATE HERE IS
+            // CHOSEN: the 450-unit big-gauge pitch, the 175/120 radii, the 520x760 slot and the ±590
+            // small-gauge symmetry are all UNCHANGED, and 1453 is the sibling page's own literal. This
+            // is a translation, not a redesign.
+            // ⛔ THE PITCH IS UNTOUCHED ON PURPOSE, and that is a §1.4 refusal rather than an oversight:
+            // the CSS wants a 0.1375-of-width pitch and the mock renders 0.1225, this build draws
+            // 0.1313, and the two sources DISAGREE — so unit 3 kept its own and wrote the disagreement
+            // up (C1.14) instead of picking one. Only the CENTRE is agreed, so only the centre moved.
+            // ⛔ CONNECTIONS and CABIN MICS did NOT move. The reference places them independently
+            // (`.connections-panel { left: 35% }`, `#dragon-main-heading { left: 50% }`), so they are
+            // not part of this group's symmetry, and CABIN MICS' own divergence — both sources centre
+            // it on the page, this build left-aligns it at 1130 — is logged, not smuggled in here.
+            //
             // ---- S104 / QC V-01: THE RING'S COLOUR IS THE MODEL'S VERDICT, NOT A CONSTANT ----
             // These four used to be `Gold, Red, Yellow, Blue` — fixed at any value. The arc's LENGTH was
             // live and its COLOUR was decoration, so CABIN TEMP was alarm-red at 21.8 °C (caution is 30,
@@ -138,16 +176,16 @@ namespace DragonScreen
             // does pass 30. `Alarms.Band` handles both directions, so the low-side pair (PPO2, PRESSURE:
             // caution 2.5/13.0, alarm 2.0/11.0) and the high-side pair (TEMP, CO2) take the one call.
             Rgba GC(Severity sev) => Alarms.GaugeColour(sev, valid);
-            Gauge(1170, 430, 175, F(s.Cabin.Ppo201),
+            Gauge(1038, 430, 175, F(s.Cabin.Ppo201),
                   GC(Alarms.Band(s.Cabin.Ppo2Psia, CabinLimits.Ppo2Caution, CabinLimits.Ppo2Alarm)),
                   "PPO2", T(s.Ppo2Text), "psia");
-            Gauge(1620, 430, 175, F(s.Cabin.CabinTemp01),
+            Gauge(1488, 430, 175, F(s.Cabin.CabinTemp01),
                   GC(Alarms.Band(s.Cabin.CabinTempC, CabinLimits.CabinTempCaution, CabinLimits.CabinTempAlarm)),
                   "CABIN TEMP", T(s.CabinTempText), "°C");
-            Gauge(2070, 430, 175, F(s.Cabin.Press01),
+            Gauge(1938, 430, 175, F(s.Cabin.Press01),
                   GC(Alarms.Band(s.Cabin.PressPsia, CabinLimits.PressCaution, CabinLimits.PressAlarm)),
                   "CABIN PRESSURE", T(s.PressText), "psia");
-            Gauge(2520, 430, 175, F(s.Cabin.Co201),
+            Gauge(2388, 430, 175, F(s.Cabin.Co201),
                   GC(Alarms.Band(s.Cabin.Co2MmHg, CabinLimits.Co2Caution, CabinLimits.Co2Alarm)),
                   "CO2", T(s.Co2Text), "mmHg");
 
@@ -159,11 +197,11 @@ namespace DragonScreen
             // gauge is wired to Loop B's live value (T13a) — so reproducing "LOOP A" on both would show two
             // different temperatures under one label. docs/REFERENCE_PAGES.md already documents this pair
             // as LOOP A / LOOP B. Owner's call (C1.4): label the second gauge "LOOP B".
-            dl.Asset("dragon_crew", PX(1560), PY(760), 520 * sx, 760 * sy, White);
-            Gauge(1230, 900,  120, F(s.Cabin.LoopA01),
+            dl.Asset("dragon_crew", PX(1453), PY(760), 520 * sx, 760 * sy, White);
+            Gauge(1123, 900,  120, F(s.Cabin.LoopA01),
                   GC(Alarms.Band(s.Cabin.LoopAC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm)),
                   "LOOP A", T(s.LoopAText), "°C");
-            Gauge(1230, 1200, 120, F(s.Cabin.LoopB01),
+            Gauge(1123, 1200, 120, F(s.Cabin.LoopB01),
                   GC(Alarms.Band(s.Cabin.LoopBC, CabinLimits.LoopCaution, CabinLimits.LoopAlarm)),
                   "LOOP B", T(s.LoopBText), "°C");
             // Net power is SIGNED — the sign lives in the printed number, the ring shows how hard the
@@ -172,8 +210,8 @@ namespace DragonScreen
             // power — a severity here would mean "discharging faster than X" and no X exists. Accent is
             // this build's "a reading, not a verdict" colour, and inventing a threshold to justify a
             // colour is the defect V-01 removes, not a smaller version of the fix.
-            Gauge(2410, 900,  120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent, "NET PWR1", T(s.NetPwr1Text), "W");
-            Gauge(2410, 1200, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent, "NET PWR2", T(s.NetPwr2Text), "W");
+            Gauge(2303, 900,  120, F(NetPwr01(s.Cabin.NetPwr1W)), Accent, "NET PWR1", T(s.NetPwr1Text), "W");
+            Gauge(2303, 1200, 120, F(NetPwr01(s.Cabin.NetPwr2W)), Accent, "NET PWR2", T(s.NetPwr2Text), "W");
 
             // ---- CONNECTIONS (left of the capsule base) ----
             // S22: "Connected" / "RECORDING" are reference COPY too, same as the checklist above — dash
