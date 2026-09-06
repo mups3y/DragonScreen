@@ -45,7 +45,7 @@ namespace DragonScreen
         /// <summary>The six subsystem sub-tabs that share this template (All + Mech are their own pages).</summary>
         public enum Sub { Crew, Propulsion, Power, Avionics, Gnc, Thermal }
 
-        public const int Commands = 300;
+        public const int Commands = 320;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
 
         /// <summary>The alert list's row buffer, owned here and reused - the draw path allocates
         /// nothing, the same rule `Pages.StepColumn` follows for its own step rows.</summary>
@@ -301,7 +301,8 @@ namespace DragonScreen
             // ---- subsystem tab bar + global bottom bar ----
             VehicleTabBar.Draw(dl, w, h, d.Tab, VehicleTabBar.Severities(s));
             VehicleDeepViewLinks.Draw(dl, w, h);
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Stretch);   // S103: undistorted; S147: CURRENT STATE live;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
         }
 
         // ---- THE FUNCTIONS | ALERTS TOGGLE (T5 drew it, T14 wired it) ----

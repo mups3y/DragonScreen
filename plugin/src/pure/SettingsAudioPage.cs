@@ -25,7 +25,7 @@ namespace DragonScreen
 {
     public static class SettingsAudioPage
     {
-        public const int Commands = 220;
+        public const int Commands = 240;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba Bg     = DragonPalette.Background;
@@ -399,7 +399,8 @@ namespace DragonScreen
             SettingsTabStrip.Draw(dl, w, h, 0);
 
             // ---- bottom status bar (reused) ----
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Stretch);   // S103: undistorted; S147: CURRENT STATE live;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
         }
 
         // =========================================================================================

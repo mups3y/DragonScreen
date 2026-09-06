@@ -18,7 +18,7 @@ namespace DragonScreen
         // carries S132's two patches and two live values, and an ALERT ACTIVITY list of up to twelve
         // rows at two commands each - a label and a value. 20 + 4 + 24 = 48, and the headroom above
         // that is for the list growing rather than for guesswork.
-        public const int Commands = 64;
+        public const int Commands = 84;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         // the light-blue attitude bowl, from the frame metadata (Ellipse 6 centre) — the disc the
@@ -70,7 +70,7 @@ namespace DragonScreen
             MarginAffordance.Draw(dl, w, h, "MANUAL", "DOCKING");
 
             // full-width bottom status bar over the frame so it reaches both edges.
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
 
         /// <summary>

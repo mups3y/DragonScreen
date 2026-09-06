@@ -97,7 +97,7 @@ namespace DragonScreen
         /// <summary>Worst-case commands any page here emits - the Cover's MAP camera view is now the
         /// heaviest (CoverPage.Commands, its ground track a command per segment) - plus the back-chevron
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
-        public const int Commands = 360;
+        public const int Commands = 380;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
 
         public const int PageCount = 35;
 
@@ -122,10 +122,14 @@ namespace DragonScreen
             { UiPage.Cover, UiPage.Hud, UiPage.Vehicle, UiPage.SuitCheck, UiPage.Audio };
 
         /// <summary>Which bottom-bar icon (0..4) a touch hit, or -1. Present on every page.
-        /// Delegates to <see cref="BottomBar.Hit"/> — the same geometry the bar is DRAWN from.</summary>
-        public static int BottomBarHit(float px, float py, int w, int h)
+        /// Delegates to <see cref="BottomBar.Hit"/> — the same geometry the bar is DRAWN from.
+        /// ⭐ S176: TAKES THE PAGE, because the bar's ends now follow the page's own x-map (S172 —
+        /// the owner's "the bottom bar does not go to the edge of the screen as it should"). The fit
+        /// comes from <see cref="BottomBar.FitFor"/>, the same table the page's draw call is checked
+        /// against, so a touch cannot land in a different frame from the icon it aimed at.</summary>
+        public static int BottomBarHit(UiPage page, float px, float py, int w, int h)
         {
-            return BottomBar.Hit(px, py, w, h);
+            return BottomBar.Hit(px, py, w, h, BottomBar.FitFor(page));
         }
 
         static readonly string[] Titles = {
@@ -321,7 +325,7 @@ namespace DragonScreen
         /// WHICH tab is active, which is this file's job.</summary>
         static void BottomBarMarker(DisplayList dl, int w, int h, UiPage page)
         {
-            BottomBar.Marker(dl, w, h, ActiveBarIcon(page));
+            BottomBar.Marker(dl, w, h, ActiveBarIcon(page), BottomBar.FitFor(page));
         }
 
         public static NavHit HitTest(UiPage page, float px, float py, int w, int h)
@@ -329,7 +333,7 @@ namespace DragonScreen
             // Bottom-bar nav is drawn over every page, so it is tested first — the same "chrome first"
             // rule the old ChromeBar followed, so a page control overlapping the bar cannot eat the one
             // touch the crew can always rely on.
-            int bar = BottomBarHit(px, py, w, h);
+            int bar = BottomBarHit(page, px, py, w, h);
             if (bar >= 0) return NavHit.Go(BarTarget[bar]);
 
             // Vehicle page's eight subsystem sub-tabs (All·Crew·Prop·Mech·Power·Avionics·GNC·Thermal)

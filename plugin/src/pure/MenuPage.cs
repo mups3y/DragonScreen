@@ -22,7 +22,7 @@ namespace DragonScreen
 {
     public static class MenuPage
     {
-        public const int Commands = 180;   // background + heading + 28 cards (rect+box+text) + bottom bar
+        public const int Commands = 200;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)   // background + heading + 28 cards (rect+box+text) + bottom bar
         const float RefW = 3427f, RefH = 2112f;
 
         const int Cols = 3;
@@ -118,7 +118,8 @@ namespace DragonScreen
                         SZ(32), TextAlign.Centre, DragonPalette.White);
             }
 
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, BarFit.Stretch);   // S103: undistorted;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
         }
 
         /// <summary>Which entry (an index into Entries) a touch hit, or -1.</summary>

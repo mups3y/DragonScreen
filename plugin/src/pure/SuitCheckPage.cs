@@ -49,7 +49,7 @@ namespace DragonScreen
 {
     public static class SuitCheckPage
     {
-        public const int Commands = 200;
+        public const int Commands = 220;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba Bg     = DragonPalette.Background;
@@ -275,7 +275,8 @@ namespace DragonScreen
             Ico("ic_grid", 2950, 1642, 36, Red); C("HALT SUIT LEAK CHECK", 3155, 1648, 30, White);
 
             // ================= bottom status bar =================
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, BarFit.Stretch);   // S103: undistorted;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
 
             // ================= the run's RESULT popup =================
             // ONE box, two outcomes. The completion box is the photographed one (discovery3) and is

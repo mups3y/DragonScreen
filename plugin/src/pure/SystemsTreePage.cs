@@ -50,7 +50,7 @@ namespace DragonScreen
 {
     public static class SystemsTreePage
     {
-        public const int Commands = 195;   // +1: S56's touch caption
+        public const int Commands = 215;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)   // +1: S56's touch caption
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba Bg     = DragonPalette.Background;
@@ -298,7 +298,7 @@ namespace DragonScreen
             C("TOUCH A POWER OR STRING NODE TO SWITCH IT — THE SAME COMMAND AS THE CONSOLE PLATE",
               MainCX, 1720f, 24, Dim);
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

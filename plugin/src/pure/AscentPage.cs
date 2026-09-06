@@ -37,7 +37,7 @@ namespace DragonScreen
         // + 11 event leaders + 11 event labels + bottom bar.
         // S159 adds 11 event-state markers, one Rect each. MEASURED at 2560x1406 by the preview:
         // 64 commands with a live feed, 53 with none (a dead feed draws no marker at all). 100 stands.
-        public const int Commands = 100;
+        public const int Commands = 120;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         // ---- the F9 + Dragon stack, in design space. Proportions are ours (no photo to measure). ----
@@ -282,7 +282,7 @@ namespace DragonScreen
                 dl.Text(EventText[i], X(CX + hw + 74f), Y(ty), Z(26), TextAlign.Left, label);
             }
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

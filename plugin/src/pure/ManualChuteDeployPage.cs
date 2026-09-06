@@ -37,7 +37,7 @@ namespace DragonScreen
 {
     public static class ManualChuteDeployPage
     {
-        public const int Commands = 320;   // includes the live globe (NavPage.Planet) command load
+        public const int Commands = 340;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)   // includes the live globe (NavPage.Planet) command load
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba White = DragonPalette.White;
@@ -236,7 +236,8 @@ namespace DragonScreen
             // its top. Both pages draw this box; both draw it the same way.
             dl.Box(X(218), Y(216), Wd(218, 1224), Z(1779), St(2), White);
             dl.Asset("rectangle_173", X(0), Y(0), Wd(0, 3427), Z(220), White);
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Split);   // S103: undistorted; S147: CURRENT STATE live;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
 
             // live globe, right of the content panel (identical placement to the Cover)
             float gs = Z(1809);

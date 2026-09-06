@@ -58,7 +58,7 @@ namespace DragonScreen
 {
     public static class DockingSimPage
     {
-        public const int Commands = 200;
+        public const int Commands = 220;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba White  = DragonPalette.White;
@@ -239,7 +239,7 @@ namespace DragonScreen
             // Typography.Min. That is NOT solved here and is not pretended to be: see Q8.
             MarginAffordance.Draw(dl, w, h, "RENDEZVOUS", null);
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
 
         // a rotation/translation control cluster: a plus of direction buttons around a centre magnitude

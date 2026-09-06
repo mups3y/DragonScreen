@@ -36,7 +36,7 @@ namespace DragonScreen
         // NavPage.Orbit's real cost - its Globe() is the same GlobeStrips=64 draw ManualChuteDeployPage
         // already budgets 320 for ("includes the live globe command load") - + the dotted ellipse
         // (72 steps) + apsides + vehicle + chord. Matched to that sibling's headroom.
-        public const int Commands = 320;
+        public const int Commands = 340;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
 
         const float RefW = 3427f, RefH = 2112f;
         const float HCX = 1713f;
@@ -63,7 +63,7 @@ namespace DragonScreen
             NavPage.Orbit(dl, s, X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), true, Typography.ScaleFor(w));
             dl.Box(X(PlotX), Y(PlotY), Z(PlotW), Z(PlotH), St(2), DragonPalette.Hairline);
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
 
         // ---- LEFT icon sub-nav rail ----

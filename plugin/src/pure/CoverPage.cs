@@ -20,7 +20,7 @@ namespace DragonScreen
         // The MAP camera view is the heaviest: its 90-sample ground track is a line command per segment
         // on top of the placed assets, and it measured 258 in the preview at zoom 0 (the Earth view, the
         // old peak, is 231). Headroom over that.
-        public const int Commands = 340;
+        public const int Commands = 360;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         // key | x | y | w | h  — measured asset placements (art/cover/<key>.png)
@@ -471,7 +471,8 @@ namespace DragonScreen
             dl.Box(X(218), Y(216), Wd(218, 1224), Z(1779), St(2), DragonPalette.White);
 
             // bottom status bar (Component 48: bg + CURRENT STATE / POINTING MODE / SPX·TDRS·ISS text) — full width
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Split);   // S103: undistorted; S147: CURRENT STATE live;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
 
             // the camera slot: the LIVE globe, the flat map, or the capsule. Drawn HERE, before the
             // placed assets, so the caption/readouts/bars in the loop below sit over it exactly as the

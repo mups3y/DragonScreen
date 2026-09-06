@@ -14,7 +14,7 @@ namespace DragonScreen
 {
     public static class FigmaFramePage
     {
-        public const int Commands = 8;
+        public const int Commands = 28;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         public static void Build(DisplayList dl, int w, int h, string frameKey)
@@ -25,7 +25,7 @@ namespace DragonScreen
             float dw = RefW * sc, ox = (w - dw) * 0.5f;
             dl.Asset(frameKey, ox, 0f, dw, h, DragonPalette.White);
             // full-width bottom status bar over the top so it reaches both edges
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, BarFit.Frame);   // S103: undistorted, in the design frame
         }
     }
 }

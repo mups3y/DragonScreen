@@ -35,7 +35,7 @@ namespace DragonScreen
 {
     public static class VrioTestPage
     {
-        public const int Commands = 140;
+        public const int Commands = 160;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         static readonly Rgba Bg     = DragonPalette.Background;
@@ -149,7 +149,8 @@ namespace DragonScreen
             L("  disconnected", 2910, 1074, 24, Dim);
 
             // ================= bottom status bar =================
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, BarFit.Stretch);   // S103: undistorted;
+            // S176 / S172: FULL BLEED - the bar takes this page's own x-map, not the letterbox.
         }
     }
 }

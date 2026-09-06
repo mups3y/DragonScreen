@@ -61,6 +61,13 @@ public static class AudioGridTest
             DrawCmd c = dl.At(i);
             if (c.Kind != DrawKind.Rect || !Same(c.Colour, DragonPalette.Panel)) continue;
             if (c.B < 1000f * sy) continue;                       // the seat highlight, not the panel
+            // ⭐ S176 — A THIRD Panel-COLOURED RECT NOW EXISTS AND IT IS THE BOTTOM BAR'S GROUND.
+            // The bar stopped being one flattened raster (§14.2a clause (1)) and its ground is a
+            // primitive fill in exactly this colour, at design y 1982 on every page in the build. The
+            // filter above was written when the only two candidates were the panel and the seat
+            // highlight; the bar's body starts below anything this page draws, so it is excluded by
+            // its own top edge rather than by name.
+            if (c.B >= 1982f * sy) continue;                      // the bottom bar, not the panel
             panels++; pL = c.A / sx; pR = (c.A + c.C) / sx; pT = c.B / sy; pB = (c.B + c.D) / sy;
         }
         Check("S134e the audio panel is one rect" + at, panels == 1, "got " + panels);

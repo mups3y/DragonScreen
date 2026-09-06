@@ -69,7 +69,7 @@ namespace DragonScreen
     public static class DeorbitBurnPrepPage
     {
         // background + title + 3 cards (dot+title+lines, card 2 also label/value pairs) + bottom bar.
-        public const int Commands = 80;
+        public const int Commands = 100;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
         const float CardX = 300f, CardW = 2827f;
 
@@ -142,7 +142,7 @@ namespace DragonScreen
                 "1 sec pulses at 30 sec intervals",
                 "State oscillates between Deorbit Burn Prep and Deorbit Burn Settle" }, C3Y, 40f);
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

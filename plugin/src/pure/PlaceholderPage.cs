@@ -28,7 +28,7 @@ namespace DragonScreen
 {
     public static class PlaceholderPage
     {
-        public const int Commands = 24;
+        public const int Commands = 44;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
 
         public static void Build(DisplayList dl, int w, int h, string title)
@@ -53,7 +53,7 @@ namespace DragonScreen
                     w * 0.5f, Y(1178), Z(30), TextAlign.Centre, DragonPalette.Text6);
 
             // bottom status bar (shared chrome)
-            BottomBar.Draw(dl, w, h);   // S103: undistorted, in the design frame
+            BottomBar.Draw(dl, w, h, BarFit.Frame);   // S103: undistorted, in the design frame
         }
     }
 }

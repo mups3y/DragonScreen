@@ -21042,16 +21042,289 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuild the shared bar from the export, and close everything open against it — **DOING** — [unit 1 of the owner's per-page rebuild programme, 2026-09-06]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DONE 2026-09-06 — pending the owner's look** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
 it or as for more edits. Only then do we move onto the next page."* and, closing [[S175]]: *"approved, move
 on to the bottom bar"*. **No other authority is claimed. `install` and glass stay SPENT ([[S171]]);
-preview-only stands.**
+preview-only stands. Nothing here wires a flight control (§14.4(a)).**
 
-**WHY THE BAR IS UNIT 1 AND NOT A PAGE.** It is a shared component drawn on all 35 Figma-era pages
-(`FigmaUI` draws it before the page body; `FigmaUI.HitTest` tests it FIRST). Rebuilding it inside a page
-would rebuild it 34 more times.
+**WHY THE BAR IS UNIT 1 AND NOT A PAGE.** It is a shared component on all 35 `UiPage` values — `FigmaUI`
+draws it under every page and `FigmaUI.HitTest` tests it FIRST. Rebuilding it inside a page would rebuild
+it 34 more times.
 
-*(Step A — the gathered backlog — is written below before any code, per the unit prompt.)*
+---
+
+## STEP A — THE GATHERED BACKLOG, AND THE CLOSURE CRITERION FOR EACH
+
+⛔ **The backlog is indexed by finding ID, not by page, so this list was built by hand from all four
+sources before any code was written.** Every item below was walked at Step C.
+
+| # | source | item | closure criterion |
+|---|---|---|---|
+| 1 | `REGISTER.md` | **[[S172]] [O] TODO** — *"the bottom bar does not go to the edge of the screen as it should"* / *"all pages have the bottom bar problem"* (owner, 2026-09-06 glass pass) | spread pages reach both edges; letterboxed pages unchanged; nothing stretched; hit map follows |
+| 2 | `REGISTER.md` | **[[S147b]] [S] HELD** — POINTING MODE, the SPX/GND/TDRS/ISS block and the counter have no source | owner rules the comm block + the counter (§1.4); Part B supplies a pointing source |
+| 3 | `REGISTER.md` | **[[S175]]'s "⚠ NOTICED, NOT TOUCHED"** — *"the bottom bar's five nav icons are still the flattened raster"* | §14.2a clause (1): sliced from the export and layered at its own coordinates |
+| 4 | `docs/BACKLOG_RECONCILIATION.md` §3 | **H40** — the bar's live text is baked on every page | `CURRENT STATE` half → [[S147]] **DONE**; remainder → [[S147b]], item 2 |
+| 5 | `docs/BACKLOG_RECONCILIATION.md` §3 | **H45** — a dashed value drawn in the same weight as a live one | [[S148]] **DONE 2026-09-06** |
+| 6 | `docs/BACKLOG_RECONCILIATION.md` §3 | **H7** — the Figma pages had no alarm surface; the bar now carries it | [[S130]] **DONE** — `BottomBar.StateInk` |
+| 7 | `docs/BACKLOG_RECONCILIATION.md` §5 | *(nothing)* — **no remaining QC finding in §5 names the bar** | verified by walking all 36 rows |
+| 8 | `docs/BACKLOG_RECONCILIATION.md` §2 | *(nothing)* — **none of the 17 duplicate pairs involves the bar** | verified row by row; H40 and H45 are not in that table |
+| 9 | `docs/SCREEN_LIVENESS_AUDIT.md` | §1.3's third bullet + **H40**, **H45** (of H1–H45) | as 4 and 5 |
+| 10 | `docs/QC_FINDINGS.md` *(read-only)* | **`C-04`** the 12.2 % stretch · **`C-12`** the white smudge · **`H-07`** two fit strategies, the frame's border through the middle of the bar | all three **CONFIRMED CLOSED** already (`C-04`/`H-07` by [[S103]], `C-12` by [[S175]]) — this unit must not re-open them |
+| 11 | `docs/QC_FINDINGS.md` *(read-only)* | **`Q8`** the letterbox-margin page links (`H-06`, `DK-04`) — coupled, because [[S172]] says *"a coupling this line must not break"* | `MarginAffordance`'s strip must survive |
+| 12 | `docs/QC_FINDINGS.md` *(read-only)* | **`M-01`** — the Menu's 31st card would be drawn under the bar | not the bar's; not in §5's remaining list; untouched here |
+
+---
+
+## STEP B — WHAT WAS BUILT
+
+### 1. ⭐ THE BAR REACHES THE GLASS — [[S172]], the owner's own finding
+
+**The mechanism, and it is [[S172]]'s own prescribed route, not a new one.** `BottomBar` takes a **`BarFit`**
+— `Frame` (letterboxed), `Stretch` (`x*w/RefW`), `Split` (`SplitReflow.X`) — and lays the bar out in the
+page's OWN x-map. ⛔ **ANCHORS take the page's map; SIZES never do.** Every glyph, tile and stroke is drawn
+at the uniform `BottomBar.Scale(h) = h/RefH`, which is what keeps QC `C-04` closed: the fix is emphatically
+NOT "stretch the raster again", and `BottomBar.cs`'s header says so where the S103 paragraph it supersedes
+is kept verbatim.
+
+**Measured at the shipped 2560×1406, from the renders, not from the code:**
+
+| | before | after |
+|---|---|---|
+| `ui_cover.png` bar ground, first and last column | **143 … 2417** | ⭐ **3 … 2557** (the 2 px frame border sits outside that) |
+| pages whose bar reaches both glass edges | **0 of 94** ([[S172]]'s own sweep) | **61 of 96 render variants — every spread page** |
+| letterboxed pages' bar box | 139.3 … 2420.7 | **139.3 … 2420.7, unchanged** |
+
+**Which pages spread and which do not is ONE table** — `BottomBar.FitFor(UiPage)` — because a page that
+passed a fit its hit map disagreed with is the S103 defect in a new coat. **16 page-views spread** (Cover
+and ManualChute by `Split`; Menu, Audio, AudioVideo, SuitCheck, the eight Vehicle pages, VrioTest and its
+alias Procedure by `Stretch`) and **19 letterbox**, counted and asserted.
+
+⛔ **THE LETTERBOXED PAGES KEEP THE LETTERBOX ON PURPOSE, AND THAT IS [[S172]]'S OWN CORRECTED SCOPE.**
+There the bar must end where the frame ART ends or QC `H-07` comes straight back — the frame's own border
+would become a rule through the middle of the page. Whether that ART should letterbox at all is
+**[[S173]]**'s question. Named, not silently left.
+
+⭐ **AND ONE HALF OF [[S172]] WAS ALREADY FIXED BEFORE THIS LINE STARTED — SAY SO RATHER THAN CLAIM IT.**
+S172's *"second defect ... the one that reads as broken"* was the bar's rule sitting **155 px** right of the
+Cover's procedure column divider instead of the reference's 23. **Measured in BOTH renders: the divider is
+at x 1098–1099 and the bar's rule at x 1115 — a 16 px gap — before and after.** [[S174]]'s panel reflow
+(`k = 1.171`) moved the divider and closed that gap on 2026-09-06; this line only had to keep it, and now
+fences it (`the Cover's bar rule continues its column divider`, read from `BottomBar.Rule1X` rather than
+from a copy of it — written with a literal first, and the mutation that moved the constant sailed past it).
+
+### 2. ⭐ THE BAR IS NO LONGER ONE FLATTENED RASTER — §14.2a clause (1), and [[S175]]'s open item
+
+**`component_48.png` is not drawn by anything any more.** It is now the SOURCE that
+`plugin/tools/slice_bottom_bar.py` cuts, and the bar is composed:
+
+| what | how |
+|---|---|
+| ground, the two frame borders, the top and bottom rules, the two vertical rules | **PRIMITIVES** (`DragonPalette.Panel` / `White`, strokes through `Strokes.Px`) |
+| the two rounded frame corners | **TILES** `bar_cap_left` / `bar_cap_right` — the only curves in the bar's chrome |
+| the five nav icons | **TILES** `bar_nav_0..4`, cut at exactly `IconX[i], IconY, IconS` — the same boxes the hit map uses, so the drawn icon and its touch target come from one set of numbers |
+| `CURRENT STATE` and `POINTING MODE` captions, `Sun + GEO`, the SPX/GND/TDRS/ISS block + counter | **TILES**, each at its own measured coordinate |
+| `CURRENT STATE`'s value | **TYPED and LIVE**, unchanged from [[S147]] |
+
+⛔ **THE ELEVEN CUTS ARE MEASURED, AND THE TOOL REFUSES A CUT THAT CLIPS ITS ELEMENT.**
+`slice_bottom_bar.py --verify` prints every cut against the ink bounding box it must contain and exits
+non-zero if a text cut's ink touches its own edge. The measurements: the bar's opaque body is asset rows
+**105..234** (0..104 are transparent but for the two corner arcs); the border is **2 px** at x 0..1 /
+3425..3426 and rows 105..106 / 233..234; the two vertical rules are at **x 1464..1465 and 1943..1944, rows
+121..218**; the ground is **`#111B52` = `DragonPalette.Panel`**, verified byte-exact.
+
+⚠ **TRAP 1 RUN BEFORE ANY ASSET WAS TOUCHED, AS THE PROMPT REQUIRES. ALL ELEVEN TILES ARE GLYPH-BEARING**
+(42–150 distinct opaque colours each; the two caps additionally 82.37 % transparent), so **not one of them
+may be stretched** — and not one is. `EveryTileIsSquareToItsSource` asserts, on the emitted COMMANDS at
+four panel sizes × three fits, that every tile's drawn `w` and `h` equal its cut size × `Scale(h)`.
+
+⭐ **THE CORNER CUT IS 105 ROWS AND 112 WAS TRIED FIRST — the render is the finding.** A cap is drawn
+132×105 source into 88×70 panel px, so a 2-row rule inside it comes out as a **~1.3 px soft band** while the
+primitive rule beside it is a crisp 2 device px. With rows 105–106 inside the tile the two met end-to-end
+and **the seam read as a GAP at the bar's right end** in `ui_cover.png`. Cutting at 105 leaves the tile
+carrying only the curve; the straight rule is one primitive inset by **90 design px** at each end — the
+arc's own feet, measured (row 105's white run is x 90..3336 of 3427).
+
+### 3. ⛔ DRAW, HIT AND MARKER MOVED TOGETHER — and the tests are the proof, not the claim
+
+`Draw`, `Hit` and `Marker` all take the same `BarFit`; `FigmaUI.BottomBarHit` now takes the **page** and
+resolves it through `BottomBar.FitFor`. **`BarFollowsItsPage` renders EVERY `UiPage` through
+`FigmaUI.Build`, finds the `bar_nav_0` tile the page ACTUALLY drew, and asserts that tile's own centre is
+a hit on icon 0** — the draw and the hit map checked against each other per page, by measurement, rather
+than by both reading the same constant.
+
+---
+
+## ⛔ AND WHILE MOVING THE PROBES, SEVEN TEST SITES WERE FOUND TESTING NOTHING — THEY WERE ALREADY BROKEN
+
+`FigmaUINavTest` carried **seven** hand-written copies of `bcx = (46f + 40f) / RefW * W` — the **stretched**
+mapping [[S103]] removed from the draw in 2026-09-05, left behind here. Two defects, and either one alone
+hides the other:
+
+1. **The probe missed the bar.** At 1280×703 it lands at **x 32.1**, against a letterboxed page's icon box
+   of **85.0..111.6**. It had not been touching the bar since S103.
+2. **The assertion could not tell.** Every one read `.Target == UiPage.Cover` — and **`NavHit.None`'s
+   `Target` IS `UiPage.Cover`**, so a MISS passed.
+
+So `Rendezvous`, `DeorbitBurnPrep`, `EntryProcedure`, `SystemsTree`, `SystemsPid`, `Ascent`, `NavOrbitPlot`,
+`ManualChute` and `Docking` all had a green "bottom-bar → Cover" check that proved nothing. All are now
+probed through `IconCentre(page, …)` — one helper, reading the page's own fit — and assert an actual
+`NavAct.Goto`. ⭐ **This is the S103 header's own warning happening for real, and it is written into the
+test beside each site rather than only here.**
+
+---
+
+## STEP C — THE STEP-A LIST, WALKED
+
+| # | item | outcome |
+|---|---|---|
+| 1 | **[[S172]]** | ✅ **CLOSED.** Spread pages 3..2557 at 2560 (was 143..2417), verified per page by pixel and by `BarReachesTheGlass`; letterboxed pages byte-identical in geometry; rule/divider gap 16 px, fenced. ⚠ Its clause *"the eleven letterboxed pages are UNCHANGED"* is met; its corrected clause *"there is no page where the bar reaches the glass"* is met for the 16 spread page-views and **deliberately not for the 19 letterboxed ones — that is [[S173]]'s question and is named, not dropped.** |
+| 2 | **[[S147b]]** | ⛔ **STILL HELD, blocker unchanged and NOT touched.** POINTING MODE needs a Part-B pointing source; the comm block and the counter need the owner's §1.4 ruling (C1.14's (2)/(3)). What DID change: each is now its own tile at its own coordinate, so wiring any one of them is a local change to `BottomBar.cs` rather than an edit to a shared 3427-px PNG. |
+| 3 | **[[S175]]'s noticed-not-touched** | ✅ **CLOSED.** The five nav icons are `bar_nav_0..4`, sliced at `IconX/IconY/IconS` and layered; `EveryTileIsSquareToItsSource` and the `component_48` ban keep them that way. |
+| 4 | **H40** | Half **CLOSED** by [[S147]] (unchanged here); remainder = item 2, **HELD**. |
+| 5 | **H45** | ✅ already **DONE** by [[S148]]; the bar's dash still draws `Text6`, verified in `StateInk` and in `ui_menu.png`. |
+| 6 | **H7** | ✅ already **DONE** by [[S130]]; `StateInk` untouched, `CoverAlarmTest` green (its `BarOf` now names `BarFit.Frame`). |
+| 7 | §5 | ✅ nothing to do — no remaining QC finding names the bar. |
+| 8 | §2 | ✅ nothing to do — the bar is in none of the 17 duplicate pairs, so nothing here is a second fix of one defect. |
+| 9 | §1.3 / H40 / H45 | as 4 and 5. |
+| 10 | **`C-04` `C-12` `H-07`** | ✅ **NOT RE-OPENED, and proven rather than asserted.** `C-04`: no tile is stretched at any of 12 size×fit combinations, and `bar_nav_0` is asserted square on every page. `H-07`: the letterboxed bar still sits exactly in the design frame. `C-12`: `component_48.png` untouched. |
+| 11 | **`Q8` / `MarginAffordance`** | ✅ **COUPLING INTACT.** Both margin links live on `Hud` and `Docking`, which are `BarFit.Frame`; their letterbox is untouched and `MarginAffordance` was not edited. `Q8` itself is unchanged and remains the owner's. |
+| 12 | **`M-01`** | untouched — not the bar's, and not in §5's remaining list. |
+
+⚠ **AND ONE THING THIS UNIT FOUND AND DID NOT FIX (C1.1, logged below as [[S177]]):** the reference's
+Frame 67 has the page's white border running the **whole height** of the page; ours is drawn only by the
+bar, so on the spread pages the corner arc curves up and stops. It reads as a rounded page corner and looks
+right, but it is not the reference's construction, and completing it is a PAGE-frame job, not the bar's.
+
+---
+
+## STEP D — VERIFICATION
+
+- **`python plugin/build.py test` → ALL SUITES PASSED.** **20 977 checks, 0 failed**, across 58 suites.
+  S167 harness fault check ok (*"fault named, exit 1, all 128 clean report lines still present"*);
+  `previewdiff` selftest green; `SELFTEST OK — 13 sections, 416 report lines`.
+- **The R-01 census is UNMOVED: `856 below the floor, 0 page(s) regressed, 0 improved`** — the bar adds no
+  new text draw, so nothing was smuggled under the floor by this rebuild.
+- **`python plugin/build.py previewdiff` ([[S168]], clean-checkout baseline): 96 existing pages changed,
+  0 new, 0 removed, of 125 compared.**
+- ⭐ **THE CHANGED LIST WAS CONFIRMED BY EXCLUSION AND BY PIXEL.** Reproducing the baseline in my own
+  worktree **with the gitignored input dirs mirrored** (the S130/S175 failure mode) and diffing page by
+  page: **every changed pixel on all 96 pages is inside the bar's own rows, y 1251..1406, and nowhere else.
+  Exactly two bounding boxes exist in the whole set** — `(0, 1251, 2560, 1406)` on **61** pages (the spread
+  ones, now full-bleed) and `(139, 1251, 2422, 1406)` on **35** (the letterboxed ones, changed only INSIDE
+  the design-frame box they already occupied). **Zero pages differ above y 1251.**
+- **The 29 unchanged pages are exactly the ones that do not draw this bar** — the legacy pre-Figma
+  `page0_`…`page4_` screens (they draw `ChromeBar`), the four `panel_*` command-panel renders,
+  `abort_overlay`, `page_docking_central`, `page_gallery`, `ui_turntable_sheet`. Same set as [[S175]]'s.
+- **A letterboxed page's change is RE-COMPOSITION, not relocation, and that was checked visually too:**
+  `ui_hud.png` before/after stacked shows every element in the same place, the top rule crisper.
+- **8 MUTATIONS, 8 KILLED — 0 compile errors and 0 crash lines on every one, so every kill came from the
+  suite under test and not from a fault above it ([[S167]]):**
+
+  | | mutation | killed by |
+  |---|---|---|
+  | M1 | the Cover reverts to the letterboxed bar | `Cover: the drawn icon's own centre is a hit on icon 0 — drawn at 169.9..223.2, hit 2` |
+  | M2 | `Hit` goes back to `bw / RefW` as "the scale" | 13 FAILs across Stretch and Split |
+  | M3 | a nav icon is sized by the bar box, not uniformly | `bar_nav_0 is drawn at its own scale in x — w 29.88, want 26.63` (QC `C-04`, put back) |
+  | M4 | the flattened raster comes back | `the bar no longer draws the flattened component` (§14.2a clause (1)) |
+  | M5 | the border stroke goes back to a float | `the Cover's rules are whole device pixels — got 0.6657, 1, 2` |
+  | M6 | the bar rule stops continuing the column divider | `gap 245.3 px` |
+  | M7 | `FitFor` letterboxes the two SPLIT pages | `16 page-views spread, 19 letterbox — 14 spread, 21 letterboxed` |
+  | M8 | the top rule runs into the rounded corners | `the bar's left corner stays rounded — a white rect covers the corner at x 84.6` |
+
+  ⚠ **M8 SURVIVED THE FIRST RUN AND THAT IS WHY THE CHECK EXISTS.** Squaring off both corners of every page
+  in the build failed nothing. `TheCornersStayRounded` was written for it, asserts the property of the
+  RENDER (no white rect may cover the corner region on the rule's own row) rather than repeating the
+  arithmetic, and kills it at all 12 size×fit combinations.
+- **`python plugin/build.py preview` — 125 pages, no `MISSING art`, no overflow.** The eleven new tiles
+  resolve by key from `art/cover/` in the preview and, by the same generic path, in the game
+  (`ImageStore.ResolveAsset`).
+- **C1.16 / G12 respected: NOTHING WAS DELETED.** `BottomBar.cs`'s S103 paragraph about the letterboxed
+  strips is kept **verbatim** and marked `SUPERSEDED IN PLACE` with the date, the owner's quote and the
+  measurement; `Rect`'s no-clamp block, the S118 note and the S175 marker block are all kept and only
+  ADDED to; `BottomBarUndistorted`'s two original checks are kept and still prove the Frame case, with the
+  reason its `bw/RefW` premise is now fit-specific written beside them; `BarValue`'s *"nothing else in the
+  bar is DRAWN text"* note is kept and turned into a finding.
+- `install` and glass **SPENT** ([[S171]]) and not touched. **No `git push`.** `docs/BUILD_PLAN.md`
+  untouched (guarded, G10). `docs/QC_FINDINGS.md` untouched (QC's). §14.4(a) untouched — no flight control
+  is wired anywhere in this change.
+
+**DECLARED OUTPUTS — the commit is exactly these paths:** `plugin/src/pure/BottomBar.cs` ·
+`plugin/src/pure/FigmaUI.cs` · the 21 page files that pass a `BarFit` · `plugin/test/FigmaUINavTest.cs` ·
+`plugin/test/AudioGridTest.cs` · `plugin/test/CoverAlarmTest.cs` · `plugin/tools/slice_bottom_bar.py` ·
+the eleven new `plugin/GameData/DragonScreen/art/cover/bar_*.png` · `REGISTER.md`.
+
+---
+
+## Open questions for the owner
+
+**S176-Q1 — §14.2a clause (1) says the bar's text must be TYPED; the settled type policy says typing it
+makes it 1.7×–2.4× bigger. Which gives way?** *(This is the one thing about this unit that is NOT closed,
+and it is not a build chat's to decide — C1.14's (2)/(3).)*
+
+**Situation.** Clause (1) is explicit: *"Text the export renders as text is TYPED, not imported as pixels —
+only typed text can go live."* Four of the bar's eleven elements are text: the two captions, `Sun + GEO`,
+and the comm/counter block. They are shipped here as **tiles**, at the export's own sizes. The reason is
+arithmetic, and it was measured before the decision was made, not after:
+
+- The export's own type on this bar is **20.3 design px** (captions), **27.5** (SPX / ISS / the counter) and
+  **30.4** (`Sun + GEO`) — derived from measured cap heights of 14 / 19 / 21 px against D-DIN's 0.690
+  cap-height ratio.
+- [[S153]]'s policy (owner, 2026-09-06) puts LIVE content at `MinDesignFor` and permits STATIC REFERENCE at
+  `DenseDesignFor` — **but `Typography.Dense`'s own docstring excludes "anything on the nav bar" in as many
+  words.** So the floor for anything typed on this bar is the GLANCEABLE one: **48.07 design px** at the
+  shipped 2560×1406.
+- That is a **2.37× raise on the captions** and a **1.75× raise on the comm block**, and it re-flows the
+  bar: the right-hand cluster grows 679 → ~930 design px and has to be re-anchored ~250 px left of where
+  the export puts it. It fits (measured: ~117 design px of clear air would remain), so this is not a
+  "cannot", it is a **"should we"**.
+- ⚠ And the part that is not arithmetic: **it would print `22:33` and `79/1450122` — two numbers with no
+  source at all ([[S147b]]) — at the same glanceable size as the live phase.** A floor exists so the crew
+  can read what matters at a glance; spending it on a frozen literal is the opposite of what it is for.
+
+This is **[[S153a]]'s wall**, met on the bar, and **S153a-Q1 is OPEN and governs it** — the same question
+that holds [[S153a]] [[S153b]] [[S153c]] [[S153d]] [[S153e]] and [[S154d]].
+
+1. **Leave the bar's text as tiles until S153a-Q1 is answered — the chat's recommendation.** *Reasoning:* it
+   costs nothing to reverse (the cuts and their coordinates are already measured and in the tool), it keeps
+   the bar looking exactly as the export draws it while the owner is judging the rebuild by eye, and it
+   avoids promoting three sourceless numbers to the legibility floor. The bar's one LIVE value is already
+   typed and already at the floor, so nothing that changes is a picture.
+2. **Type all four now, at `MinDesignFor`, and re-flow the right cluster.** *Reasoning:* clause (1) read
+   literally, and it makes [[S147b]] a one-line change per value once the owner rules. ⚠ Changes the bar's
+   appearance on all 96 render variants and pre-empts S153a-Q1 on one surface.
+3. **Type the two CAPTIONS only** (they are labels, not values, and no source question touches them) and
+   leave `Sun + GEO` and the comm block as tiles. ⚠ **Recommend against:** it produces the worst of both —
+   a 48 px `CURRENT STATE` over a 30 px `Sun + GEO` two cells away, which reads as a mistake rather than a
+   hierarchy.
+
+**Gate flags (C1.12):** none needs `install` or glass. Option 2 and option 3 are **type-scale decisions on a
+shipped surface**, which S153a-Q1 reserves to the owner; a build chat may not take either on its own.
+
+**S176-Q2 — the reference draws the page's border all the way round; we draw only the bar's end of it.**
+Logged as [[S177]] below rather than posed as a blocker, because nothing is wrong on the glass today — the
+arc reads as a rounded page corner. It is here so the owner sees it named while looking at the preview.
+
+⚠ **NOTICED, NOT TOUCHED (C1.1):** `previewdiff` still warns `assets/kenney_ui_scifi` is now EMPTY — the
+same warning [[S174]] and [[S175]] both logged. Untracked reference art, not this line's scope, not
+modified here. Flagged again so it is not lost quietly.
+
+---
+
+### S177 [S] The page frame's white border exists only where the bottom bar draws it — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: fidelity]
+- **The finding.** `assets/figma/frames/Frame 67.png` draws the design frame's 2 px white border around the
+  WHOLE page — up both sides, across the top, and curving into the bottom bar through the two rounded
+  corners. In our build the **only** part of it that is drawn is the part `component_48` carried, i.e. the
+  bar's own top rule, its two side stubs and its two corner arcs. On the spread pages the arc therefore
+  curves up out of the bar and stops.
+- ⚠ **NOT A DEFECT ON THE GLASS TODAY**, which is why it is a log and not a fix: it reads as a rounded page
+  corner, and it is what [[S176]]'s preview was approved or refused on. It is a fidelity gap against the
+  reference's own construction.
+- ⛔ **AND IT IS A PAGE-FRAME JOB, NOT THE BAR'S.** Drawing the border needs each page to own it (the
+  letterboxed pages already get one from their frame raster and must NOT get a second — that is QC `H-07`),
+  so the work belongs with whichever per-page rebuild unit reaches the Cover and the Menu, under §14.2a.
+- **DONE when:** the spread pages draw the design frame's border at their own edges, at the same 2 px
+  through `Strokes.Px`, joining the bar's corner arcs; the letterboxed pages are untouched; and no page
+  ends up with two borders.

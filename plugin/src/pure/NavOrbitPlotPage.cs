@@ -43,7 +43,7 @@ namespace DragonScreen
         // Commands=320 already covers a full Orbit call including its live Globe(), matched here
         // since this page's plot well is the same order of size) + colour key (2 dots + 2 labels)
         // + 3 readout rows (label+value each) + bottom bar.
-        public const int Commands = 340;
+        public const int Commands = 360;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
 
         const float RefW = 3427f, RefH = 2112f;
         const float PlotX = 380f, PlotY = 180f, PlotW = 2667f, PlotH = 1670f;
@@ -180,7 +180,7 @@ namespace DragonScreen
             Row("RATE", s.Valid && s.HasTarget ? s.RateText : Dashes.None, rowY + 44f);
             Row("RANGE", s.Valid && s.HasTarget ? s.RangeText : Dashes.None, rowY + 88f);
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

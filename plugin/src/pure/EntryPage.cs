@@ -32,7 +32,7 @@ namespace DragonScreen
     public static class EntryPage
     {
         // background + title + 1 card (dot+title+lines) + bottom bar.
-        public const int Commands = 40;
+        public const int Commands = 60;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
         const float RefW = 3427f, RefH = 2112f;
         const float CardX = 300f, CardW = 2827f;
 
@@ -120,7 +120,7 @@ namespace DragonScreen
                     s.MainsReleased },
                 C1Y, 40f);
 
-            BottomBar.Draw(dl, w, h, s);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
+            BottomBar.Draw(dl, w, h, s, BarFit.Frame);   // S103: undistorted, in the design frame; S147: CURRENT STATE live
         }
     }
 }

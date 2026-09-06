@@ -122,11 +122,12 @@ public static class FigmaUINavTest
             // S103: derived from BottomBar, not a third hardcoded copy of the stretched mapping -
             // this probe silently stopped landing on the bar when the draw was un-stretched, which is
             // exactly the drift the shared geometry exists to prevent.
-            float bbx, bby, bbw, bbh;
-            BottomBar.Rect(W, H, out bbx, out bby, out bbw, out bbh);
-            float bk = bbw / RefW;
-            float bcx = bbx + (BottomBar.IconX[0] + BottomBar.IconS * 0.5f) * bk;
-            float bcy = bby + (BottomBar.IconY - 1877f + BottomBar.IconS * 0.5f) * bk;
+            // ⭐ S176 — AND THIS PROBE MOVED WITH THE DRAW, WHICH IS THE POINT. The Menu is a
+            // SPREAD page, so its bar reaches both glass edges and its first icon is ~109 px left of
+            // where the letterboxed bar put it at 2560. A probe that kept the old number would have
+            // gone on testing an empty strip. The centre comes from the page's OWN fit.
+            float bcx, bcy;
+            IconCentre(UiPage.Menu, 0, W, H, out bcx, out bcy);
             NavHit back = FigmaUI.HitTest(UiPage.Menu, bcx, bcy, W, H);
             Check("menu bottom-bar -> Cover (back)",
                   back.Act == NavAct.Goto && back.Target == UiPage.Cover, "got " + back.Act + " " + back.Target);
@@ -243,9 +244,19 @@ public static class FigmaUINavTest
         Check("Docking margin -> Rendezvous", toRdv.Act == NavAct.Goto && toRdv.Target == UiPage.Rendezvous,
               "got " + toRdv.Act + " " + toRdv.Target);
 
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        // *** S176 - THE PROBE AND THE ASSERTION WERE BOTH WRONG, AND HAD BEEN SINCE S103.
+        // `(46+40)/RefW*W` is the STRETCHED mapping S103 removed from the draw, left behind here as a
+        // hand-written copy; at 1280x703 it lands at x 32.1 against this page's icon box of
+        // 85.0..111.6, so it had been missing the bar entirely. It passed because `.Target ==
+        // UiPage.Cover` is ALSO what a MISS returns - `NavHit.None`'s Target is `UiPage.Cover`. The
+        // probe now comes from `IconCentre`, which reads the page's own fit, and the assertion
+        // requires an actual `Goto`.
+        float bcx, bcy;
+        IconCentre(UiPage.Rendezvous, 0, W, H, out bcx, out bcy);
+        NavHit toCover = FigmaUI.HitTest(UiPage.Rendezvous, bcx, bcy, W, H);
         Check("Rendezvous bottom-bar -> Cover",
-              FigmaUI.HitTest(UiPage.Rendezvous, bcx, bcy, W, H).Target == UiPage.Cover, "");
+              toCover.Act == NavAct.Goto && toCover.Target == UiPage.Cover,
+              "got " + toCover.Act + " " + toCover.Target);
 
         // Menu (every page but itself) must have picked the new page up automatically.
         bool sawIt = false;
@@ -269,10 +280,19 @@ public static class FigmaUINavTest
         // T7: reached only via the Menu grid for now (its natural phase-rail entry point is T14's
         // job - see FigmaUI's DeorbitBurnPrep enum comment). Carries the bottom bar like every page,
         // and the reconstructed content cards are display-only (no invented destinations).
-        float sc = (float)H / RefH;
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        // *** S176 - THE PROBE AND THE ASSERTION WERE BOTH WRONG, AND HAD BEEN SINCE S103.
+        // `(46+40)/RefW*W` is the STRETCHED mapping S103 removed from the draw, left behind here as a
+        // hand-written copy; at 1280x703 it lands at x 32.1 against this page's icon box of
+        // 85.0..111.6, so it had been missing the bar entirely. It passed because `.Target ==
+        // UiPage.Cover` is ALSO what a MISS returns - `NavHit.None`'s Target is `UiPage.Cover`. The
+        // probe now comes from `IconCentre`, which reads the page's own fit, and the assertion
+        // requires an actual `Goto`.
+        float bcx, bcy;
+        IconCentre(UiPage.DeorbitBurnPrep, 0, W, H, out bcx, out bcy);
+        NavHit toCover = FigmaUI.HitTest(UiPage.DeorbitBurnPrep, bcx, bcy, W, H);
         Check("DeorbitBurnPrep bottom-bar -> Cover",
-              FigmaUI.HitTest(UiPage.DeorbitBurnPrep, bcx, bcy, W, H).Target == UiPage.Cover, "");
+              toCover.Act == NavAct.Goto && toCover.Target == UiPage.Cover,
+              "got " + toCover.Act + " " + toCover.Target);
 
         bool sawIt = false;
         for (int i = 0; i < MenuPage.Entries.Length; i++)
@@ -291,10 +311,19 @@ public static class FigmaUINavTest
         // natural nav entry point is T14's job), carries the bottom bar, and its one reconstructed
         // content card is display-only (no invented destinations). Distinct from the unrelated
         // UiPage.Entry (14) - see FigmaUI's EntryProcedure enum comment.
-        float sc = (float)H / RefH;
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        // *** S176 - THE PROBE AND THE ASSERTION WERE BOTH WRONG, AND HAD BEEN SINCE S103.
+        // `(46+40)/RefW*W` is the STRETCHED mapping S103 removed from the draw, left behind here as a
+        // hand-written copy; at 1280x703 it lands at x 32.1 against this page's icon box of
+        // 85.0..111.6, so it had been missing the bar entirely. It passed because `.Target ==
+        // UiPage.Cover` is ALSO what a MISS returns - `NavHit.None`'s Target is `UiPage.Cover`. The
+        // probe now comes from `IconCentre`, which reads the page's own fit, and the assertion
+        // requires an actual `Goto`.
+        float bcx, bcy;
+        IconCentre(UiPage.EntryProcedure, 0, W, H, out bcx, out bcy);
+        NavHit toCover = FigmaUI.HitTest(UiPage.EntryProcedure, bcx, bcy, W, H);
         Check("EntryProcedure bottom-bar -> Cover",
-              FigmaUI.HitTest(UiPage.EntryProcedure, bcx, bcy, W, H).Target == UiPage.Cover, "");
+              toCover.Act == NavAct.Goto && toCover.Target == UiPage.Cover,
+              "got " + toCover.Act + " " + toCover.Target);
 
         bool sawIt = false;
         for (int i = 0; i < MenuPage.Entries.Length; i++)
@@ -312,13 +341,23 @@ public static class FigmaUINavTest
         // deliberately NOT VehicleTabBar tabs (that strip's eight tabs are confirmed-real, C1.4), so a
         // touch where the tab strip sits on a REAL vehicle page must stay inert here.
         float sc = (float)H / RefH;
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        // *** S176 - THE PROBE AND THE ASSERTION WERE BOTH WRONG, AND HAD BEEN SINCE S103.
+        // `(46+40)/RefW*W` is the STRETCHED mapping S103 removed from the draw, left behind here as a
+        // hand-written copy; at 1280x703 it lands at x 32.1 against this page's icon box of
+        // 85.0..111.6, so it had been missing the bar entirely. It passed because `.Target ==
+        // UiPage.Cover` is ALSO what a MISS returns - `NavHit.None`'s Target is `UiPage.Cover`. The
+        // probe now comes from `IconCentre`, which reads the page's own fit, and the assertion
+        // requires an actual `Goto`.
         float tabX = VehicleTabBar.CentreX(4) / RefW * W, tabY = 1812f * sc;
 
         foreach (UiPage p in new[] { UiPage.SystemsTree, UiPage.SystemsPid })
         {
+            float bcx, bcy;
+            IconCentre(p, 0, W, H, out bcx, out bcy);
+            NavHit toCover = FigmaUI.HitTest(p, bcx, bcy, W, H);
             Check(p + " bottom-bar -> Cover",
-                  FigmaUI.HitTest(p, bcx, bcy, W, H).Target == UiPage.Cover, "");
+                  toCover.Act == NavAct.Goto && toCover.Target == UiPage.Cover,
+                  "got " + toCover.Act + " " + toCover.Target);
 
             bool sawIt = false;
             for (int i = 0; i < MenuPage.Entries.Length; i++) if (MenuPage.Entries[i] == p) sawIt = true;
@@ -379,10 +418,19 @@ public static class FigmaUINavTest
         // T12: same reachability footing as DeorbitBurnPrep (T7) / EntryProcedure (T8) - reached only
         // via the Menu grid for now (a real entry point is T14's job), carries the bottom bar, and its
         // reconstructed content (the F9 schematic + event callouts) is display-only.
-        float sc = (float)H / RefH;
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        // *** S176 - THE PROBE AND THE ASSERTION WERE BOTH WRONG, AND HAD BEEN SINCE S103.
+        // `(46+40)/RefW*W` is the STRETCHED mapping S103 removed from the draw, left behind here as a
+        // hand-written copy; at 1280x703 it lands at x 32.1 against this page's icon box of
+        // 85.0..111.6, so it had been missing the bar entirely. It passed because `.Target ==
+        // UiPage.Cover` is ALSO what a MISS returns - `NavHit.None`'s Target is `UiPage.Cover`. The
+        // probe now comes from `IconCentre`, which reads the page's own fit, and the assertion
+        // requires an actual `Goto`.
+        float bcx, bcy;
+        IconCentre(UiPage.Ascent, 0, W, H, out bcx, out bcy);
+        NavHit toCover = FigmaUI.HitTest(UiPage.Ascent, bcx, bcy, W, H);
         Check("Ascent bottom-bar -> Cover",
-              FigmaUI.HitTest(UiPage.Ascent, bcx, bcy, W, H).Target == UiPage.Cover, "");
+              toCover.Act == NavAct.Goto && toCover.Target == UiPage.Cover,
+              "got " + toCover.Act + " " + toCover.Target);
 
         bool sawIt = false;
         for (int i = 0; i < MenuPage.Entries.Length; i++)
@@ -563,10 +611,19 @@ public static class FigmaUINavTest
         // for now (a real entry point is T14's job), carries the bottom bar, and its content (the
         // concentric rings, the shared NavPage.Orbit conic, the colour key, the g/rate readout) is
         // display-only - no invented destinations.
-        float sc = (float)H / RefH;
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
+        // *** S176 - THE PROBE AND THE ASSERTION WERE BOTH WRONG, AND HAD BEEN SINCE S103.
+        // `(46+40)/RefW*W` is the STRETCHED mapping S103 removed from the draw, left behind here as a
+        // hand-written copy; at 1280x703 it lands at x 32.1 against this page's icon box of
+        // 85.0..111.6, so it had been missing the bar entirely. It passed because `.Target ==
+        // UiPage.Cover` is ALSO what a MISS returns - `NavHit.None`'s Target is `UiPage.Cover`. The
+        // probe now comes from `IconCentre`, which reads the page's own fit, and the assertion
+        // requires an actual `Goto`.
+        float bcx, bcy;
+        IconCentre(UiPage.NavOrbitPlot, 0, W, H, out bcx, out bcy);
+        NavHit toCover = FigmaUI.HitTest(UiPage.NavOrbitPlot, bcx, bcy, W, H);
         Check("NavOrbitPlot bottom-bar -> Cover",
-              FigmaUI.HitTest(UiPage.NavOrbitPlot, bcx, bcy, W, H).Target == UiPage.Cover, "");
+              toCover.Act == NavAct.Goto && toCover.Target == UiPage.Cover,
+              "got " + toCover.Act + " " + toCover.Target);
 
         bool sawIt = false;
         for (int i = 0; i < MenuPage.Entries.Length; i++)
@@ -1430,9 +1487,24 @@ public static class FigmaUINavTest
         Check("HUD margin -> Docking", e.Act == NavAct.Goto && e.Target == UiPage.Docking, "got " + e.Act + " " + e.Target);
 
         // Both new pages carry the global bottom bar, so the Cover icon returns from either.
-        float bcx = (46f + 40f) / RefW * W, bcy = (2003f + 40f) * sc;
-        Check("ManualChute bottom-bar -> Cover", FigmaUI.HitTest(UiPage.ManualChute, bcx, bcy, W, H).Target == UiPage.Cover, "");
-        Check("Docking bottom-bar -> Cover", FigmaUI.HitTest(UiPage.Docking, bcx, bcy, W, H).Target == UiPage.Cover, "");
+        // ⛔ TWO DEFECTS FOUND HERE BY S176, AND BOTH WERE ALREADY PRESENT. (1) The probe was
+        // `(46+40)/RefW*W` - a fourth hand-written copy of the STRETCHED mapping S103 removed - and
+        // one x was used for two pages that do not share a map. (2) The assertion was
+        // `.Target == UiPage.Cover`, and `NavHit.None`'s Target IS `UiPage.Cover`: a MISS passed this
+        // check. Measured at 1280x703, the Docking probe landed at x 32.1 against an icon box of
+        // 85.0..111.6 - it had been missing the bar entirely and reporting success. Both halves are
+        // fixed together, because either one alone still hides the other.
+        {
+            float mcx, mcy, dkx, dky;
+            IconCentre(UiPage.ManualChute, 0, W, H, out mcx, out mcy);
+            IconCentre(UiPage.Docking, 0, W, H, out dkx, out dky);
+            NavHit mc = FigmaUI.HitTest(UiPage.ManualChute, mcx, mcy, W, H);
+            NavHit dk = FigmaUI.HitTest(UiPage.Docking, dkx, dky, W, H);
+            Check("ManualChute bottom-bar -> Cover",
+                  mc.Act == NavAct.Goto && mc.Target == UiPage.Cover, "got " + mc.Act + " " + mc.Target);
+            Check("Docking bottom-bar -> Cover",
+                  dk.Act == NavAct.Goto && dk.Target == UiPage.Cover, "got " + dk.Act + " " + dk.Target);
+        }
     }
 
     // ---- S107 / QC C-07: THE RAIL AND THE ARROWS MUST AGREE ABOUT WHAT A SLOT DOES ----
@@ -2562,27 +2634,33 @@ public static class FigmaUINavTest
         DisplayList a = BarOf(classifier, VW, VH);
         PageState other = new PageState(); other.Valid = true; other.Phase = "ENTRY INTERFACE";
         DisplayList b = BarOf(other, VW, VH);
-        Check("the bar prints the phase it was given", BarValue(a, VW, VH) == "Orbit",
-              "bar reads \"" + BarValue(a, VW, VH) + "\"");
+        Check("the bar prints the phase it was given", BarValue(a, VW, VH, BarFit.Frame) == "Orbit",
+              "bar reads \"" + BarValue(a, VW, VH, BarFit.Frame) + "\"");
         Check("...and a different phase gives a different bar",
-              BarValue(b, VW, VH) == "ENTRY INTERFACE",
-              "bar reads \"" + BarValue(b, VW, VH) + "\"");
+              BarValue(b, VW, VH, BarFit.Frame) == "ENTRY INTERFACE",
+              "bar reads \"" + BarValue(b, VW, VH, BarFit.Frame) + "\"");
         // ⛔ The frozen sentence is gone from the ART, so it cannot be drawn at all any more.
         Check("the baked sentence is not drawn by any state",
               !Drew(a, "Far Field Pointing Deorbit") && !Drew(b, "Far Field Pointing Deorbit"), "");
 
         DisplayList none = BarOf(blank, VW, VH);
-        Check("with no phase the bar dashes", BarValue(none, VW, VH) == Dashes.None,
-              "bar reads \"" + BarValue(none, VW, VH) + "\"");
+        Check("with no phase the bar dashes", BarValue(none, VW, VH, BarFit.Frame) == Dashes.None,
+              "bar reads \"" + BarValue(none, VW, VH, BarFit.Frame) + "\"");
 
         // ---- 3. GEOMETRY: right-aligned on the erased box, at the glanceable floor --------------
         float sc = (float)VH / 2112f;
         float bx, by, bw, bh;
-        BottomBar.Rect(VW, VH, out bx, out by, out bw, out bh);
-        float k = bw / 3427f;
+        BottomBar.Rect(VW, VH, BarFit.Frame, out bx, out by, out bw, out bh);
+        // ⚠ S176 — `bw / RefW` IS NO LONGER THE DRAW SCALE and this is where that first bites. On a
+        // spread page the box is the whole panel while the glyphs stay at h/RefH; the two agree only
+        // under BarFit.Frame, which is what BarOf renders. `BottomBar.Scale` is the honest form.
+        float k = BottomBar.Scale(VH);
+        // The value hangs off the RULE now, not off the bar's left end - which is the same number
+        // under Frame and the only form that survives the other two fits.
+        float vx = BottomBar.MapX(1464f, VW, VH, BarFit.Frame) - 3f * k;
         Check("the value is right-aligned exactly where the erased box ended",
-              Math.Abs(XOf(a, "Orbit") - (bx + 1461f * k)) < 0.5f,
-              "drawn at " + XOf(a, "Orbit") + ", box right edge " + (bx + 1461f * k));
+              Math.Abs(XOf(a, "Orbit") - vx) < 0.5f,
+              "drawn at " + XOf(a, "Orbit") + ", box right edge " + vx);
         // ⚠ LIVE type, so S153's glanceable floor - the baked value was ~29 design px, 60% of it, and
         // is one of QC R-01's own samples.
         Check("...and at the glanceable floor, not the baked size",
@@ -2613,11 +2691,11 @@ public static class FigmaUINavTest
             if (FigmaUI.IsPlaceholder(up)) continue;
             DisplayList dl = new DisplayList(1200);
             FigmaUI.Build(dl, up, VW, VH, sweepState, MapProjection.Default());
-            bool has = BarValue(dl, VW, VH) == "ENTRY INTERFACE";
+            bool has = BarValue(dl, VW, VH, BottomBar.FitFor(up)) == "ENTRY INTERFACE";
             bool exempt = Array.IndexOf(stateless, up) >= 0;
             if (has) live++; else dashed++;
             if (has == exempt) { wrong++; Console.WriteLine("    S147  " + up + " bar=\""
-                                                            + BarValue(dl, VW, VH) + "\" exempt="
+                                                            + BarValue(dl, VW, VH, BottomBar.FitFor(up)) + "\" exempt="
                                                             + exempt); }
         }
         Check("every page that receives vessel state prints it in the bar; the five that do not, do not",
@@ -2631,17 +2709,25 @@ public static class FigmaUINavTest
     /// page for the phase string and every page that prints the phase for its OWN reasons - the Cover's
     /// ACTIVE PHASE row, for one - passed whatever the bar did. A mutation reverting one page to the
     /// stateless overload went uncaught because of it.</summary>
-    static string BarValue(DisplayList dl, int w, int h)
+    static string BarValue(DisplayList dl, int w, int h, BarFit fit)
     {
         float bx, by, bw, bh;
-        BottomBar.Rect(w, h, out bx, out by, out bw, out bh);
+        BottomBar.Rect(w, h, fit, out bx, out by, out bw, out bh);
         if (bw <= 0f) return null;
-        float k = bw / 3427f;
+        float k = BottomBar.Scale(h);
         // ⚠ The band is generous on purpose. The live value is drawn at `185 - 0.553 * size`,
         // which at the floor size is PNG row 158.4 - a band starting at 160 missed it by 1.6 px
         // and the whole sweep read empty. Nothing else in the bar is DRAWN text (the captions
         // are baked), so a wide band costs nothing.
-        float x = bx + 1461f * k, y0 = by + 110f * k, y1 = by + 225f * k;
+        // ⭐ SUPERSEDED IN PLACE 2026-09-06 (S176) - THE LAST SENTENCE IS STILL TRUE AND IS NOW A
+        // FINDING RATHER THAN A CONVENIENCE. The captions are still not drawn text: §14.2a clause (1)
+        // asks for them TYPED and they are still TILES, because typing them puts them at the nav
+        // bar's glanceable floor (Typography.Dense excludes "anything on the nav bar") - a 2.4x raise
+        // that is S153a-Q1's open owner question. See REGISTER.md S176. If that question is ever
+        // answered YES, this band stops being unambiguous and the search must narrow to the row.
+        // ⚠ AND THE ANCHOR MOVED: the value hangs off the RULE, which is where the page's own column
+        // divider is, so it must be found through the page's own fit and not off the bar's left end.
+        float x = BottomBar.MapX(1464f, w, h, fit) - 3f * k, y0 = by + 110f * k, y1 = by + 225f * k;
         for (int i = 0; i < dl.Count; i++)
         {
             DrawCmd c = dl.At(i);
@@ -2654,8 +2740,22 @@ public static class FigmaUINavTest
     static DisplayList BarOf(PageState s, int w, int h)
     {
         DisplayList dl = new DisplayList(64);
-        BottomBar.Draw(dl, w, h, s);
+        BottomBar.Draw(dl, w, h, s, BarFit.Frame);
         return dl;
+    }
+
+    /// <summary>An icon's DRAWN centre on a given page, through that page's OWN fit (S176).
+    /// ⛔ THE ONE PLACE A PROBE IS COMPUTED. Every bar probe in this file goes through here, so a fit
+    /// change moves the probes with the draw instead of leaving them testing an empty strip - which is
+    /// what the S103 comment above the Menu probe warned about and what S174 saw happen for real.</summary>
+    static void IconCentre(UiPage page, int icon, int w, int h, out float cx, out float cy)
+    {
+        BarFit fit = BottomBar.FitFor(page);
+        float bx, by, bw, bh;
+        BottomBar.Rect(w, h, fit, out bx, out by, out bw, out bh);
+        float k = BottomBar.Scale(h);
+        cx = bx + (BottomBar.IconX[icon] + BottomBar.IconS * 0.5f) * k;
+        cy = by + (BottomBar.IconY - 1877f + BottomBar.IconS * 0.5f) * k;
     }
 
     // ================= S145 / S49 H35: THE RANGE RINGS CARRY A SCALE =================
@@ -3475,47 +3575,56 @@ public static class FigmaUINavTest
         // mapping, hardcoded here as a second copy of what FigmaUI's hit test happened to do. So it
         // proved the hit map agreed with itself and nothing about whether it agreed with the DRAW.
         // Both now read `BottomBar`, which is the one geometry the bar is drawn from (QC C-04/H-07).
-        float bx, by, bw, bh;
-        BottomBar.Rect(W, H, out bx, out by, out bw, out bh);
-        float k = bw / RefW;
         float[] x = BottomBar.IconX;
         const float s = BottomBar.IconS;
         // Must match FigmaUI.BarTarget (from the reference demo: icon N -> panel N).
         UiPage[] want = { UiPage.Cover, UiPage.Hud, UiPage.Vehicle, UiPage.SuitCheck, UiPage.Audio };
 
+        // ⭐ S176: THE PROBE IS PER PAGE NOW, because the bar's ends are. The HUD letterboxes and the
+        // Cover spreads, so one probe cannot serve both any more - and the pair below is the check
+        // that matters: the SAME icon, on two pages with two different maps, still routes.
         for (int i = 0; i < x.Length; i++)
         {
-            float cx = bx + (x[i] + s * 0.5f) * k;
-            float cy = by + (BottomBar.IconY - 1877f + s * 0.5f) * k;
+            float hx, hy, cvx, cvy;
+            IconCentre(UiPage.Hud, i, W, H, out hx, out hy);
+            IconCentre(UiPage.Cover, i, W, H, out cvx, out cvy);
 
-            Check("bar icon " + i + " hittable", FigmaUI.BottomBarHit(cx, cy, W, H) == i,
-                  "got " + FigmaUI.BottomBarHit(cx, cy, W, H));
+            Check("bar icon " + i + " hittable", FigmaUI.BottomBarHit(UiPage.Hud, hx, hy, W, H) == i,
+                  "got " + FigmaUI.BottomBarHit(UiPage.Hud, hx, hy, W, H));
 
             // The bar routes to its target from ANY page — tested here from a sub-page and the hub.
-            NavHit fromSub = FigmaUI.HitTest(UiPage.Hud, cx, cy, W, H);
+            NavHit fromSub = FigmaUI.HitTest(UiPage.Hud, hx, hy, W, H);
             Check("bar icon " + i + " routes (sub-page)",
                   fromSub.Act == NavAct.Goto && fromSub.Target == want[i],
                   "act " + fromSub.Act + " tgt " + fromSub.Target);
 
-            NavHit fromCover = FigmaUI.HitTest(UiPage.Cover, cx, cy, W, H);
+            NavHit fromCover = FigmaUI.HitTest(UiPage.Cover, cvx, cvy, W, H);
             Check("bar icon " + i + " wins over cover controls",
                   fromCover.Act == NavAct.Goto && fromCover.Target == want[i],
                   "act " + fromCover.Act + " tgt " + fromCover.Target);
         }
 
         // Neighbours must not share a hit region (the icon pitch is 128 design px, the icon 80).
-        for (int i = 0; i + 1 < x.Length; i++)
         {
-            float edge = bx + ((x[i] + s) + x[i + 1]) * 0.5f * k;     // midpoint of the gap
-            float cy = by + (BottomBar.IconY - 1877f + s * 0.5f) * k;
-            Check("gap after icon " + i + " hits nothing", FigmaUI.BottomBarHit(edge, cy, W, H) == -1,
-                  "got " + FigmaUI.BottomBarHit(edge, cy, W, H));
+            float bx, by, bw, bh;
+            BottomBar.Rect(W, H, BarFit.Frame, out bx, out by, out bw, out bh);
+            float k = BottomBar.Scale(H);
+            for (int i = 0; i + 1 < x.Length; i++)
+            {
+                float edge = bx + ((x[i] + s) + x[i + 1]) * 0.5f * k;     // midpoint of the gap
+                float cy = by + (BottomBar.IconY - 1877f + s * 0.5f) * k;
+                Check("gap after icon " + i + " hits nothing",
+                      FigmaUI.BottomBarHit(UiPage.Hud, edge, cy, W, H) == -1,
+                      "got " + FigmaUI.BottomBarHit(UiPage.Hud, edge, cy, W, H));
+            }
         }
 
         // A touch above the bar is not a bar hit.
-        Check("above the bar misses", FigmaUI.BottomBarHit(100f, H * 0.5f, W, H) == -1, "");
+        Check("above the bar misses", FigmaUI.BottomBarHit(UiPage.Hud, 100f, H * 0.5f, W, H) == -1, "");
 
         BottomBarUndistorted();
+        BarFollowsItsPage();
+        BarReachesTheGlass();
     }
 
     // ============================================================================================
@@ -3533,13 +3642,14 @@ public static class FigmaUINavTest
         // The shipped screens plus two deliberately different aspects, including one NARROWER than the
         // design (where Rect clamps and there is no letterbox to sit in).
         int[,] sizes = { { 1280, 703 }, { 1280, 710 }, { 2560, 1406 }, { 1000, 800 } };
+        BarFit[] fits = { BarFit.Frame, BarFit.Stretch, BarFit.Split };
         for (int i = 0; i < sizes.GetLength(0); i++)
         {
             int w = sizes[i, 0], h = sizes[i, 1];
             string at = " @" + w + "x" + h;
 
             float bx, by, bw, bh;
-            BottomBar.Rect(w, h, out bx, out by, out bw, out bh);
+            BottomBar.Rect(w, h, BarFit.Frame, out bx, out by, out bw, out bh);
 
             // UNDISTORTED: the bar's own x-scale and y-scale are the same number. This is the whole
             // finding - `bw / RefW` used to be `w / RefW` while `bh / 235` was `h / RefH`.
@@ -3555,16 +3665,217 @@ public static class FigmaUINavTest
                 Check("bar fits the panel" + at, bx >= -0.01f && bx + bw <= w + 0.01f,
                       "x " + bx + " w " + bw);
 
-            // Every icon's DRAWN centre is a hit on ITS OWN index - the draw and the hit map agreeing,
-            // which is what having one geometry is for.
-            float k = bw / RefW;
-            for (int n = 0; n < BottomBar.IconX.Length; n++)
+            // *** SUPERSEDED IN PLACE 2026-09-06 (S176) - THE TWO CHECKS ABOVE ARE STILL EXACTLY
+            // RIGHT FOR BarFit.Frame AND ARE KEPT AS THEY WERE. What has changed is that `bw / RefW`
+            // is no longer "the bar's scale" on the other two fits: a spread bar's BOX is the whole
+            // panel while every glyph in it is still drawn at h/RefH. So the undistorted property is
+            // now asserted where it actually lives - on the emitted COMMANDS - by the sweep below,
+            // and this block keeps proving the letterbox case it was written for.
+            //
+            // THE HEADER'S WARNING STILL STANDS, RE-READ: "A future 'just make the bar reach both
+            // edges again' fails here rather than on the glass." S176 IS that change, and it does not
+            // fail here, because it did not do the thing the fence forbids - it moved the ANCHORS and
+            // left every SIZE at the uniform scale. EveryTileIsSquareToItsSource is the fence for
+            // that, and it is the one a real re-stretch would trip.
+            for (int f = 0; f < fits.Length; f++)
             {
-                float cx = bx + (BottomBar.IconX[n] + BottomBar.IconS * 0.5f) * k;
-                float cy = by + (BottomBar.IconY - 1877f + BottomBar.IconS * 0.5f) * k;
-                Check("icon " + n + " drawn centre hits itself" + at,
-                      BottomBar.Hit(cx, cy, w, h) == n, "got " + BottomBar.Hit(cx, cy, w, h));
+                BarFit fit = fits[f];
+                string atf = at + " " + fit;
+                float k = BottomBar.Scale(h);
+                float fx, fy, fw, fh;
+                BottomBar.Rect(w, h, fit, out fx, out fy, out fw, out fh);
+
+                // Every icon's DRAWN centre is a hit on ITS OWN index - the draw and the hit map
+                // agreeing, which is what having one geometry is for.
+                for (int n = 0; n < BottomBar.IconX.Length; n++)
+                {
+                    float cx = fx + (BottomBar.IconX[n] + BottomBar.IconS * 0.5f) * k;
+                    float cy = fy + (BottomBar.IconY - 1877f + BottomBar.IconS * 0.5f) * k;
+                    Check("icon " + n + " drawn centre hits itself" + atf,
+                          BottomBar.Hit(cx, cy, w, h, fit) == n,
+                          "got " + BottomBar.Hit(cx, cy, w, h, fit));
+                }
+
+                EveryTileIsSquareToItsSource(w, h, fit, atf);
+                TheCornersStayRounded(w, h, fit, atf);
             }
         }
+    }
+
+    // ============================================================================================
+    // S176 / S172 - THE BAR REACHES THE GLASS, AND NOTHING IN IT IS STRETCHED TO GET THERE
+    //
+    // The owner's finding, verbatim (2026-09-06 glass pass): "the bottom bar does not go to the edge
+    // of the screen as it should", then "all pages have the bottom bar problem". The fix moves the
+    // bar's ANCHORS into the page's own x-map and leaves every SIZE at the uniform h/RefH. These
+    // three suites are that sentence, each half asserted where it can actually be measured.
+    // ============================================================================================
+
+    /// <summary>Every tile the bar emits is drawn at the SAME scale in x and y as the box it was cut
+    /// from - the QC C-04 property, asserted on the COMMANDS rather than on a constant, so it holds
+    /// under a fit that deliberately makes the bar's box wider than the design frame.</summary>
+    static void EveryTileIsSquareToItsSource(int w, int h, BarFit fit, string at)
+    {
+        // key -> the cut's own pixel size in component_48 (plugin/tools/slice_bottom_bar.py).
+        string[] keys = { "bar_cap_left", "bar_cap_right", "bar_nav_0", "bar_nav_1", "bar_nav_2",
+                          "bar_nav_3", "bar_nav_4", "bar_label_current_state",
+                          "bar_label_pointing_mode", "bar_value_pointing_mode", "bar_comm_block" };
+        float[,] src = { {132,105},{132,105},{80,80},{80,80},{80,80},{80,80},{80,80},
+                         {158,22},{158,22},{144,30},{686,59} };
+
+        PageState st = new PageState(); st.Valid = true; st.Phase = "ORBIT";
+        DisplayList dl = new DisplayList(64);
+        BottomBar.Draw(dl, w, h, st, fit);
+        float k = BottomBar.Scale(h);
+
+        int found = 0;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            // The flattened raster is GONE - clause (1)'s "never left flattened once its own export
+            // exists". A revert to dl.Asset("component_48", ...) is exactly what this catches.
+            Check("the bar no longer draws the flattened component" + at,
+                  c.AssetKey != "component_48", "");
+            if (c.Kind != DrawKind.Image || c.AssetKey == null) continue;
+            int n = System.Array.IndexOf(keys, c.AssetKey);
+            Check("bar tile is one of the cuts" + at, n >= 0, "stray key " + c.AssetKey);
+            if (n < 0) continue;
+            found++;
+            Check(c.AssetKey + " is drawn at its own scale in x" + at,
+                  System.Math.Abs(c.C - src[n, 0] * k) < 0.01f,
+                  "w " + c.C + ", want " + (src[n, 0] * k));
+            Check(c.AssetKey + " is drawn at its own scale in y" + at,
+                  System.Math.Abs(c.D - src[n, 1] * k) < 0.01f,
+                  "h " + c.D + ", want " + (src[n, 1] * k));
+        }
+        Check("all 11 bar tiles are drawn" + at, found == keys.Length, "found " + found);
+    }
+
+    /// <summary>The frame's bottom corners are ROUNDED, so the straight top rule must stop short of
+    /// them - measured: row 105's white run in the asset is x 90..3336 of 3427, and inside that the
+    /// border is the corner ARC, which is a tile.
+    ///
+    /// ⛔ WRITTEN BECAUSE A MUTATION SURVIVED. Drawing the rule `left..left+bw` instead of insetting it
+    /// by `RuleStart` squares off both corners of every page in the build, and nothing failed. It is
+    /// asserted here as a property of the RENDER - no White rect may cover the corner region on the
+    /// rule's own row - rather than as a repeat of the arithmetic, so a second way of getting it wrong
+    /// is caught too.</summary>
+    static void TheCornersStayRounded(int w, int h, BarFit fit, string at)
+    {
+        PageState st = new PageState(); st.Valid = true; st.Phase = "ORBIT";
+        DisplayList dl = new DisplayList(64);
+        BottomBar.Draw(dl, w, h, st, fit);
+
+        float bx, by, bw, bh;
+        BottomBar.Rect(w, h, fit, out bx, out by, out bw, out bh);
+        float k = BottomBar.Scale(h);
+        // Halfway into the corner region, on the rule's own row: inside the arc, well clear of the
+        // 2 px side border, and exactly where a full-width rule would paint.
+        float probeY = by + 105f * k + 0.5f;
+        float[] probeX = { bx + 45f * k, bx + bw - 45f * k };
+        for (int e = 0; e < 2; e++)
+        {
+            bool painted = false;
+            for (int i = 0; i < dl.Count; i++)
+            {
+                DrawCmd c = dl.At(i);
+                if (c.Kind != DrawKind.Rect) continue;
+                if (c.Colour.R < 0.99f || c.Colour.G < 0.99f || c.Colour.B < 0.99f) continue;
+                if (probeX[e] >= c.A && probeX[e] < c.A + c.C
+                    && probeY >= c.B && probeY < c.B + c.D) painted = true;
+            }
+            Check("the bar's " + (e == 0 ? "left" : "right") + " corner stays rounded" + at,
+                  !painted, "a white rect covers the corner at x " + probeX[e]);
+        }
+    }
+
+    /// <summary>Every page's bar is laid out in that page's OWN map - checked against the tile the
+    /// page ACTUALLY drew, not against the table that decided it. This is the trap the S103 header
+    /// names: draw, hit and marker move together or not at all.</summary>
+    static void BarFollowsItsPage()
+    {
+        const int VW = 2560, VH = 1406;
+        PageState st = new PageState(); st.Valid = true; st.Phase = "ORBIT";
+        foreach (UiPage up in (UiPage[])System.Enum.GetValues(typeof(UiPage)))
+        {
+            DisplayList dl = new DisplayList(1200);
+            FigmaUI.Build(dl, up, VW, VH, st, MapProjection.Default());
+
+            // Find the first nav icon the page drew, and use its own rectangle as the probe.
+            float ix = -1f, iy = -1f, iw = 0f, ih = 0f;
+            for (int i = 0; i < dl.Count; i++)
+            {
+                DrawCmd c = dl.At(i);
+                if (c.Kind == DrawKind.Image && c.AssetKey == "bar_nav_0")
+                { ix = c.A; iy = c.B; iw = c.C; ih = c.D; }
+            }
+            Check(up + ": drew the first nav icon", ix >= 0f, "no bar_nav_0 command");
+            if (ix < 0f) continue;
+
+            Check(up + ": nav icon is square (QC C-04)", System.Math.Abs(iw - ih) < 0.01f,
+                  iw + " x " + ih);
+            Check(up + ": the drawn icon's own centre is a hit on icon 0",
+                  FigmaUI.BottomBarHit(up, ix + iw * 0.5f, iy + ih * 0.5f, VW, VH) == 0,
+                  "drawn at " + ix + ".." + (ix + iw) + ", hit "
+                  + FigmaUI.BottomBarHit(up, ix + iw * 0.5f, iy + ih * 0.5f, VW, VH));
+        }
+    }
+
+    /// <summary>S172's own DONE-when, as arithmetic: the spread pages reach both glass edges, the
+    /// letterboxed ones still agree with their frame art, and the Cover's bar rule lands back on the
+    /// Cover's own column divider.</summary>
+    static void BarReachesTheGlass()
+    {
+        const int VW = 2560, VH = 1406;
+        int spread = 0, boxed = 0;
+        foreach (UiPage up in (UiPage[])System.Enum.GetValues(typeof(UiPage)))
+        {
+            BarFit fit = BottomBar.FitFor(up);
+            float bx, by, bw, bh;
+            BottomBar.Rect(VW, VH, fit, out bx, out by, out bw, out bh);
+            if (fit == BarFit.Frame)
+            {
+                boxed++;
+                // The design frame's own box, where the frame ART is - H-07's fix, unchanged.
+                Check(up + ": letterboxed bar still sits in the design frame",
+                      System.Math.Abs(bx - (VW - 3427f * BottomBar.Scale(VH)) * 0.5f) < 0.01f,
+                      "x " + bx);
+            }
+            else
+            {
+                spread++;
+                Check(up + ": bar reaches the left edge", System.Math.Abs(bx) < 0.01f, "x " + bx);
+                Check(up + ": bar reaches the right edge",
+                      System.Math.Abs(bx + bw - VW) < 0.01f, "right " + (bx + bw));
+            }
+        }
+        // Counted, not asserted loosely: 16 spread page-views against 19 letterboxed ones. If a new
+        // page lands in the wrong half of FitFor, this moves and says so.
+        Check("16 page-views spread, 19 letterbox", spread == 16 && boxed == 19,
+              spread + " spread, " + boxed + " letterboxed");
+
+        // *** S172's SECOND defect, the one that reads as broken: the bar's first rule CONTINUES the
+        // Cover's procedure column divider at design 1441. The reference puts it 23 design px right
+        // of it; ours sat 155 px right because the whole bar carried the letterbox offset.
+        // ⛔ READ FROM THE CONSTANT THE DRAW USES, not from a copy of it. Written with a literal
+        // 1464 first, and the mutation that moved Rule1X sailed straight past this check.
+        float divider = SplitReflow.X(1441f, VW, VH);
+        float rule = BottomBar.MapX(BottomBar.Rule1X, VW, VH, BarFit.Split);
+        Check("the Cover's bar rule continues its column divider",
+              rule - divider > 0f && rule - divider < 20f,
+              "gap " + (rule - divider) + " px (was 155)");
+
+        // CURRENT STATE's clear run, in DESIGN px, on each fit - the run its own docstring quotes.
+        // The longest string the baked art ever showed was 798 design px wide.
+        Console.WriteLine("  note  CURRENT STATE clear run (design px): Frame "
+            + BottomBar.ValueRun(VW, VH, BarFit.Frame).ToString("0")
+            + ", Split " + BottomBar.ValueRun(VW, VH, BarFit.Split).ToString("0")
+            + ", Stretch " + BottomBar.ValueRun(VW, VH, BarFit.Stretch).ToString("0"));
+        Check("the value's clear run never shrinks below the letterbox case",
+              BottomBar.ValueRun(VW, VH, BarFit.Split) >= BottomBar.ValueRun(VW, VH, BarFit.Frame)
+              && BottomBar.ValueRun(VW, VH, BarFit.Stretch) >= BottomBar.ValueRun(VW, VH, BarFit.Frame),
+              "Frame " + BottomBar.ValueRun(VW, VH, BarFit.Frame)
+              + " Split " + BottomBar.ValueRun(VW, VH, BarFit.Split)
+              + " Stretch " + BottomBar.ValueRun(VW, VH, BarFit.Stretch));
     }
 }

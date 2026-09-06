@@ -119,7 +119,7 @@ public static class CoverAlarmTest
     static Rgba StateColour(PageState s)
     {
         DisplayList dl = new DisplayList(64);
-        BottomBar.Draw(dl, W, H, s);
+        BottomBar.Draw(dl, W, H, s, BarFit.Frame);
         for (int i = 0; i < dl.Count; i++)
             if (dl.At(i).Kind == DrawKind.Text) return dl.At(i).Colour;
         return new Rgba(0f, 0f, 0f, 0f);
