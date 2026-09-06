@@ -22381,3 +22381,95 @@ them.
   action; they are gitignored, so no build chat can recover them from the repo) or the manifest is
   marked to say what is no longer held, with the SHA rows kept so a restore can be verified. ⛔ C1.16:
   the manifest is under `docs/` and is **not** to be deleted or trimmed to match.
+
+### S181 [O] UNIT 2a — the VRIO Health LEDs page: geometry and construction from the export — **DOING** — [the overseer's per-page rebuild programme, unit 2; SPLIT per C1.7 — 2b is [[S182]]; §14.2a (G13) + [[S162]]'s ruling]
+- 🟢 **OWNER, 2026-09-07, verbatim:** *"approved, give copy paste prompt for overseer to plan the next page
+  not you"* — closing unit 1 ([[S176]]) and handing the choice of the next page to the overseer. **This unit
+  was planned by the overseer; this chat did not choose the page and does not rewrite the plan.**
+- **Scope: GEOMETRY AND CONSTRUCTION ONLY.** `plugin/src/pure/VrioTestPage.cs`. Liveness, `PageState`,
+  `HitTest` and the VRIO LED model are **[[S182]]** (unit 2b), a separate chat after the owner approves this.
+- ⛔ **TYPE IS OUT OF SCOPE.** [[S153c]] is **HELD** on its own owner question (S153c-Q1) and owns this
+  page's below-floor draws. No text size moves in this unit, up or down; the R-01 census must not regress.
+- ⛔ **`Typography.BarDesign = 29` binds the bottom bar ALONE** ([[S176]] edit 3). Not borrowed here.
+- ⛔ **THE BOTTOM BAR IS DONE AND IS NOT REBUILT** — on this page or any other.
+
+#### STEP A — the per-page backlog list (the first deliverable, built from all four sources)
+
+⚠ **The backlog is indexed by finding ID, not by page**, so this list is assembled rather than looked up.
+
+| # | item | source | what it is | closure criterion | outcome in 2a |
+|---|---|---|---|---|---|
+| 1 | **[[S180]]** | REGISTER | `assets/figma` held 74 files against the manifest's 319 element rows | manifest and directory agree, restore verified against the recorded hashes | ✅ **CLOSED — step 0** |
+| 2 | **[[S162]]** / QC `VT-02` | REGISTER (DONE, unapplied) | ruling: absent tier-1 photographs, take `frame59`'s alignment and layout as a **MARKED tier-2 fill** | the seven elements laid to the frame and **marked tier-2 in the code** | ✅ **APPLIED — step B** |
+| 3 | QC `F-01` | QC_FINDINGS | `Procedure` and `VrioTest` were one screen shipped twice | one screen, one renderer | ✅ **verified still closed** — `FigmaUI.cs` routes both to `VrioTestPage.Build` |
+| 4 | **[[S160]]** | REGISTER | VrioTest inert end to end — no `PageState`, no `HitTest`, no glue branch, no LED model | page takes state, checklist reflects a run, LEDs read a marked micro-sim | ➡ **2b ([[S182]])** |
+| 5 | QC `VT-01` | QC_FINDINGS (part-closed) | tints done; **step tracking blocked on H34** ([[S159]]) | step tracking | ➡ **2b**, and still blocked on H34 |
+| 6 | **H21** | SCREEN_LIVENESS_AUDIT | ⚠ **the SAME defect as `VT-01`** — §2 duplicate pair | — | ➡ **2b. Counted ONCE, not twice** |
+| 7 | **[[S153c]]** | REGISTER (**HELD**) | this page's 37 below-floor text draws | owner answers S153c-Q1 | ⛔ **stays HELD** — type untouched here |
+| 8 | **[[S136]]** | REGISTER (**HELD**) | "`UiPage.Procedure` is a flat image" | — | ✅ **its Procedure half was already closed by [[S110]]**; the Cabin half is a different page. Not redone |
+| 9 | **[[S177]]** | REGISTER | the design frame's 2 px white outer border | the spread pages draw their own border | ⛔ **NOT TAKEN — S177 scopes it to the Cover/Menu units** (C1.1) |
+
+- ⚠ **§2 of `docs/BACKLOG_RECONCILIATION.md` lists 17 duplicate pairs; this page's is `VT-01` ≡ `H21`.**
+  Checked, so the same defect is not fixed twice and closed once.
+
+#### STEP B — what was built, and from what
+
+**§14.2a (G13) clause (1)** — every element present in `assets/figma/elements/procedure_vrio/` is built from
+that export, at its own coordinates, layered; **text the export renders as text is TYPED, not imported as
+pixels**, because only typed text can go live and 2b depends on it.
+**Clause (2)** — an element ABSENT from the export **stays exactly as it is**.
+
+⭐ **THE EXPORT'S OWN GEOMETRY WAS RECOVERED, NOT INFERRED.** The 51 element PNGs are 1:1 crops of a
+3427x2112 frame — which is this page's own `RefW`/`RefH` — so each element's position was found by masked
+FFT correlation against `assets/figma/frames/Frame 59.png` and then **cross-checked against
+`assets/figma/dashboard_ui/Frame 59.svg`'s vector coordinates**. Two independent sources, agreeing to the
+pixel: `Rectangle 178` locates at `(22,26,827,1929)` and `Rectangle 179` at `(889,26,2516,1929)`, and a
+raster scan of the frame puts its panel strokes at exactly `x 22..23 / 847..848 / 889..890 / 3403..3404`.
+**The panel geometry in this file is therefore measured, not chosen.**
+
+#### ⛔ WHAT IS MARKED TIER-2, AND WHY THE MARKING IS NOT OPTIONAL
+
+[[S162]]'s guardrail, in its own words: the ruling applies where tier-1 evidence is **ABSENT**, *"not where
+it is merely inconvenient"*, and **unmarked it silently becomes the §1.4 inversion [[S111]] caught in
+[[S110]]** — a tier-2 source standing in for tier-1 with nothing saying so.
+- **LAYOUT is tier-2 here** and every block carries the mark: the photographs `REAL_SPACEX_SCREENSHOTS/`
+  are **not in this repository** (S162 checked four ways; re-checked this session — still absent).
+- ⭐ **CONTENT stays tier-1 and no string was changed.** `docs/SCREEN_INVENTORY.md` #6 transcribes the
+  steps, the section numbering and the row labels, and that is a verified-real source. The split is
+  therefore exactly the one §1.4 clause (2) describes: tier-1 for WHAT, tier-2 for WHERE.
+
+#### STEP D — verification
+
+- `python plugin/build.py test` green; `previewdiff` against a clean checkout reports **this page only**.
+- ⛔ `install` / glass **NOT** used — spent per [[S171]]; judged on the PNG. No `git push`.
+
+- **DONE when:** the page is rebuilt from the export's own coordinates, the tier-2 fills are marked in the
+  code, the type census has not moved, `previewdiff` shows this page alone, and **the owner has approved the
+  preview**. His approval is recorded verbatim in its own commit, as [[S176]] did.
+
+### S182 [S] UNIT 2b — the VRIO page's liveness: state, touch, and the LED model — **TODO** — [split of unit 2 per C1.7; carries [[S160]] + QC `VT-01` + H21; **starts only after the owner approves [[S181]]**]
+- **Scope.** Everything [[S160]] describes: a `PageState` parameter, a `HitTest`, a `ScreenPainter` branch,
+  the checklist driven by a real step model instead of the literal `bool[]`, and the VRIO health LEDs.
+- ⛔ **C1.15 applies in full** — the deliverable must record a documented search against
+  `docs/reference/INSTALLED_MODS.md` before any micro-sim is written. **TestFlight is installed and models
+  failure/reliability** and must be assessed before anything is invented.
+- ⚠ **`VT-01`'s step-tracking half is blocked on H34** ([[S159]]), and that blocker is unchanged by 2a.
+- ⚠ **2a drew rects but no hit rects.** Every control 2a moved is drawn-only; §14.4(a) honest-no-op stands,
+  and 2a says so on the page rather than leaving a control that looks live and is not.
+- **DONE when:** [[S160]]'s DONE-when is met.
+
+### S183 [S] `assets/figma/` is gitignored, so nothing protects it — and it has now been lost twice — **TODO** — [logged by [[S181]] per C1.1, 2026-09-07; TIER 2: build-input durability]
+- **The finding.** `.gitignore:82` excludes `assets/figma/`. On **2026-09-06** the tree held 337 files; on
+  **2026-09-07** it held **74** — `elements/cover/`, `elements/hud_numerals/`, `dashboard_ui/` and
+  `component_48_variants/` gone entirely, and **29 of `procedure_vrio`'s own 51 elements with them**.
+  ⭐ Recovered in full by [[S181]] step 0 from the seven owner-supplied zips and verified byte-exact against
+  `docs/reference/FIGMA_ELEMENT_EXPORTS.md`. **Nothing was lost in the end. The exposure is the finding.**
+- ⚠ **This is the SECOND such loss.** `assets/kenney_ui_scifi` went empty (run 3) and `previewdiff` has
+  printed that warning on every run since; [[S174]], [[S175]] and [[S176]] each logged it and none owned it.
+- ⛔ **NOT FIXED HERE, DELIBERATELY.** Changing the ignore rule is a repo-policy change and would commit a
+  third-party design export — a licensing question, not a build one (`.gitignore:82`'s own stated reason is
+  *"exports of the REFERENCE UI's design, not ours to republish"*). **C1.1: logged, not done.**
+- **DONE when:** the owner has decided how these inputs are protected — the options being (a) leave them
+  ignored and treat the manifest's hashes as the recovery contract, which is exactly what just worked;
+  (b) track them, which republishes someone else's design; or (c) keep an out-of-repo backup that the
+  manifest names, so a later chat knows where to look without being told.
