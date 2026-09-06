@@ -443,3 +443,79 @@ can tell whether the copy in its tree is the one this file describes.
 | `Trunk Jettison and Deorbit Burn Enabled.png` | 360 | 59 | `db41531c` |
 | `Union.png` | 1412 | 740 | `be688c4a` |
 | `cabin.png` | 83 | 21 | `b3c43b8e` |
+
+---
+
+# The 2026-09-07 loss, and the restore — written by `S181` (UNIT 2a), step 0
+
+## What was gone
+
+`assets/figma/` is **gitignored** (`.gitignore:82`), so git protected none of it. Measured **337 files on
+2026-09-06**; measured **74 on 2026-09-07**. Four directories had gone entirely —
+
+| directory | manifest rows | present 2026-09-07 |
+|---|---:|---:|
+| `elements/cover/` | 75 | **0** |
+| `elements/hud_numerals/` | 145 | **0** |
+| `dashboard_ui/` | 9 SVGs | **0** |
+| `component_48_variants/` | 5 | **0** |
+| `elements/procedure_vrio/` | 51 | **22** |
+| `elements/settings_displays/` | 48 | 48 |
+| `frames/` | 4 | 4 |
+
+⛔ **AND THE LOSS REACHED FURTHER THAN `S180` RECORDED.** That line says `elements/` held 70 of the
+manifest's rows and names four whole directories. It does not say that **29 of `procedure_vrio`'s own 51
+elements were also gone** — the set was not intact-but-lonely, it was two fifths of a set. The task prompt
+for this unit inherited the same reading and described the surviving 22 as *"the page's whole vocabulary"*.
+⭐ **It is not: the vocabulary is 51**, and the 29 missing ones include every checklist row, every command
+step, all nine rules, both panel rectangles, the tick and ring glyphs and the three button plates — i.e.
+**most of what §14.2a clause (1) obliges this unit to build from.** Had the restore not been done first,
+this page would have been rebuilt from two fifths of its own source without anything saying so.
+
+## The restore, and how it was verified
+
+All seven source zips survived — six in `C:\Users\User\Downloads\`, one on the Desktop. Their contents were
+re-extracted and sorted into this file's own layout. **Every landed file was then checked against the tables
+above: name, pixel size, and md5.**
+
+```
+                    manifest rows   exact match (name + size + md5)   missing   mismatched
+cover                        75                75                        0          0
+procedure_vrio               51                51                        0          0
+hud_numerals                145               145                        0          0
+settings_displays            48                48                        0          0
+                            ---               ---                       ---        ---
+                            319               319                        0          0
+```
+
+**337 files on disk after the restore — the 2026-09-06 count, recovered byte-for-byte.** Also re-landed:
+`dashboard_ui/` (9 SVGs), `frames/` (4, never lost), `component_48_variants/` (the 5 distinct variants).
+
+⚠ **ONE TRAP WORTH RECORDING, BECAUSE IT COST A PASS.** The table at the top of this file says the duplicate
+pairs *"differ only in which navigation tab `Component 48.png` shows as active"*. **For the `cover` pair that
+is not true**: `(2).zip` and `.zip` differ in **36 of their 75 files**, not one. Landing `cover` from `.zip`
+reproduced 39 of the 75 recorded hashes; landing it from `(2).zip` reproduced **75 of 75**. The sizes are
+identical in every case, so the difference is a re-render, not a re-layout — but it is a real difference and
+**`(2).zip` is the twin this manifest was written from.** The `procedure_vrio` pair does behave as described.
+
+## ⭐ `S175-Q1`, `procedure_vrio` half: ANSWERED. It is **Frame 59**, not Frame 66.
+
+`S175-Q1` left three of the four set names *"read off their own contents, not proved against a frame"*, and
+recommended that **the unit that first needs one of those sets establish the mapping and record it here**.
+This is that unit, and the mapping is now proved rather than guessed:
+
+- Every one of the 51 elements was located in `frames/Frame 59.png` by masked FFT correlation. The positions
+  are **mutually coherent** — the five checklist rows fall on a 94 px pitch, the three command-button glyphs
+  sit at a constant +43 px from their own plates — which a false match does not produce.
+- The result was then **cross-checked against `dashboard_ui/Frame 59.svg`'s vector coordinates**, an
+  independent source, and they agree: `Rectangle 177` ↔ `<rect x="328" y="1834" … rotate(-180)>`,
+  `Rectangle 186` ↔ `<rect x="2663" y="398" width="20" height="867">`, the seven 605 px rules ↔ the seven
+  `<line x1="154" x2="759">` elements, and the NEXT plate ↔ `<rect x="982.188" y="1592.19" …>`.
+- A raster scan of `Frame 59.png` puts its panel strokes at `x 22..23 / 847..848 / 889..890 / 3403..3404`,
+  which is exactly where `Rectangle 178` (827×1929) and `Rectangle 179` (2516×1929) locate.
+
+⚠ **The manifest's own guess above — *"`procedure_vrio` is probably Frame 66"* — is WRONG and is superseded
+by this section** (C7.1: marked in place, not deleted). Frame 66 is `CABIN SETTINGS`; the same four probe
+elements score an RMS of 148 / 157 / 70 / 127 against it versus 42 / 44 / 38 / 69 against Frame 59, and its
+best positions are mutually incoherent. **`hud_numerals` and `settings_displays` are still unproved** and
+stay open on `S175-Q1` for the units that reach them.

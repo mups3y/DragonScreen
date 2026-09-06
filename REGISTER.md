@@ -22359,7 +22359,7 @@ them.
   through `Strokes.Px`, joining the bar's corner arcs; the letterboxed pages are untouched; and no page
   ends up with two borders.
 
-### S180 [S] `assets/figma` holds 74 files against a 340-row manifest, and `component_48_variants/` is gone — **TODO** — [logged by [[S176]] edit 3 per C1.1, 2026-09-06; TIER 2: a missing build INPUT]
+### S180 [S] `assets/figma` holds 74 files against a 340-row manifest, and `component_48_variants/` is gone — **DONE 2026-09-07 — restored in full from the seven source zips and verified 319/319 against the manifest's own hashes; and the loss was BIGGER than this line recorded** — [logged by [[S176]] edit 3 per C1.1, 2026-09-06; TIER 2: a missing build INPUT]
 - **The finding.** `docs/reference/FIGMA_ELEMENT_EXPORTS.md` is the in-repo manifest for the Figma
   element exports and carries **340 rows with per-file SHA hashes**. On disk, `assets/figma/` contains
   **74 files** — `elements/` 70 and `frames/` 4 — and the `component_48_variants/` directory named by
@@ -22473,3 +22473,29 @@ it is merely inconvenient"*, and **unmarked it silently becomes the §1.4 invers
   ignored and treat the manifest's hashes as the recovery contract, which is exactly what just worked;
   (b) track them, which republishes someone else's design; or (c) keep an out-of-repo backup that the
   manifest names, so a later chat knows where to look without being told.
+
+#### ✅ DONE 2026-09-07 by [[S181]] step 0 — the first branch of the DONE-when, not the second
+
+The DONE-when offered two ways to close: restore the exports, or mark the manifest to say what is no longer
+held. **The first was met.** All seven source zips survived — six in `Downloads`, one on the Desktop — so the
+restore needed no owner action after all, and no manifest row had to be retired. `docs/reference/
+FIGMA_ELEMENT_EXPORTS.md` carries the full record; the headline is **319 of 319 element rows matching on
+name, pixel size AND md5, 0 missing, 0 mismatched, 337 files on disk = the 2026-09-06 count**.
+
+⛔ **AND THIS LINE UNDERSTATED THE LOSS, WHICH IS THE PART WORTH KEEPING.** It reports `elements/` holding
+70 rows and names four vanished directories. It does not say that **29 of `procedure_vrio`'s own 51 elements
+were gone too** — and that set is the one [[S181]] was about to build a page from. The unit's own prompt
+inherited the same reading and called the surviving 22 *"the page's whole vocabulary"*; the vocabulary is
+**51**, and the missing 29 included every checklist row, every command step, all nine rules, both panel
+rectangles, the tick and ring glyphs and the three button plates. ⭐ **The line's own warning was therefore
+exactly right and arrived one unit early**: *"a per-page rebuild unit that reaches a page whose elements are
+among the missing ones cannot satisfy that clause and would have no way of knowing why."* It reached one.
+
+⭐ **A trap found in the doing, recorded because it cost a pass.** The manifest says the duplicate zip pairs
+*"differ only in which navigation tab `Component 48.png` shows as active"*. For the `cover` pair that is
+false — the two twins differ in **36 of 75 files** — and landing it from the wrong twin reproduced only 39
+of the 75 recorded hashes. Same sizes throughout, so it is a re-render rather than a re-layout, but the
+manifest was written from `(2).zip` and only that twin verifies. Corrected in place per C7.1.
+
+⚠ **The EXPOSURE is not closed and is not this line's** — `assets/figma/` is still gitignored and this is
+the second such loss. Logged separately as **[[S183]]**, which is an owner decision, not a build fix.
