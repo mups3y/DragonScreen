@@ -515,8 +515,14 @@ namespace DragonScreen
 
         /// <summary>Where a line of this type puts its ink centre below the y it is drawn at, as a
         /// fraction of the size. Measured on a render in [[S129]] and reused here rather than
-        /// re-derived — one number, one measurement.</summary>
-        const float InkCentreOfTop = 0.553f;
+        /// re-derived — one number, one measurement.
+        ///
+        /// ➕ S176, 2026-09-06 — ADDED, nothing above changed and NOTHING RENDERS DIFFERENTLY. The
+        /// literal 0.553 moved to `Typography.CapCentreOfTop` when a SECOND call site needed it (the
+        /// Cover's two pills), and this reads it rather than keeping a private copy — "one number,
+        /// one measurement" applied to itself. The value is identical, so every render is
+        /// byte-identical; only the home moved.</summary>
+        const float InkCentreOfTop = Typography.CapCentreOfTop;
 
         /// <summary>The design x where CURRENT STATE's clear run begins — the right edge of the last
         /// nav icon's box. Used only to MEASURE the run in the tests; the draw does not need it.</summary>

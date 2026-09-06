@@ -21042,7 +21042,7 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DONE 2026-09-06 — pending the owner's look** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — the build is done and verified; the unit stays OPEN for the owner's edits (edit 1 landed 2026-09-06; S176-Q2 awaits an `OVERRIDE`)** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
@@ -21312,6 +21312,147 @@ same warning [[S174]] and [[S175]] both logged. Untracked reference art, not thi
 modified here. Flagged again so it is not lost quietly.
 
 ---
+
+---
+
+#### ⭐ EDIT 1 (OWNER, 2026-09-06) — THE TWO PILLS ARE ONE PAIR: NO DASH, ALL CAPS, ONE SIZE, CENTRED
+
+**🟢 OWNER INSTRUCTION, verbatim (C1.12's evidentiary standard):** *"remove the "-" from the pills and
+make both "NEXT VIEW" AND "SETTINGS" all caps, both the same font size as "NEXT VIEW" and centred withing
+the pills"*.
+
+⚠ **THIS IS AN EDIT TO THE OPEN S176 UNIT, NOT A NEW LINE** — the unit prompt's own rule: *"An edit
+request is not a new task and needs no new register line — this line is still open."* It is on the COVER,
+not the bar, because that is the page the preview was showing.
+
+**⛔ ONE OF THE FOUR THINGS ASKED FOR WAS ALREADY TRUE, AND SAYING SO MATTERS.** `settings.png` was opened
+before anything was changed: **the baked asset already reads "SETTINGS" in caps.** No reference copy was
+edited (§1.4) — the word is untouched. What changed is that it stopped being a *picture* of the word.
+
+**⭐ AND IT HAD TO BECOME TEXT TO BE OBEYED AT ALL.** `settings` is a **140×37 raster**. It cannot be
+re-sized to match NEXT VIEW or re-centred without stretching a glyph-bearing PNG — which is QC `C-04`, the
+defect this whole unit exists downstream of. Typing it is also exactly what **§14.2a clause (1)** asks for
+(*"text the export renders as text is TYPED, not imported as pixels"*), **so this closes that clause for
+this element** — the first element in the build where it has been closed rather than deferred.
+
+**WHAT CHANGED, precisely:**
+
+| | before | after |
+|---|---|---|
+| SETTINGS' dash | `ic_sharp_subtract`, a 56×56 baked asset | **gone** (skipped in the asset loop) |
+| SETTINGS' word | `settings`, a 140×37 baked raster | **typed**, `TextAlign.Centre` |
+| NEXT VIEW's dash | `dl.Rect(…, Strokes.Px(6, sc), …)` | **gone** |
+| NEXT VIEW's label | left-aligned at `px + Z(102)` | **typed, centred** |
+| both sizes | 50 design px (NEXT VIEW) vs a fixed 37-px-tall raster (SETTINGS) | **both `Typography.LiveDesign(50, w, sc)`** |
+| the pill itself | `rectangle_174`, export art | **unchanged — still the export's own art** |
+
+⭐ **ONE FUNCTION DRAWS BOTH (`CoverPage.PillLabel`), AND THAT IS THE POINT.** The owner asked for two
+properties that are only checkable if the two share code — *the same size* and *both centred*. They were a
+primitive and a raster maintained apart, which is precisely how "the same size" stops being true without
+anyone noticing; `MarginAffordance`'s header is the record of where that ends.
+
+**⛔ THE DEPARTURE FROM THE EXPORT, STATED PLAINLY RATHER THAN BURIED.** Frame 67 draws `— SETTINGS`. The
+dash is an element **PRESENT in the export** and it has been removed on the owner's instruction above.
+§14.2a clause (2) does not cover this (that clause governs elements ABSENT from the export); this is a
+§14.2a clause (1) conformance departure, authorised by the owner in this chat and recorded here and in
+`CoverPage.cs` with his words. **No build-chat judgement was applied to it.**
+
+**MEASURED IN THE RENDER, NOT JUDGED BY EYE** (`ui_cover.png` @2560×1406):
+
+| | NEXT VIEW | SETTINGS |
+|---|---:|---:|
+| cap height | **23 px** | **23 px** ← the same size, measured |
+| ink width | 176 px | 160 px (ratio 1.10 vs the font's own 1.11) |
+| offset from its pill's centre, x | **+0.8 px** | **−0.7 px** |
+| offset from its pill's centre, y | **+0.1 px** | **+0.1 px** |
+
+And it fits with room, measured off the font rather than the eye: D-DIN advance at 50 design px is
+**206.2** for `SETTINGS` and **229.5** for `NEXT VIEW`, in a **401**-px pill — 97 and 86 design px of clear
+air each side.
+
+**⭐ A THIRD COPY OF A MEASURED CONSTANT WAS ABOUT TO BE BORN, AND WAS NOT.** Centring a label vertically
+needs "how far below the text y does the cap centre fall" — `0.553`, measured on a render in [[S129]] and
+until now a private `const` in `BottomBar`. It is now **`Typography.CapCentreOfTop`**, with its provenance,
+and `BottomBar` reads it (identical value, so **every bar render is byte-identical** — confirmed: the
+previewdiff below touches no page that is not a Cover). ⚠ `CoverPage.PadButton` centres with a
+**fourth** figure, `0.45f`, which was never measured; unifying it moves the NavEarth cluster's labels, so
+it is **LOGGED as [[S178]]** rather than changed in passing (C1.1).
+
+#### Verified (edit 1)
+
+- **`python plugin/build.py test` → ALL SUITES PASSED.** New suite in `CoverActsTest`
+  (**`TheTwoPillsAreOnePair`**, 90 checks in that file, was 66) reading the RENDER at both shipped widths:
+  both labels are Text commands, the same size, at their pills' centres in x and y, the dash assets and
+  the baked word are absent, the NEXT VIEW pill's interior holds no white primitive, and `rectangle_174`
+  is still drawn from the export.
+- **The R-01 census is UNMOVED: `856 below the floor, 0 regressed, 0 improved`.** The typed labels are at
+  50 design px = 33.3 panel px against a floor of 32, so nothing new sits under it.
+- **`previewdiff`: 23 changed, 0 new, 0 removed, of 125** — every one a Cover variant, which is the only
+  page with these pills.
+- ⭐ **AND ALL 23 SHARE ONE BOUNDING BOX: `(1001, 1230, 2486, 1259)`** — 29 px tall, spanning exactly the
+  two pills' label band. **Nothing else on the Cover moved by a pixel.**
+- **7 MUTATIONS, 7 KILLED**, 0 compile errors and 0 crash lines on every one ([[S167]]):
+
+  | | mutation | killed by |
+  |---|---|---|
+  | P1 | SETTINGS goes back to the baked raster | `the SETTINGS pill's dash is gone` |
+  | P2 | the two labels stop sharing a size | `both pills' labels are the same size — NEXT VIEW 33.29, SETTINGS 32` |
+  | P3 | a label is left-aligned again | `NEXT VIEW is centred horizontally in its pill` |
+  | P4 | the vertical centre is guessed (`0.45`) not measured | `cap centre 622.66, pill centre 620.95` |
+  | P5 | NEXT VIEW's dash comes back | `the Cover's rules are whole device pixels — got 1, 2` |
+  | P6 | the label size drops to 30 | `it is NEXT VIEW's own 50 design px` |
+  | P7 | `CapCentreOfTop` is "tidied" to 0.5 | `CapCentreOfTop is still the 0.553 that was MEASURED in S129` |
+
+  ⚠ **P6 AND P7 SURVIVED THE FIRST RUN, AND BOTH SURVIVORS WERE REAL GAPS.** **P6**: lowering
+  `PillLabelSize` to 30 changed nothing detectable, because `Typography.LiveDesign` lifts it back to the
+  floor and the two labels stay equal to each other on the way down — the size the owner NAMED was
+  unguarded, and is now pinned at 50 design px. **P7**: the centring check computed its expected centre
+  from `CapCentreOfTop` itself, so it agreed with any value — a tautology. The constant is now pinned to
+  its measurement in `LegibilityFloorTest`, beside `Typography.Min`, for the same reason and with the same
+  argument.
+- ⚠ **ONE EXISTING EXPECTATION MOVED AND IT IS NOT A WEAKENING.** `LegibilityFloorTest`'s Cover
+  thin-rect sets went `"1, 2"` → `"1"` and `"2, 4"` → `"2"`. The 2/4 member **was** NEXT VIEW's dash. The
+  set is smaller because the page has one fewer rule, not because a rule stopped being a whole device
+  pixel — and the doubling relation the check exists for still holds exactly. Written into the check.
+- **C1.16 / G12: nothing deleted.** QC `C-03`'s whole block in `DrawCameraChrome` — the 110-px inset
+  argument and its R-02 addendum — is kept **verbatim** and marked `SUPERSEDED IN PLACE`, because its
+  second half is still exactly why the size is 50 and that size is now what BOTH pills take.
+- `install` and glass **SPENT**; no `git push`; `docs/BUILD_PLAN.md` and `docs/QC_FINDINGS.md` untouched;
+  §14.4(a) untouched.
+
+#### ⛔ STILL UNANSWERED FROM THIS UNIT — re-posed rather than dropped
+
+**S176-Q2 (was the NEXT VIEW placement) — NOT ACTIONED, AWAITING `OVERRIDE`.** The owner asked, verbatim:
+*"move next view button to above the setting button"*. It was **not built**, for two measured reasons put
+to him with two rendered mocks:
+1. It reverses a **recorded owner decision** — `NextViewRect`'s header carries his own 2026-09-05 words,
+   *"next button should also be moved to look like it belongs"* / *"I like well balanced layouts"* — which
+   is why the pill mirrors SETTINGS at the other end of the slot, and which closed QC `C-13`. **C1.8
+   requires an explicit `OVERRIDE`.**
+2. The space directly above SETTINGS is **occupied**: the CAMERA / heading caption sits at design y
+   1718–1779, immediately above SETTINGS' 1810–1921. Above that there is a clear band, design y
+   **1361–1727**, before the globe's disc.
+
+Two placements were rendered and shown: **A** — pill at design y 1667 with the CAMERA caption moved up to
+1577 (two elements move); **B** — pill at design y 1567, above the caption, nothing else moves. **Neither
+is committed.** ⚠ Either way the left end of the camera slot goes empty, which is the balance `S105` filled.
+
+**S176-Q1 (the bar's typed text vs the nav-bar floor) is UNCHANGED and still open** — see above.
+
+---
+
+### S178 [S] Four ways to centre a label vertically, and only one of them was measured — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: consistency]
+- **The finding.** "How far below a text `y` the cap centre falls, as a fraction of the size" now has a
+  home — `Typography.CapCentreOfTop` = **0.553**, measured on a render in [[S129]] — and [[S176]] moved
+  `BottomBar`'s private copy onto it and used it for the Cover's two pills. **`CoverPage.PadButton` still
+  uses `0.45f`**, and it was never measured; it centres the NavEarth pan/zoom cluster's labels.
+- ⚠ **NOT A DEFECT ANYONE CAN SEE TODAY**, which is why it is a log: 0.45 against 0.553 is 1.0 % of the
+  size, and `PadLabel` is 26 design px, so the labels sit ~0.27 design px high. It is a consistency and
+  provenance problem, not a legibility one.
+- ⛔ **AND IT MOVES A RENDER**, so it is not a free tidy-up: unifying it shifts every cluster label on the
+  Cover's MAP view and must go through `previewdiff` with the changed list confirmed.
+- **DONE when:** every vertical-centring site in `plugin/src/pure/` reads `Typography.CapCentreOfTop`, the
+  render change is bounded and reported, and no second figure survives anywhere (grep-proven).
 
 ### S177 [S] The page frame's white border exists only where the bottom bar draws it — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: fidelity]
 - **The finding.** `assets/figma/frames/Frame 67.png` draws the design frame's 2 px white border around the

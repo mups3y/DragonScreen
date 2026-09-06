@@ -112,8 +112,125 @@ public static class CoverActsTest
               && default(CoverAct).Latch == CoverLatch.None,
               "got " + default(CoverAct).Kind + "/" + default(CoverAct).Latch);
 
+        TheTwoPillsAreOnePair();
+
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (" + actions + " action rows, none of which can command the vehicle)");
         return failures;
     }
+
+    // ============================================================================================
+    // S176 (OWNER, 2026-09-06) - THE TWO PILLS ARE ONE PAIR
+    //
+    // Owner, verbatim: "remove the "-" from the pills and make both "NEXT VIEW" AND "SETTINGS" all
+    // caps, both the same font size as "NEXT VIEW" and centred withing the pills".
+    //
+    // Three claims, and each is only checkable against the RENDER: same size, both centred, no dash.
+    // They were previously a primitive (NEXT VIEW) and a 140x37 raster (SETTINGS) maintained apart,
+    // which is exactly how "the same size" stops being true without anyone noticing.
+    // ============================================================================================
+    static void TheTwoPillsAreOnePair()
+    {
+        int[,] sizes = { { 1280, 703 }, { 2560, 1406 } };
+        for (int i = 0; i < sizes.GetLength(0); i++)
+        {
+            int w = sizes[i, 0], h = sizes[i, 1];
+            string at = " @" + w + "x" + h;
+            float sc = h / 2112f, extra = w - 3427f * sc; if (extra < 0f) extra = 0f;
+
+            DisplayList dl = new DisplayList(CoverPage.Commands + 60);
+            PageState st = new PageState(); st.Valid = true;
+            CoverPage.Build(dl, w, h, st, MapProjection.Default(), 0,
+                            CoverPage.CoverCam.Earth, new TurntableState());
+
+            // The two pill rectangles, from the page's own geometry - NEXT VIEW's is public, and
+            // SETTINGS' is rectangle_174's Box row, which is where the page draws it from.
+            float nx, ny, nw, nh;
+            CoverPage.NextViewRect(w, h, out nx, out ny, out nw, out nh);
+            float sx = 2994f * sc + extra, sy = 1810f * sc, sw = 401f * sc, sh = 111f * sc;
+
+            float[] gotSize = { -1f, -1f };
+            float[] gotCx = { 0f, 0f };
+            float[] gotY = { 0f, 0f };
+            string[] want = { "NEXT VIEW", "SETTINGS" };
+            for (int c = 0; c < dl.Count; c++)
+            {
+                DrawCmd d = dl.At(c);
+                if (d.Kind != DrawKind.Text) continue;
+                for (int n = 0; n < 2; n++)
+                    if (d.Str == want[n]) { gotSize[n] = d.C; gotCx[n] = d.A; gotY[n] = d.B; }
+            }
+
+            Check("NEXT VIEW is drawn as TEXT" + at, gotSize[0] > 0f, "not found");
+            Check("SETTINGS is drawn as TEXT, not the baked raster" + at, gotSize[1] > 0f, "not found");
+            if (gotSize[0] <= 0f || gotSize[1] <= 0f) continue;
+
+            // 1. THE SAME SIZE - the owner's own words, and the reason one helper draws both.
+            Check("both pills' labels are the same size" + at,
+                  Math.Abs(gotSize[0] - gotSize[1]) < 0.001f,
+                  "NEXT VIEW " + gotSize[0] + ", SETTINGS " + gotSize[1]);
+
+            // ...and that size clears the glanceable floor, because these are navigation controls.
+            Check("...and it clears the glanceable floor" + at,
+                  gotSize[0] >= Typography.MinFor(w) - 0.001f,
+                  "size " + gotSize[0] + ", floor " + Typography.MinFor(w));
+
+            // ⛔ AND IT IS NEXT VIEW'S OWN 50 DESIGN PX, WHICH IS WHAT THE OWNER NAMED - "both the
+            // same font size as NEXT VIEW". The floor check above cannot see a drop from 50 to 48.07,
+            // because `Typography.LiveDesign` lifts anything smaller back up to the floor and the two
+            // labels stay equal to each other on the way down. Proven by mutation: lowering the
+            // constant to 30 failed nothing until this line existed.
+            Check("...and it is NEXT VIEW's own 50 design px, the size the owner named" + at,
+                  Math.Abs(gotSize[0] / sc - 50f) < 0.01f,
+                  "design size " + (gotSize[0] / sc));
+
+            // 2. CENTRED, BOTH WAYS. The text is anchored Centre, so its x IS the centre; the y is the
+            // TOP of the line box and the cap centre sits CapCentreOfTop of the size below it.
+            float[] cx = { nx + nw * 0.5f, sx + sw * 0.5f };
+            float[] cy = { ny + nh * 0.5f, sy + sh * 0.5f };
+            for (int n = 0; n < 2; n++)
+            {
+                Check(want[n] + " is centred horizontally in its pill" + at,
+                      Math.Abs(gotCx[n] - cx[n]) < 0.01f,
+                      "drawn at " + gotCx[n] + ", pill centre " + cx[n]);
+                Check(want[n] + " is centred vertically in its pill" + at,
+                      Math.Abs(gotY[n] + gotSize[n] * Typography.CapCentreOfTop - cy[n]) < 0.01f,
+                      "cap centre " + (gotY[n] + gotSize[n] * Typography.CapCentreOfTop)
+                      + ", pill centre " + cy[n]);
+            }
+
+            // 3. NO DASH IN EITHER PILL. SETTINGS' was the `ic_sharp_subtract` asset and NEXT VIEW's
+            // was a Strokes.Px(6) rect; the baked word `settings` went with them.
+            bool dash = false, bakedWord = false;
+            for (int c = 0; c < dl.Count; c++)
+            {
+                DrawCmd d = dl.At(c);
+                if (d.AssetKey == "ic_sharp_subtract") dash = true;
+                if (d.AssetKey == "settings") bakedWord = true;
+            }
+            Check("the SETTINGS pill's dash is gone" + at, !dash, "ic_sharp_subtract still drawn");
+            Check("...and so is its baked word" + at, !bakedWord, "the `settings` raster still drawn");
+            // NEXT VIEW's dash was the only thin white Rect INSIDE its pill; nothing may paint there
+            // now except the pill's own border, which is at the box's edge.
+            int inside = 0;
+            for (int c = 0; c < dl.Count; c++)
+            {
+                DrawCmd d = dl.At(c);
+                if (d.Kind != DrawKind.Rect) continue;
+                if (d.Colour.R < 0.99f || d.Colour.G < 0.99f || d.Colour.B < 0.99f) continue;
+                if (d.A > nx + 8f && d.A + d.C < nx + nw - 8f
+                    && d.B > ny + 8f && d.B + d.D < ny + nh - 8f) inside++;
+            }
+            Check("the NEXT VIEW pill's interior is empty of primitives" + at, inside == 0,
+                  inside + " white rect(s) inside the pill");
+
+            // ⭐ AND THE PILL IS STILL THE EXPORT'S OWN ART. Removing the interior must not remove
+            // rectangle_174 - §14.2a clause (1) keeps the element that IS in the export.
+            bool pillArt = false;
+            for (int c = 0; c < dl.Count; c++)
+                if (dl.At(c).AssetKey == "rectangle_174") pillArt = true;
+            Check("the SETTINGS pill itself is still drawn from the export" + at, pillArt, "");
+        }
+    }
+
 }

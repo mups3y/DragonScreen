@@ -277,6 +277,38 @@ namespace DragonScreen
         // It takes S75's branch rather than a rect because what it would scroll is not settled (C-05).
         static readonly string[] InertKeys = { "gridicons_refresh", "rectangle_182" };
 
+        // ---- ⭐ S176 (OWNER, 2026-09-06): THE TWO PILLS ARE ONE PAIR, AND THEIR LABELS ARE TYPED ----
+        // Owner, verbatim: *"remove the "-" from the pills and make both "NEXT VIEW" AND "SETTINGS"
+        // all caps, both the same font size as "NEXT VIEW" and centred withing the pills"*.
+        //
+        // These two baked assets are the SETTINGS pill's whole interior: `ic_sharp_subtract` is the
+        // dash, and `settings` is the label as a 140x37 PICTURE of the word. Both are skipped now.
+        // `rectangle_174` — the pill itself — is NOT skipped and is still the export's own art.
+        //
+        // ⭐ THE LABEL HAD TO BECOME TEXT TO BE OBEYED AT ALL. It is a 140-px raster, so it cannot be
+        // re-sized to match NEXT VIEW or re-centred without stretching a glyph-bearing PNG, which is
+        // QC `C-04`. Typing it is also what §14.2a clause (1) asks for — *"text the export renders as
+        // text is TYPED, not imported as pixels"* — so this closes that clause for this element.
+        // ⚠ The word is UNCHANGED: the asset already reads "SETTINGS" in caps (verified by opening it),
+        // so no reference copy was edited (§1.4).
+        //
+        // ⛔ AND THE DASH IS A DEPARTURE FROM THE EXPORT, STATED PLAINLY RATHER THAN BURIED. Frame 67
+        // draws `— SETTINGS`, and the dash is gone from both pills on the owner's instruction above.
+        // §14.2a clause (2) does not cover it (that clause is about elements ABSENT from the export);
+        // this is an element PRESENT in the export and removed by owner direction, recorded here and
+        // in REGISTER.md S176 with his words, per C1.12's evidentiary standard.
+        static readonly string[] PillSkipKeys = { "ic_sharp_subtract", "settings" };
+
+        /// <summary>The two pills' shared label size, in design px — NEXT VIEW's own, which the owner
+        /// named as the one both take. Lifted through `Typography.LiveDesign` at the call site so it
+        /// can never fall under the glanceable floor: these are page-navigation controls.</summary>
+        const float PillLabelSize = 50f;
+
+        /// <summary>SETTINGS' pill, read out of Keys/Box rather than re-typed, so the typed label
+        /// cannot drift off the art it sits in if the placement is ever re-measured.</summary>
+        static readonly float SetX = BoxOf("rectangle_174", 0), SetY = BoxOf("rectangle_174", 1);
+        static readonly float SetW = BoxOf("rectangle_174", 2), SetH = BoxOf("rectangle_174", 3);
+
         /// <summary>The tint an inert, un-hit-testable glyph is drawn in. Text6 is the same "nothing
         /// live behind this" tint the dashed readouts use, so the distinction reads at IVA distance
         /// without moving the asset or changing the layout.</summary>
@@ -524,6 +556,8 @@ namespace DragonScreen
                 // S105/C-13: the two TARGET readouts are placed by DrawCameraChrome now, centred on
                 // the slot rather than at their baked x, so the loop never draws them.
                 if (Array.IndexOf(EarthOnlyKeys, k) >= 0) continue;
+                // S176: the SETTINGS pill's dash and its baked word — the label is typed instead.
+                if (Array.IndexOf(PillSkipKeys, k) >= 0) continue;
                 // S75: a glyph in InertKeys is painted but has no hit rect, so it is tinted OUT of this
                 // page's white-glyph-means-button idiom rather than left to imply a touch it cannot take.
                 Rgba tint = (Array.IndexOf(InertKeys, k) >= 0) ? InertTint : DragonPalette.White;
@@ -695,9 +729,26 @@ namespace DragonScreen
             float px, py, pw, ph;
             NextViewRect(w, h, out px, out py, out pw, out ph);
             Pill(dl, px, py, pw, ph, Strokes.Px(2f, sc));
-            // S105/C-03: the dash moves in with the label (36 -> 30) so the cluster stays balanced
-            // inside the pill rather than the label being pushed up against the right border.
-            dl.Rect(px + Z(30f), py + Z(53f), Z(44f), Strokes.Px(6f, sc), DragonPalette.White);
+
+            // ---- ⭐ S176 (OWNER, 2026-09-06): BOTH PILLS ARE A CENTRED LABEL AND NOTHING ELSE ----
+            // Owner, verbatim: *"remove the "-" from the pills and make both "NEXT VIEW" AND
+            // "SETTINGS" all caps, both the same font size as "NEXT VIEW" and centred withing the
+            // pills"*. One helper draws both, so "the same font size" and "centred" cannot be true of
+            // one pill and false of the other — which is what happened when they were a primitive and
+            // a raster maintained apart.
+            PillLabel(dl, w, sc, px, py, pw, ph, "NEXT VIEW");
+            PillLabel(dl, w, sc, X(SetX), Y(SetY), Z(SetW), Z(SetH), "SETTINGS");
+
+            // ⭐ SUPERSEDED IN PLACE 2026-09-06 (S176) — EVERYTHING BELOW THIS LINE, DOWN TO THE
+            // TARGET-READOUT BLOCK, DESCRIBES A LEFT-ALIGNED LABEL SITTING BESIDE A DASH. The label is
+            // CENTRED now and the dash is gone, on the owner's instruction quoted above, so the 110-px
+            // inset the block argues for no longer exists. It is kept in full and unedited because it
+            // is the record of a REAL overrun (QC `C-03`) and of the arithmetic that settled it, and
+            // because its second half — the R-02 verdict that Z(50) clears the floor at BOTH shipped
+            // widths while QC's proposed 37 does not — is still exactly why the size is 50 and is now
+            // the size BOTH pills take. ⛔ The `dl.Rect` that drew NEXT VIEW's dash was removed here;
+            // the SETTINGS pill's own dash is `ic_sharp_subtract`, skipped in the asset loop.
+            //
             // ---- S105 / QC C-03: THE LABEL FITS ITS OWN BUTTON NOW ----
             // It was `Z(130)` in and `Z(53)` tall, and at the shipped 1280x703 that is 96 px of glyph in
             // 90.2 px of room — the pill's right border struck through the final "W" (verified as a real
@@ -724,7 +775,7 @@ namespace DragonScreen
             // "Below Typography.Min = 16" above should now be read as "below the floor, which is 16
             // AT 1280" - the number moved, the verdict did not. Raising the resolution buys crispness,
             // never legibility; Typography's header says so in as many words.
-            dl.Text("NEXT VIEW", px + Z(102f), py + Z(34f), Z(50f), TextAlign.Left, DragonPalette.White);
+            // (the draw itself moved up to PillLabel — see the S176 block above.)
 
             // ---- S105 / QC C-13: THE TWO TARGET READOUTS, SYMMETRIC ABOUT THE GLOBE ----
             // They were placed at their baked design x (2014 and 2361) and then pushed right by the
@@ -815,6 +866,37 @@ namespace DragonScreen
             dl.ArcBand(x + pw - r, cy, r - stroke, r, 0.0, 180.0, DragonPalette.White);
             dl.Rect(x + r, y, pw - 2f * r, stroke, DragonPalette.White);
             dl.Rect(x + r, y + ph - stroke, pw - 2f * r, stroke, DragonPalette.White);
+        }
+
+        /// <summary>
+        /// A pill's label: all caps, one size for both pills, centred in the box both ways.
+        ///
+        /// ⭐ ONE FUNCTION FOR BOTH, WHICH IS THE POINT. The owner asked for two things that are only
+        /// checkable if they share code — the SAME size and BOTH centred. NEXT VIEW was a primitive
+        /// drawn here and SETTINGS was a 140x37 raster placed from the Box table; keeping them equal
+        /// by hand across two mechanisms is the `MarginAffordance` failure, one step to the right.
+        ///
+        /// ⛔ THE SIZE GOES THROUGH `Typography.LiveDesign`, NOT A BARE 50. Both are page-navigation
+        /// controls, so S153's policy puts them at the GLANCEABLE floor; 50 design px is 33.3 panel px
+        /// at the shipped 2560x1406 against a floor of 32, so it clears — but it clears by 4%, and a
+        /// cfg change must lift it rather than silently drop it under. Typography's header states that
+        /// rule twice ("DO NOT WRITE 48 INTO A PAGE").
+        ///
+        /// ⛔ AND THE VERTICAL CENTRE IS MEASURED, NOT GUESSED. `dl.Text`'s y is the TOP of the line
+        /// box; the cap centre sits `Typography.CapCentreOfTop` of the size below it (0.553, measured
+        /// on a render in S129). Both labels therefore sit on the pill's own centre line rather than
+        /// on a hand-tuned offset per pill.
+        ///
+        /// ⚠ IT FITS, MEASURED OFF THE FONT RATHER THAN THE EYE. D-DIN advance widths at 50 design px:
+        /// "SETTINGS" is 206.2 and "NEXT VIEW" is 229.5, in a 401-px pill — 97 and 86 design px of
+        /// clear air each side. Pinned by `CoverActsTest`.
+        /// </summary>
+        static void PillLabel(DisplayList dl, int w, float sc, float x, float y, float pw, float ph,
+                              string label)
+        {
+            float size = Typography.LiveDesign(PillLabelSize, w, sc) * sc;
+            dl.Text(label, x + pw * 0.5f, y + ph * 0.5f - size * Typography.CapCentreOfTop,
+                    size, TextAlign.Centre, DragonPalette.White);
         }
 
         /// <summary>One cluster button: NavEarth's `border: 1px solid white; background: rgba(2,7,56,.75)`

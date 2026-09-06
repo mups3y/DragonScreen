@@ -78,6 +78,16 @@ public static class LegibilityFloorTest
         Eq("Min is still the 16 px that was MEASURED at RefPanelW", Typography.Min, 16f, 0f);
         Eq("RefPanelW is the width it was measured at", Typography.RefPanelW, 1280f, 0f);
 
+        // *** S176 - THE OTHER MEASURED CONSTANT IN THAT FILE, PINNED THE SAME WAY AND FOR THE SAME
+        // REASON. CapCentreOfTop is how far below a text y the CAP CENTRE falls, as a fraction of the
+        // size; 0.553 was measured on a real render in S129 and is what every vertically-centred label
+        // in the build is placed from. It looks like a roundable number and it is not: 0.5 is the
+        // obvious "tidy-up" and it moves every centred label off its box by 1.6% of the size.
+        // A CENTRING check cannot catch that - it computes the expected centre from this same
+        // constant, so it agrees with any value. Only a check against the MEASUREMENT can.
+        Eq("CapCentreOfTop is still the 0.553 that was MEASURED in S129",
+           Typography.CapCentreOfTop, 0.553f, 0f);
+
         // The floor IS the constant at the reference width, and a ratio away from it everywhere else.
         Eq("MinFor(RefPanelW) is exactly Min", Typography.MinFor(Typography.RefPanelW), Typography.Min, 1e-4f);
         Eq("the floor at the shipped 2560 is 32 px", Typography.MinFor(W2), 32f, 1e-4f);
@@ -363,8 +373,14 @@ public static class LegibilityFloorTest
         {
             string thin1 = ThinRectThicknesses(W1, H1);
             string thin2 = ThinRectThicknesses(W2, H2);
-            Check("the Cover's rules are whole device pixels at 1280", thin1 == "1, 2", "got " + thin1);
-            Check("...and exactly twice that at 2560 - one rule, scaled", thin2 == "2, 4", "got " + thin2);
+            // *** S176, 2026-09-06 - THE EXPECTED SETS WENT "1, 2" -> "1" AND "2, 4" -> "2", AND THE
+            // PROPERTY BEING TESTED IS UNCHANGED. The 2/4 member was NEXT VIEW's dash, a
+            // Strokes.Px(6, sc) rect the owner asked to be removed from both pills (verbatim:
+            // "remove the "-" from the pills"). The set is smaller because there is one fewer rule on
+            // the page, not because a rule stopped being a whole device pixel - and the doubling
+            // relation, which is what this check exists for, still holds exactly.
+            Check("the Cover's rules are whole device pixels at 1280", thin1 == "1", "got " + thin1);
+            Check("...and exactly twice that at 2560 - one rule, scaled", thin2 == "2", "got " + thin2);
         }
     }
 

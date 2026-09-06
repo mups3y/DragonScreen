@@ -220,6 +220,23 @@ namespace DragonScreen
         public const float Hero = 40f;
 
         /// <summary>
+        /// Where a line of type puts its CAP CENTRE below the y it is drawn at, as a fraction of the
+        /// size — the number you need to centre a label vertically in a box.
+        ///
+        /// ⛔ MEASURED OFF A RENDER, NOT DERIVED. `DisplayList.Text`'s y is the TOP of the line box,
+        /// and how far the ink sits below that is a property of the FONT and of the two renderers'
+        /// layout, not something the design frame knows. 0.553 was measured on a real render in
+        /// [[S129]] for the bottom bar's CURRENT STATE value, and it is one number from one
+        /// measurement — which is why it lives here rather than being re-guessed per call site.
+        ///
+        /// ⚠ THERE IS A THIRD FIGURE IN THE TREE AND IT IS NOT THIS ONE. `CoverPage.PadButton`
+        /// centres with `0.45f`. It was not measured, it predates this constant, and unifying it
+        /// moves the NavEarth cluster's labels, so it is LOGGED (REGISTER.md S178) rather than
+        /// changed in passing.
+        /// </summary>
+        public const float CapCentreOfTop = 0.553f;
+
+        /// <summary>
         /// Dense reference detail, BELOW the glanceable floor and legal only because zoom exists.
         ///
         /// Permitted for a table someone leans in to read. NOT for any live value, any alert, or
