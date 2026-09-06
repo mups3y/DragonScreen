@@ -23411,3 +23411,37 @@ x124 to x2530, rising only at the two extreme corners, which neither the panel n
   the bar at `Top 1880` → **killed**.
 - **`previewdiff`: `21 CHANGED`, 106 unchanged, 0 new, 0 removed** — the same Vehicle-family set, since
   the strip and the pills are shared. **R-01 census `856 below the floor, 0 regressed, 0 improved`.**
+
+---
+
+### S193 [O] UNIT 3c — the Vehicle strip made LIVE: navigation, severity colour, and the gauges proven — **DOING** — [owner directive on the [[S192]] preview, 2026-09-07]
+
+🟢 **OWNER, 2026-09-07, verbatim**, on the `S192b` preview:
+
+> *"that will do for now build it so it works as intended, icons lead to the correct pages. Icons in the
+> bar you just moved are white when nominal, turn orange then red for issues that need the user attention
+> like low fuel or power etc. All gauges read accurately etc. Make it live"*
+
+⚠ **THE ACCEPTANCE IS "WILL DO FOR NOW", NOT "APPROVED"** — the same word [[S181]] was careful to record
+as an acceptance rather than an approval. It releases the LOOK of the page; it is not a sign-off on the
+open questions, and [[S192]]'s Q1–Q3 stay open.
+
+**What this line does — and what it deliberately does not.**
+1. **"icons lead to the correct pages."** The mapping and the routing already exist; what does not exist
+   is anything that would CATCH a mis-mapping. Verify `VehicleTabBar.Tabs` against `FigmaUI.VehicleTab`
+   tab by tab, from every Vehicle-family page, and pin it.
+2. **"white when nominal, turn orange then red."** ⛔ **A real defect:** an unselected tab's icon is drawn
+   `Text6` (dim), not white. The severity path is already live and already reaches all three pages.
+3. **"like low fuel or power."** Verify those two are the REAL signals — `Alarms.Low(s.DragonProp01)` and
+   `Alarms.Low(s.Power01)`, caution at ≤25 %, alarm at ≤10 % — and pin that a low reading colours the
+   right tab and only the right tab.
+4. **"All gauges read accurately."** Every ring's fill and its printed number come from one readout by
+   construction (T13a); what is missing is a check that a CHANGED value moves the ring, which is the only
+   thing that can tell a live gauge from a decorative one — the fixture-A-vs-B idiom [[S79]] used.
+- ⛔ **NOT IN SCOPE, and each for a settled reason.** The seven checklist rows and the four CONNECTIONS
+  rows are reference COPY (S22) and making them "live" would invent content §1.4 reserves to the owner;
+  the four Orbit-subtank rows are a settled dash (T5/§14.4(e)); and **flight ACTUATION stays an honest
+  no-op until Part B (§14.4(a))** — "make it live" is about READOUTS and NAVIGATION, which is what every
+  item he named is.
+- **DONE when:** the four items are verified and pinned, `test` is green and mutation-proved,
+  `previewdiff`'s changed list is reported in full, and the owner has seen the preview.
