@@ -61,8 +61,11 @@ namespace DragonScreen
         // the VEHICLE, and if no embedded MechJebCore resolved on this vessel then nothing is flying it
         // — so the conductor must fall back to the honest live classifier exactly as it did before T18
         // (§B12.5a(iv): never half-wire a status). One property read, no search.
-        // ⚠ T20/T21 add `Docked`, `Entry` and `Drogues` HERE, each in the same diff as the controller
-        // that flies it (§B12.8 rider (c)) — never ahead of one.
+        // ⚠ T21 adds `Entry` and `Drogues` HERE, in the same diff as the controller that flies them
+        // (§B12.8 rider (c)) — never ahead of one.
+        // ⭐ T20, 2026-09-07 — `Docked` joins it, and it covers BOTH of the plan's two `Fly(Docked)`
+        // steps: the Docking Autopilot flies the capture (O6 / §B10.3), SmartASS KILL-ROT holds the
+        // berth (§B12.3). `pure/DockingLadder.cs` tells them apart from the gate each walks toward.
         // ⭐ T19, 2026-09-07 — `Phasing`, `Coast` and `Approach` join it. `MechConductor`'s on-orbit
         // executor composes the §B10.2 Maneuver-Planner operations, flies them with the Node Executor
         // and re-plans them live (§B12.4). Same gate as Ascent: `MechConductor.Available`, because a
@@ -73,7 +76,8 @@ namespace DragonScreen
             return p == MissionPhase.Ascent      // T18
                 || p == MissionPhase.Phasing     // T19 — §B9 P2 insertion trim + the phasing orbit
                 || p == MissionPhase.Coast       // T19 — the free-flyer's dwell, same executor
-                || p == MissionPhase.Approach;   // T19 — §B9 P3, out to the Keep-Out Sphere
+                || p == MissionPhase.Approach    // T19 — §B9 P3, out to the Keep-Out Sphere
+                || p == MissionPhase.Docked;     // T20 — §B9 P4 capture, then the berthed attitude hold
         }
 
         public void Start()

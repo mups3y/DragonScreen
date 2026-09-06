@@ -4727,8 +4727,125 @@ crew still poll before the transfer *(recommended for flight 1)*; (2) hold the p
 is inside 7.5 km, which means the chain runs in `Phasing` and contradicts §B12.3; (3) re-word the gate.
 ⛔ **(2) changes the plan and needs the owner (C1.12 / G10).**
 
-### T20 [O] Docking hand-off + speedLimit ladder — **DOING**
+### T20 [O] Docking hand-off + speedLimit ladder — **NEEDS-WORK — built, awaiting the in-sim criterion**
 - **Read:** §B10.3 / §B14.  **DONE when:** dock in-sim.
+
+#### ⚠ NEEDS-WORK 2026-09-07 — BUILT AND PROVEN HEADLESS; **`DONE` NEEDS THE SIM AND THIS CHAT HAS NO GATE**
+
+T20's DONE-when is *"dock in-sim"*. Built and proven headless; `install` + glass are spent and a build
+chat never opens a gate (C1.12).
+
+**Files: one pure, one suite, three glue.**
+`plugin/src/pure/DockingLadder.cs` (new — the §B10.3 speedLimit ladder + the two-`Fly(Docked)`-steps
+discrimination) · `plugin/test/DockingLadderTest.cs` (new, **39 checks**) ·
+`plugin/src/MechConductor.cs` (+the docking executor, the attitude hold, the manual override) ·
+`plugin/src/FlightDriver.cs` (phase table += `Docked`) · `plugin/src/_AutopilotStub.cs`
+(**the facade flip**) · `plugin/test/MissionWalkTest.cs` (the walk now runs pad → berth, **55 checks**).
+
+⛔ **§14.4(a) — EXACTLY WHAT BECOMES LIVE, AND WHAT DOES NOT.**
+**LIVE after T20, and only in `MissionPhase.Docked` with AUTO SEQUENCE engaged:** MechJeb's **Docking
+Autopilot** on the CAPTURE leg (the DEFAULT from the Keep-Out Sphere inward — **owner decision O6**), with
+`speedLimit` walking down §B10.3's ladder and `forceRol` roll-aligning to the port; **SmartASS KILL-ROT**
+holding attitude on the BERTHED leg (§B12.3); and the **manual-docking override MECHANISM**
+(`MechConductor.RequestManualDocking`), which takes the autopilot off and keeps it off.
+**STILL AN HONEST NO-OP:** every flight button on every screen; `UndockOps` / `DeorbitOps` (T21); and
+**ABORT** — W19 still HELD.
+⭐ **FACADE FLIP: `DockingOps.Engaged` + `.Note`** — §B12.5a names T20 as its owner, and this is the
+increment's ONE property. It is **dark in three states that matter**: berthed, under manual docking, and
+whenever the core is not driving.
+
+⛔ **THE MANUAL-DOCKING BUTTON IS NOT WIRED, BY THE BATCH'S OWN SCOPE LINE.** The batch says *"THE SCREENS'
+FLIGHT BUTTONS ARE NOT IN SCOPE. These wire the autopilot, not the UI's command surface."* So T20 builds
+the mechanism — `RequestManualDocking()` / `ResumeAutoDocking()` / `ManualDocking`, live and tested,
+feeding `ConductorInputs.ManualDockingRequested` — and **nothing in the tree calls it**, which is exactly
+§14.4(a). The screen-side press (the Manual ISS Docking page, §B12.5's front-end) is logged as
+**[[S202]]**, not built (C1.1).
+
+⭐⭐ **THE FINDING THAT SHAPED THIS LINE: `ModeManager`'s PLAN HAS TWO `Fly(Docked)` STEPS AND §B12.3's
+PHASE TABLE HAS ONE ROW.** The plan is
+`Fly(Docked,"Soft → hard capture")` → **G13** → `Fly(Docked,"Docked — crew aboard")` → **G14**.
+§B12.3's single `Docked` entry is *"idle/KILL-ROT"*, which describes the SECOND; the FIRST is §B9 Phase 4's
+*"capture at IDA-2"*, which the same §B12.3 sentence hands to the Docking AP. So `pure/Conductor.cs`
+returning KILL-ROT for `MissionPhase.Docked` is right for one step and **would try to re-dock a hard-mated
+vehicle** on the other, and the phase enum cannot tell them apart.
+⭐ **The seam that can is the one W10 built for it:** `CrewProcedureOps.NextGateId`, whose own comment says
+it exists to *"let a flying controller know which leg it is on"*. Capture walks toward **G13**, berthed
+toward **G14**. The discrimination is **pure and tested** (`DockingLadder.LegFor`), not a special case in
+the glue where it would rot; the glue's redirect is one `if`, and the suite checks the real plan really is
+in the order capture → G13 → berthed → G14.
+⚠ **LOGGED, NOT FIXED (C1.1):** §B12.3's single row does not distinguish them and `docs/BUILD_PLAN.md` is
+guarded (G10) — **[[S203]]**.
+
+⛔ **NO NUMBER WAS INVENTED, AND THE ONE JUDGEMENT CALL IS STATED AS A PRINCIPLE.** Two of the ladder's
+three rungs are single documented values taken as they stand: **1.0 m/s** far (§B10.3 *"keep-out approach
+~1"*, and the shipped cfg's own persisted `speedLimit = 1`) and **0.1 m/s** at contact (§B11 *"[DOC] Crew
+Dragon final contact ~0.1 m/s"*). The middle rung is the only one the plan gives as a **band** —
+§B10.3's *"waypoints ~0.3–0.5"* — and the rule applied is written down rather than hidden: **where the
+plan gives a band and no single figure, take the SLOWER end**, because a too-slow approach costs time and
+a too-fast one costs the vehicle. So 0.3, and T22 converges it.
+⭐ **AND §B11's *"rate must stay < 0.2 m/s inside 5 m"* IS ENFORCED AS A PROPERTY OF THE WHOLE LADDER**,
+not of one constant — swept over every centimetre inside 5 m — so a later tune that moves a boundary
+cannot satisfy the letter of the contact rung and still break the rule at 4.9 m.
+
+⚠⚠ **ONE PLACE T20 DOES NOT FOLLOW §B10.3's WORDING, AND IT IS NOT A DEVIATION.** §B10.3 says
+*"safe-distance ≈ the Keep-Out Sphere"*. Read in the vendored source, `safeDistance` is **not** an
+operational keep-out radius: `MechJebModuleDockingAutopilot.OnFixedUpdate` computes it as
+`vesselBoundingBox.size.magnitude + targetSize + 0.5f`, and `Drive` uses it as the **HULL-clearance**
+radius for the wrong-side recovery. Forcing it to 200 m would hold the autopilot in
+`WRONG_SIDE_BACKING_UP` and back the Dragon away from the station for as long as it was engaged.
+⛔ **T20 therefore leaves `overrideSafeDistance` alone** — which is not a deviation but the standing gate:
+§B10.3's line is a **TUNING target**, and §0 defers the one-parameter-at-a-time tune until after the first
+recorded flight (T22). Raised as **Q1** below rather than settled.
+
+**VERIFIED (C1.3).** `python plugin/build.py test` — **ALL SUITES PASSED**; `DockingLadderTest` **39
+checks, 0 failed**, `MissionWalkTest` **55 checks, 0 failed**. `previewdiff` — **0 of 127 pages changed**.
+**MUTATION-PROVEN, 11 mutations, ALL 11 KILLED, every kill from a suite under test (S167):**
+
+| mutation | killed by |
+|---|---|
+| **D1** the contact rung is §B11's LIMIT (0.2) instead of the documented 0.1 | `DockingLadderTest` + `MissionWalkTest` |
+| **D2** the corridor rung takes the FASTER end of §B10.3's band | `DockingLadderTest` |
+| **D3** an unknown (zero) range takes the FASTEST rung | `DockingLadderTest` |
+| **D4** the ladder has no corridor rung, only far and contact | `DockingLadderTest` + `MissionWalkTest` |
+| **D5** the Docking Autopilot flies the BERTHED leg too | `DockingLadderTest` + `MissionWalkTest` |
+| **D6** the BERTHED leg completes itself when docked | `DockingLadderTest` + `MissionWalkTest` |
+| **D7** the capture leg completes before the vehicle is docked | `DockingLadderTest` + `MissionWalkTest` |
+| **D8** the two Docked steps are swapped (G13 = berthed, G14 = capture) | `DockingLadderTest` + `MissionWalkTest` |
+| **D9** the WP2 approach gate also names a docking leg | `DockingLadderTest` |
+| **D10** §B11's hard rule is checked against nothing (`Conforms` returns true) | `DockingLadderTest` |
+| **D11** the contact range is 0.5 m instead of §B11's 5 m | `DockingLadderTest` |
+
+⭐⭐ **D10 ESCAPED THE FIRST TIME, AND FIXING THAT IMPROVED THE CODE, NOT JUST THE TEST.** `Conforms`
+originally computed its own input from `SpeedLimitFor`, so a version that simply returned `true` passed
+every check written against the real ladder — because the real ladder is conformant. **A guard that
+computes its own input can only ever agree with itself.** It now takes the cap as a PARAMETER, the suite
+hands it values the ladder would never produce and watches it refuse them (including the exact `<` vs
+`<=` boundary at 0.2 m/s), and the mutation dies.
+
+⭐ **THE BERTHED LEG NEVER COMPLETES ITSELF, AND THAT IS THE DESIGN, NOT A GAP.** The crew's UNDOCK press
+calls `CrewProcedureOps.MarkDockedThisMission`, which disengages AUTO SEQUENCE; the next engage resumes at
+the departure step past G14 — the flow that file's own comment describes as *"press UNDOCK, then press
+AUTO SEQUENCE"*. A berthed step that completed itself would walk the plan straight **through the undock
+gate with the hooks still closed**, so `MissionWalkTest` holds it there for 200 ticks and asserts it is
+still on that step.
+
+**DONE when (unchanged):** dock in-sim.
+
+#### Open questions for the owner (C1.14) — **HELD**
+
+**Q1 — the Docking Autopilot's `safeDistance`.  Category: SOURCE / plan wording.** §B10.3 says
+*"safe-distance ≈ the Keep-Out Sphere"*, but the vendored field is a hull-clearance radius, not an
+operational keep-out radius, and setting it to 200 m would make the autopilot back away from the station
+continuously (mechanism quoted in `MechConductor.RunDocking`). T20 leaves MechJeb's own computed default,
+which is also what §0's deferred-tune gate says to do. **Options:** (1) leave the default and read the
+flown approach *(recommended — the vendored semantics are unambiguous and §0 defers the tune)*;
+(2) re-word §B10.3 to say what it meant; (3) set it anyway. ⛔ **(2) edits `docs/BUILD_PLAN.md` (G10) and
+(3) contradicts the vendored source — both need the owner.**
+
+**Q2 — the corridor rung, 0.3 vs 0.5.  Category: TASTE / T22 tune.** §B10.3 gives a band and no single
+figure; T20 takes the slower end under a stated principle. **Options:** (1) 0.3 *(recommended — slow costs
+time, fast costs the vehicle, and flight 1 is not in a hurry)*; (2) 0.5, on the reading that a 200 m
+corridor at 0.3 m/s is eleven minutes; (3) leave it to T22 with no preference. **No gate needed.**
 
 ### T21 [O] Deorbit/entry/chutes + abort wiring — **TODO**
 - **Read:** §B13 / §B10.4 / §B9.  **DONE when:** return + splash in-sim, EJECT abort works.

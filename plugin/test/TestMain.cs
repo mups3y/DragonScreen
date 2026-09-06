@@ -351,6 +351,11 @@ public static class TestMain
         // relies on those defaults; a re-pin that reorders one would silently move a rendezvous burn.
         bad += Suite(RendezvousOpsTest.Run);
 
+        // T20: §B10.3's speedLimit ladder (⚠ "the single most important docking knob"), §B11's hard
+        // "< 0.2 m/s inside 5 m" rule checked as a property of the WHOLE ladder, and the one thing the
+        // phase enum cannot answer - which of `ModeManager`'s TWO `Fly(Docked)` steps we are standing on.
+        bad += Suite(DockingLadderTest.Run);
+
         bad += Suite(MissionWalkTest.Run);
         bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT

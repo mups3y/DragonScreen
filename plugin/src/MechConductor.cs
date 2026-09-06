@@ -92,6 +92,25 @@ namespace DragonScreen
         static int approachPasses;           // how many times this leg has walked the chain
         static string approachNote;          // what the far-field lamp says
 
+        // ── T20: the docking leg (§B9 P4, §B10.3, O6) ────────────────────────────────
+        static DockingLeg dockLeg;
+        static bool dockingEngaged;
+        static bool manualDockingRequested;
+        static string dockingNote;
+        static MuMech.MechJebModuleSmartASS.Target smartAssTarget =
+            MuMech.MechJebModuleSmartASS.Target.OFF;
+
+        /// <summary>Which docking step is being flown. `None` when the conductor is not on one.</summary>
+        public static DockingLeg Dock { get { return dockLeg; } }
+
+        /// <summary>⭐ THE §B12.5a FACADE READ FOR `DockingOps`. True exactly while the Docking Autopilot
+        /// holds the vehicle on the CAPTURE leg — dark when berthed, dark when the crew have taken
+        /// manual docking, and dark whenever the core is not driving.</summary>
+        public static bool DockingEngaged { get { return Flying && dockingEngaged; } }
+
+        /// <summary>The docking lamp's caption. Null when nothing is engaged.</summary>
+        public static string DockingNote { get { return DockingEngaged ? dockingNote : null; } }
+
         /// <summary>Which on-orbit leg is being flown. `None` when the conductor is not on one.</summary>
         public static RendezvousLeg Leg { get { return leg; } }
 
@@ -127,6 +146,9 @@ namespace DragonScreen
             note = "idle";
             ResetLeg();
             leg = RendezvousLeg.None;
+            dockLeg = DockingLeg.None; dockingEngaged = false; dockingNote = null;
+            manualDockingRequested = false;
+            smartAssTarget = MuMech.MechJebModuleSmartASS.Target.OFF;
             lastRangeM = 0.0; lastRangeUT = 0.0; openingRateMps = 0.0;
         }
 
@@ -227,8 +249,12 @@ namespace DragonScreen
             s.Aborted  = CrewProcedureOps.AbortActive;
 
             // Which leg, from the gate this step walks toward (`NextGateId` exists for exactly this).
-            leg = OnOrbit(s.Phase) ? RendezvousOps.LegFor(CrewProcedureOps.NextGateId)
-                                   : RendezvousLeg.None;
+            GateId nextGate = CrewProcedureOps.NextGateId;
+            leg = OnOrbit(s.Phase) ? RendezvousOps.LegFor(nextGate) : RendezvousLeg.None;
+            // ⭐ AND WHICH OF THE TWO `Fly(Docked)` STEPS — the phase enum cannot tell them apart, and
+            // engaging the Docking Autopilot on the berthed one would try to re-dock a hard-mated
+            // vehicle. See `pure/DockingLadder.cs`'s header for the two plan sections this reconciles.
+            dockLeg = s.Phase == MissionPhase.Docked ? DockingLadder.LegFor(nextGate) : DockingLeg.None;
 
             // ---- the measured rendezvous state ----
             double rangeM = 0.0, relSpeedMps = 0.0;
@@ -237,9 +263,10 @@ namespace DragonScreen
 
             double target = RendezvousOps.TargetRangeM(leg);
             s.InKeepOutSphere = RendezvousOps.InsideKeepOutSphere(rangeM);
-            // ⛔ T20's, not T19's. Represented as an input the core reads and never as something the
-            // conductor initiates (`pure/Conductor.cs` says so in its own header).
-            s.ManualDockingRequested = false;
+            // ⭐ T20: the crew's manual-docking override, an INPUT the core reads and never something
+            // the conductor initiates — `pure/Conductor.cs` says so in its own header, and this is the
+            // shape that keeps it true.
+            s.ManualDockingRequested = manualDockingRequested;
             s.ApproachStepsDone = approachStepsDone;
             // ⛔⛔ `NodeExists` IS A LATCH ON "A NODE WAS BUILT FOR THIS STEP", NOT A LIVE COUNT OF
             // MANEUVER NODES — AND IT HAS TO BE, OR THE CHAIN CANNOT TERMINATE. `Conductor.PlanThenBurn`
@@ -274,7 +301,11 @@ namespace DragonScreen
             s.PhaseComplete =
                 (s.Phase == MissionPhase.Ascent && AscentSequence.CanAdvancePlan(ascentStep))
              || (OnOrbit(s.Phase) && RendezvousOps.LegComplete(leg, rangeM, relSpeedMps,
-                                                               RendezvousOps.NulledRelativeSpeedMps));
+                                                               RendezvousOps.NulledRelativeSpeedMps))
+             // ⛔ The CAPTURE leg ends on a MEASURED dock; the BERTHED leg never ends on its own — the
+             // crew's UNDOCK press does that, via `CrewProcedureOps.MarkDockedThisMission`.
+             || (dockLeg != DockingLeg.None
+                 && DockingLadder.LegComplete(dockLeg, DockedSide.Docked(v)));
 
             approachNote = leg == RendezvousLeg.None ? null
                          : leg.ToString() + " — " + (rangeM / 1000.0).ToString("F2") + " km, "
@@ -310,11 +341,21 @@ namespace DragonScreen
                 case ConductorModule.NodeExecutor:
                     BurnNode(v, a);
                     return;
+                // T20: §B9 Phase 4 — the Docking Autopilot, the DEFAULT inside the Keep-Out Sphere (O6).
                 case ConductorModule.DockingAutopilot:
-                    StandDown(v, "no docking executor yet (T20) — " + a.Reason);
+                    RunDocking(v, a);
                     return;
+
+                // ⭐ THE ONE PLACE THE GLUE READS THE PLAN AND NOT ONLY THE PHASE. §B12.3's table has ONE
+                // `Docked` row — "idle/KILL-ROT" — but `ModeManager`'s plan has TWO `Fly(Docked)` steps,
+                // and the FIRST of them is §B9 Phase 4's capture, which the same §B12.3 sentence gives to
+                // the Docking AP. So a KILL-ROT decision on the CAPTURE leg is redirected, and only
+                // there. The discrimination itself is pure and tested (`pure/DockingLadder.cs`).
                 case ConductorModule.SmartAss:
-                    StandDown(v, "no attitude executor yet (T20/T21) — " + a.Reason);
+                    if (a.Op == ConductorOp.KillRot && DockingLadder.AutopilotFlies(dockLeg))
+                    { RunDocking(v, a); return; }
+                    if (a.Op == ConductorOp.KillRot) { RunAttitudeHold(v, a); return; }
+                    StandDown(v, "no attitude executor for " + a.Op + " yet (T21) — " + a.Reason);
                     return;
                 default:
                     StandDown(v, a.Reason);
@@ -858,6 +899,182 @@ namespace DragonScreen
             Debug.Log(message);
         }
 
+        // ============================ THE DOCKING EXECUTOR (T20) ============================
+        //
+        //  §B9 Phase 4 / §B10.3 / O6. The Docking Autopilot is the DEFAULT from the Keep-Out Sphere
+        //  inward — owner decision O6, 2026-09-03 via the overseer — and the conductor's job here is
+        //  three things and no more: engage it on the CAPTURE leg only, walk `speedLimit` down the
+        //  §B10.3 ladder as the range closes, and shut it down the moment the crew take manual docking.
+        //
+        //  ⛔ IT IS NOT RE-IMPLEMENTED. MechJeb's docking autopilot flies the corridor, the wrong-side
+        //  recovery and the axis alignment; every one of those is code we would otherwise be writing
+        //  from scratch next to a station. The conductor sets the cap and gets out of the way.
+
+        /// <summary>Engage (or keep) the Docking Autopilot, with the ladder's cap for this range.</summary>
+        static void RunDocking(Vessel v, ConductorAction a)
+        {
+            try
+            {
+                MuMech.MechJebModuleDockingAutopilot ap = core.GetComputerModule<MuMech.MechJebModuleDockingAutopilot>();
+                if (ap == null) { StandDown(v, "the core has no Docking Autopilot"); return; }
+
+                // ⭐ THE CREW'S OVERRIDE OUTRANKS EVERYTHING HERE. §B12.3 / §B10.3: "Pressing the manual
+                // docking button switches to the Manual ISS Docking screen and SHUTS DOWN the Docking
+                // Autopilot." That is a crew command, so it is only ever an INPUT — this file never
+                // initiates it — and when it arrives the autopilot goes off and stays off.
+                if (manualDockingRequested)
+                {
+                    if (dockingEngaged) ReleaseDocking("crew took manual docking");
+                    StandDown(v, "manual docking - the crew have the vehicle");
+                    return;
+                }
+
+                double rangeM, relSpeedMps;
+                Measure(v, out rangeM, out relSpeedMps);
+
+                core.AuthorizeDrive(true);
+
+                // §B10.3's ladder. Re-asserted every tick, not set once: the whole point is that it
+                // walks DOWN as the corridor narrows, and `speedLimit` is a live field MechJeb clamps
+                // its own computed approach speed against (`FixSpeed`), never a commanded speed.
+                double cap = DockingLadder.SpeedLimitFor(rangeM);
+                if (ap.speedLimit.Val != cap)
+                {
+                    ap.speedLimit.Val = cap;
+                    Debug.Log("[DragonScreen] conductor: docking speedLimit -> " + cap.ToString("F2")
+                              + " m/s at " + rangeM.ToString("F1") + " m (B10.3 ladder)");
+                }
+
+                if (!dockingEngaged)
+                {
+                    // §B10.3: "Target: enable roll-align to the IDA-2 port." `forceRol` with `rol` at
+                    // its own default of 0 aligns the roll to the target port's orientation
+                    // (`MechJebModuleDockingAutopilot.Drive`: attitudeTo(..., TARGET_ORIENTATION)).
+                    ap.forceRol = true;
+
+                    // ⛔ `overrideSafeDistance` IS DELIBERATELY LEFT ALONE, AND THIS IS THE ONE PLACE
+                    // T20 DOES NOT FOLLOW §B10.3's WORDING. §B10.3 says "safe-distance = the Keep-Out
+                    // Sphere", but read in the vendored source, `safeDistance` is NOT an operational
+                    // keep-out radius: `OnFixedUpdate` computes it as
+                    // `vesselBoundingBox.size.magnitude + targetSize + 0.5f` and `Drive` uses it as the
+                    // HULL-clearance radius for the wrong-side recovery. Forcing it to 200 m would put
+                    // the autopilot permanently in WRONG_SIDE_BACKING_UP and back the Dragon away from
+                    // the station for as long as it was engaged.
+                    // ⚠ NOT a decision to deviate: §B10.3's line is a TUNING target, and §0's standing
+                    // gate defers the one-parameter-at-a-time tune until after the first recorded
+                    // flight (T22). Leaving MechJeb's own default IS what that gate says to do. Raised
+                    // as an owner question on T20's register line rather than settled here.
+
+                    ap.Users.Add(Owner);
+                    dockingEngaged = true;
+                    Debug.Log("[DragonScreen] conductor: DOCKING AUTOPILOT engaged (O6 default) at "
+                              + rangeM.ToString("F1") + " m, cap " + cap.ToString("F2")
+                              + " m/s, roll-align ON. " + a.Reason);
+                }
+
+                dockingNote = "DOCK " + rangeM.ToString("F1") + " m, cap " + cap.ToString("F2") + " m/s"
+                            + (string.IsNullOrEmpty(ap.status) ? "" : " - " + ap.status);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: docking tick failed: " + e.Message);
+            }
+        }
+
+        /// <summary>Attitude hold while berthed - §B12.3's "Docked -> idle/KILL-ROT" (§B10.5).</summary>
+        static void RunAttitudeHold(Vessel v, ConductorAction a)
+        {
+            try
+            {
+                MuMech.MechJebModuleSmartASS sa = core.SmartASS;
+                if (sa == null) { StandDown(v, "the core has no SmartASS"); return; }
+                core.AuthorizeDrive(true);
+
+                if (smartAssTarget != MuMech.MechJebModuleSmartASS.Target.KILLROT)
+                {
+                    SetSmartAss(sa, MuMech.MechJebModuleSmartASS.Target.KILLROT);
+                    Debug.Log("[DragonScreen] conductor: SmartASS KILL-ROT engaged - " + a.Reason);
+                }
+                dockingNote = null;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: attitude hold failed: " + e.Message);
+            }
+        }
+
+        /// <summary>Take the Docking Autopilot off, for any reason, and say which.</summary>
+        static void ReleaseDocking(string why)
+        {
+            try
+            {
+                MuMech.MechJebModuleDockingAutopilot ap =
+                    core == null ? null : core.GetComputerModule<MuMech.MechJebModuleDockingAutopilot>();
+                if (ap != null) ap.Users.Remove(Owner);
+            }
+            catch { }
+            dockingEngaged = false; dockingNote = null;
+            Debug.Log("[DragonScreen] conductor: docking autopilot released - " + why);
+        }
+
+        /// <summary>
+        /// Point SmartASS at one of its targets. ⭐ BOTH `target` AND `mode` are set, from MechJeb's own
+        /// `Target2Mode` table, because the two are a pair: `Engage()` resolves the attitude from
+        /// `target`, while `mode` is what the module's own update path reads back. Setting one without
+        /// the other leaves the module internally inconsistent.
+        /// </summary>
+        static void SetSmartAss(MuMech.MechJebModuleSmartASS sa, MuMech.MechJebModuleSmartASS.Target tgt)
+        {
+            sa.target = tgt;
+            sa.mode = MuMech.MechJebModuleSmartASS.Target2Mode[(int)tgt];
+            sa.Engage();
+            smartAssTarget = tgt;
+        }
+
+        /// <summary>Take SmartASS off. `Target.OFF` is MechJeb's own "deactivate the attitude hold".</summary>
+        static void ReleaseAttitude()
+        {
+            try
+            {
+                MuMech.MechJebModuleSmartASS sa = core == null ? null : core.SmartASS;
+                if (sa != null && smartAssTarget != MuMech.MechJebModuleSmartASS.Target.OFF)
+                    SetSmartAss(sa, MuMech.MechJebModuleSmartASS.Target.OFF);
+            }
+            catch { }
+            smartAssTarget = MuMech.MechJebModuleSmartASS.Target.OFF;
+        }
+
+        // ---- the crew's manual-docking override --------------------------------------------------
+
+        /// <summary>
+        /// ⭐ THE CREW TAKE MANUAL DOCKING. §B12.3 / §B10.3 / O6: pressing the manual docking button
+        /// switches to the Manual ISS Docking screen and SHUTS THE DOCKING AUTOPILOT DOWN.
+        ///
+        /// ⛔ THE BUTTON THAT CALLS THIS IS **NOT** WIRED BY T20, AND THAT IS THE BATCH'S OWN SCOPE
+        /// LINE: "THE SCREENS' FLIGHT BUTTONS ARE NOT IN SCOPE. These wire the autopilot, not the UI's
+        /// command surface." So the MECHANISM is here, tested and live, and the screen-side press is
+        /// §B12.5's front-end - logged on T20's register line, not built. Nothing in the tree calls
+        /// this today, which is exactly §14.4(a).
+        ///
+        /// ⚠ IT IS ONE-WAY WITHIN A FLIGHT SCENE. Once the crew have taken the vehicle, the conductor
+        /// does not take it back on its own; `Resume` is an explicit, separate act.
+        /// </summary>
+        public static void RequestManualDocking()
+        {
+            manualDockingRequested = true;
+            Debug.Log("[DragonScreen] MANUAL DOCKING requested - the docking autopilot stands down.");
+        }
+
+        /// <summary>Give the docking autopilot back the approach after a manual take-over.</summary>
+        public static void ResumeAutoDocking()
+        {
+            manualDockingRequested = false;
+            Debug.Log("[DragonScreen] auto docking resumed.");
+        }
+
+        /// <summary>True while the crew hold the docking approach by hand.</summary>
+        public static bool ManualDocking { get { return manualDockingRequested; } }
+
         // ============================ STAND DOWN ============================
 
         /// <summary>
@@ -881,6 +1098,11 @@ namespace DragonScreen
                 // T19: an on-orbit stand-down releases the Node Executor too, or it keeps the
                 // attitude and thrust user pools on a core that is about to stop driving.
                 if (nodeExecuting && core.Node != null) { core.Node.Abort(); nodeExecuting = false; }
+                // T20: and the Docking Autopilot and SmartASS, for the same reason — both hold the
+                // RCS/attitude user pools, and a pool held by a core that is no longer master is a
+                // vehicle nobody is steering and nobody has given back.
+                if (dockingEngaged) ReleaseDocking(why);
+                ReleaseAttitude();
                 if (core.DriveAuthorized) core.AuthorizeDrive(false);
             }
             catch (Exception e)

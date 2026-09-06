@@ -263,6 +263,130 @@ public static class MissionWalkTest
 
         // ---- 5. ON INTO THE RENDEZVOUS (T19) ----------------------------------------------------
         WalkTheRendezvous(plan, ref index);
+
+        // ---- 6. AND ON INTO THE DOCKING (T20) ---------------------------------------------------
+        WalkTheDocking(plan, ref index);
+    }
+
+    // ---- 6. CAPTURE, THE BERTH, AND THE CREW'S OVERRIDE ------------------------------------------
+    // T20's DONE-when is "dock in-sim". Everything decidable without the game: that the CAPTURE leg
+    // engages the Docking Autopilot and ends on a measured dock, that the BERTHED leg holds attitude
+    // and never walks the plan through the undock gate on its own, and that the crew's manual override
+    // takes the vehicle off the autopilot at any point on the way in.
+    static void WalkTheDocking(MissionStep[] plan, ref int index)
+    {
+        Check(index < plan.Length && plan[index].Kind == StepKind.Fly
+              && plan[index].Phase == MissionPhase.Docked,
+              "the rendezvous handed the plan to the first Fly(Docked) step");
+        if (index >= plan.Length) return;
+
+        MissionProfile m = Missions.Resolve("Crew-2");
+        bool docked = false;
+        int captureTicks = 0, dockingAsked = 0, killRotAsked = 0, gatesCleared = 0;
+        DockingLeg sawCapture = DockingLeg.None, sawBerthed = DockingLeg.None;
+        double capAtKos = -1.0, capAtContact = -1.0;
+        int offKillRot = 0, capViolations = 0;
+        bool ended = false;
+
+        for (int tick = 0; tick < 3000 && index < plan.Length; tick++)
+        {
+            if (plan[index].Kind == StepKind.Gate)
+            {
+                Gate g = CrewGates.ById(m, plan[index].Gate);
+                bool[] sat = new bool[g.Items == null ? 0 : g.Items.Length];
+                for (int i = 0; i < sat.Length; i++) sat[i] = true;
+                CrewGateInputs gi;
+                gi.Gate = g; gi.Satisfied = sat;
+                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+                if (!CrewGate.Step(gi, GatePhase.Holding).Cleared)
+                { Check(false, "gate " + g.Id + " would not clear"); break; }
+                index = ModeManager.Advance(plan, index, new ModeInputs { GateGo = true }).Index;
+                gatesCleared++;
+                continue;
+            }
+
+            if (plan[index].Phase != MissionPhase.Docked) { ended = true; break; }
+
+            GateId next = GateId.None;
+            for (int i = index; i < plan.Length; i++)
+                if (plan[i].Kind == StepKind.Gate) { next = plan[i].Gate; break; }
+            DockingLeg dleg = DockingLadder.LegFor(next);
+            if (dleg == DockingLeg.Capture) sawCapture = dleg;
+            if (dleg == DockingLeg.Berthed) sawBerthed = dleg;
+
+            ConductorInputs s = new ConductorInputs();
+            s.Phase = MissionPhase.Docked;
+            s.PhaseComplete = DockingLadder.LegComplete(dleg, docked);
+            ConductorAction a = Conductor.Decide(s);
+
+            if (a.Verb == ConductorVerb.Advance)
+            {
+                index = ModeManager.Advance(plan, index, new ModeInputs { PhaseComplete = true }).Index;
+                continue;
+            }
+
+            // Counted, not asserted per tick - a check inside a 3000-tick loop drowns the count.
+            if (a.Verb != ConductorVerb.Engage || a.Module != ConductorModule.SmartAss
+                || a.Op != ConductorOp.KillRot) offKillRot++;
+
+            // ⭐ The glue's own redirect, mirrored: KILL-ROT on the CAPTURE leg means the Docking AP.
+            if (DockingLadder.AutopilotFlies(dleg))
+            {
+                dockingAsked++;
+                captureTicks++;
+                // the corridor closes: 200 m -> contact, one metre per tick
+                double range = Math.Max(0.2, 200.0 - captureTicks);
+                double cap = DockingLadder.SpeedLimitFor(range);
+                if (range <= RendezvousOps.KeepOutSphereM && capAtKos < 0.0) capAtKos = cap;
+                if (range <= DockingLadder.ContactRangeM && capAtContact < 0.0) capAtContact = cap;
+                if (!DockingLadder.Conforms(range)) capViolations++;
+                if (range <= 0.25) docked = true;          // MechJeb's own acquireRange
+                continue;
+            }
+
+            killRotAsked++;
+            // ⛔ THE BERTHED LEG NEVER COMPLETES ITSELF. If it ever did, this loop would walk the plan
+            // straight through the UNDOCK gate with the hooks closed — so it is bounded and asserted.
+            if (killRotAsked > 200) { ended = true; break; }
+        }
+
+        Check(offKillRot == 0, "every Docked tick asked for SmartASS KILL-ROT and nothing else ("
+              + offKillRot + " did not)");
+        Check(capViolations == 0, "⛔ the speedLimit cap honoured §B11's rule on every metre of the "
+              + "corridor (" + capViolations + " violation(s))");
+        Check(sawCapture == DockingLeg.Capture, "the walk stood on the CAPTURE leg");
+        Check(docked, "⭐ T20's OWN DONE-WHEN: the capture leg ended on a MEASURED dock");
+        Check(dockingAsked > 0, "the Docking Autopilot was engaged for the capture, " + dockingAsked + " tick(s)");
+        Check(gatesCleared >= 1, "gate G13 (DOCKING COMPLETE) was worked after capture");
+        Check(sawBerthed == DockingLeg.Berthed, "...and the plan then reached the BERTHED leg");
+        Check(killRotAsked > 0, "which holds attitude on SmartASS KILL-ROT (" + killRotAsked + " tick(s))");
+        Check(ended && index < plan.Length && plan[index].Kind == StepKind.Fly
+              && plan[index].Phase == MissionPhase.Docked,
+              "⛔ and it is STILL on the berthed leg after 200 ticks — a berthed step that completed "
+              + "itself would walk the plan through the UNDOCK gate with the hooks closed");
+
+        Check(capAtKos == DockingLadder.CorridorSpeedMps,
+              "the speedLimit at the Keep-Out Sphere is the corridor rung (got " + capAtKos + ")");
+        Check(capAtContact == DockingLadder.ContactSpeedMps,
+              "...and the contact rung inside 5 m (got " + capAtContact + ")");
+        Check(capAtContact < DockingLadder.ContactRateLimitMps,
+              "⭐ which is under §B11's documented '< 0.2 m/s inside 5 m' the whole way in");
+
+        // ⭐ THE CREW'S OVERRIDE, PROVED DIRECTLY. §B12.3: the manual docking button shuts the Docking
+        // Autopilot down. A nominal walk never presses it, so it is asserted rather than hoped for.
+        {
+            ConductorInputs mo = new ConductorInputs();
+            mo.Phase = MissionPhase.Approach;
+            mo.InKeepOutSphere = true;
+            ConductorAction auto = Conductor.Decide(mo);
+            Check(auto.Verb == ConductorVerb.Engage && auto.Module == ConductorModule.DockingAutopilot,
+                  "inside the KOS the Docking Autopilot is the default (O6)");
+            mo.ManualDockingRequested = true;
+            ConductorAction man = Conductor.Decide(mo);
+            Check(man.Verb == ConductorVerb.Idle && man.Module == ConductorModule.None,
+                  "⭐ ...and the crew's manual-docking request takes it off, engaging nothing (got "
+                  + man + ")");
+        }
     }
     // ============================================================================================
     //  THE CHASE — a station to close on, and a planner that does not always hit what it aims at

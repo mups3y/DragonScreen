@@ -186,8 +186,13 @@ namespace DragonScreen
     //                     mined to TUNE this phase; it lands no code.)
     //  DockingOps       → the MechJeb **Docking Autopilot**, the DEFAULT from the Keep-Out Sphere inward
     //                     (O6, owner 2026-09-03; §B10.3/§B12.3), with the manual button overriding to the
-    //                     Manual ISS Docking screen. NO-OP: not built. **T20.** (Not W21 — that is a
-    //                     reference READ, kept for the IDSS envelope + corridor geometry MechJeb lacks.)
+    //                     Manual ISS Docking screen. **LIVE since T20, 2026-09-07** —
+    //                     `MechConductor.DockingEngaged`, true only on the CAPTURE leg with the core
+    //                     driving; dark when berthed and dark under manual docking. ⚠ The manual-override
+    //                     MECHANISM is live (`MechConductor.RequestManualDocking`); the screen BUTTON
+    //                     that calls it is §B12.5's front-end and is NOT wired — see T20's register line.
+    //                     (Not W21 — that is a reference READ, kept for the IDSS envelope + corridor
+    //                     geometry MechJeb lacks.)
     //  UndockOps        → the conductor's §B9 Phase 6: SmartASS backout + small departure burns → Node
     //                     Executor. NO-OP: not built. **T21, increment 1** (§B12.5a: one property per
     //                     increment, undock before deorbit).
@@ -199,11 +204,12 @@ namespace DragonScreen
     //                     flying, gated on the conductor's recovery stage. No `BoosterControl` byte is
     //                     back and no focus moves — it is the hull-camera follow, not a command.
     //
-    // ⛔ THREE OF THESE ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged`;
+    // ⛔ FOUR OF THESE ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged`;
     // W9 (2026-09-07) flipped `BoosterRecovery.Tracked`; T19 (2026-09-07) flipped
-    // `StationApproach.Engaged`/`.Note` — one property per increment, every time (§B12.5). The other two
-    // still return false/null, so their lamps are dark and every flight command
-    // on every screen is still §14.4(a)'s honest no-op — click, no light, no action, and no red.
+    // `StationApproach.Engaged`/`.Note`; T20 (2026-09-07) flipped `DockingOps.Engaged`/`.Note` — one
+    // property per increment, every time (§B12.5). `UndockOps` and `DeorbitOps` still return false/null,
+    // so their lamps are dark, and every flight command on every screen is still §14.4(a)'s honest
+    // no-op — click, no light, no action, and no red.
     // `AutoPilot.Engaged` lighting means the CONDUCTOR is engaged, not that anything is flying: the host
     // behind it is read-only and commands nothing (§B12.6 step (3)). `BoosterRecovery.Tracked` going
     // non-null means a hull camera has something to look at on a SEPARATE vessel; the Dragon's own flight
@@ -221,7 +227,18 @@ namespace DragonScreen
         public static bool Engaged { get { return MechConductor.ApproachEngaged; } }
         public static string Note { get { return MechConductor.ApproachNote; } }
     }
-    public static class DockingOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
+    // ---- ⭐ LIVE SINCE T20 (2026-09-07) — THIS INCREMENT'S ONE FACADE FLIP (§B12.5: exactly one). ----
+    // `MechConductor.DockingEngaged` is true exactly while MechJeb's Docking Autopilot — the DEFAULT
+    // from the Keep-Out Sphere inward (O6, owner 2026-09-03; §B10.3/§B12.3) — holds the vehicle on the
+    // CAPTURE leg. ⛔ IT IS DARK IN THREE STATES THAT MATTER: when the vehicle is BERTHED (that step is
+    // SmartASS KILL-ROT, not a docking approach), when the crew have taken MANUAL docking (§B12.3: the
+    // manual button shuts the autopilot down), and whenever the core is not driving at all — because it
+    // reads `Flying`, which is the core's own drive authority.
+    public static class DockingOps
+    {
+        public static bool Engaged { get { return MechConductor.DockingEngaged; } }
+        public static string Note { get { return MechConductor.DockingNote; } }
+    }
     public static class DeorbitOps { public static bool Engaged { get { return false; } } }
     public static class UndockOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
 
