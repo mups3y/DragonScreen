@@ -162,6 +162,15 @@ namespace DragonScreen
                 return FlightDriver.HasControllerFor(p) ? p : MissionPhase.Unknown;
             }
         }
+        // ⭐ T18: the plan has been walked to its end. `pure/Conductor.cs` reads this as `Complete` and
+        // returns `Release` — "a finished plan cannot re-engage a module". ADDED, not renamed: no existing
+        // member changed shape (§B12.5a(iv)). ⛔ Deliberately NOT true when nothing is engaged: a
+        // disengaged conductor has not finished a mission, it simply is not running one.
+        public static bool PlanComplete
+        {
+            get { return engaged && plan != null && index >= plan.Length; }
+        }
+
         public static MissionProfile Profile { get { return mission; } }
 
         // A ModeStep snapshot for the flight recorder (mission_phase + mode columns), built from the live

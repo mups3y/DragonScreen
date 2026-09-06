@@ -4429,7 +4429,7 @@ checks, 0 failed**. **Pure code only — no draw changed, so no preview applies*
   that comes with restoring `CrewProcedureOps`/`FlightDriver` for real. No `.cs` file touched by this
   closure. `/next` can no longer route anyone to T17.
 
-### T18 [O] Wire Ascent (PVG) — **DOING**
+### T18 [O] Wire Ascent (PVG) — **NEEDS-WORK — built, awaiting the in-sim criterion**
 - **Read:** §B8 / §B11.  **DONE when:** PVG flies to insertion in-sim.
 
 #### ⚠ BATCH DEVIATION FROM C1.1 + C1.7, RECORDED ON THE FIRST LINE THIS SESSION WRITES
@@ -4444,6 +4444,138 @@ stands**, including C1.12 (a build chat never opens a gate), C1.16 (research is 
 four can be marked `DONE` in this chat** — all four DONE-criteria are in-sim. Each ends
 **`NEEDS-WORK — built, awaiting the in-sim criterion`**, and the session closes with ONE gate request
 covering the whole mission profile.
+
+#### ⚠ NEEDS-WORK 2026-09-07 — BUILT AND PROVEN HEADLESS; **`DONE` NEEDS THE SIM AND THIS CHAT HAS NO GATE**
+
+T18's DONE-when is *"PVG flies to insertion in-sim"*. `install` + glass are SPENT (the 2026-09-07 gate went
+on the [[T15b]] flight) and a build chat never opens one (C1.12), so this line stays **NEEDS-WORK** with a
+gate request at the end of the batch. **Everything provable without the game is proven.**
+
+**Files: two pure, two suites, three glue.**
+`plugin/src/pure/AscentSequence.cs` (new — the §B8 direct-control event chain + `AscentTargets`) ·
+`plugin/src/MechConductor.cs` (new — the MechJeb-FACING executor §B12.2 promised) ·
+`plugin/test/AscentSequenceTest.cs` (new, **108 checks**) · `plugin/test/MissionWalkTest.cs` (new, **27
+checks**, closed-loop) · `plugin/src/FlightDriver.cs` (+1 dispatch line, the phase table, the reset) ·
+`plugin/src/CrewProcedureOps.cs` (+`PlanComplete`, additive) · `plugin/test/TestMain.cs` (+2 suites).
+
+⛔ **§14.4(a) — EXACTLY WHAT BECOMES LIVE, AND WHAT DOES NOT.** Stated here and in
+`MechConductor.cs`'s header, per the batch's own rule.
+**LIVE after T18, and ONLY inside `MissionPhase.Ascent` with AUTO SEQUENCE engaged:** MechJeb drive
+authority (`DragonMechJebCore.AuthorizeDrive` — PVG steers and throttles); octaweb ignition; hold-down
+release; MECO shutdown; booster separation; MVac ignition; Dragon separation; nose-cone open — all through
+the recovered `src/Actuator.cs`, **never staging and never an action group** (§B12.7).
+**STILL AN HONEST NO-OP:** every flight button on every screen (`FlightCommands.Run` is **untouched** — the
+batch put the UI command surface out of scope); `StationApproach` / `DockingOps` / `UndockOps` /
+`DeorbitOps` (T19/T20/T21); and **ABORT** — `Conductor` can decide it, and all `MechConductor` does is stop
+flying and hand the vehicle back, because there is no abort executor in the tree.
+**FACADE FLIPS: NONE.** §B12.5a gives T18 no property; `AutoPilot.Engaged` was already live (W10) and its
+meaning is unchanged.
+
+⭐ **WHICH PROFILE T18 BUILDS AGAINST — the batch's S195 question, ANSWERED (not decided).**
+**It builds against whatever profile the core has loaded, and writes NO ascent-shaping knob at all.** The
+mechanism was read out of the pinned tree, not reported: `DragonMechJebCore.OnStart` → `base.OnStart` runs
+`MechJebModuleAscentSettings.ApplyRODefaults()` (the RSS-RO baseline) → our `ApplyTune()` then lays the
+**TUNED Crew-2 cfg over it**. So the live stack is *RO defaults, then the §B11 tuning TARGET on top* —
+exactly [[S195]]. Which profile flight 1 flies is a §B5/T22 plan question on a guarded file (C1.12 / G10),
+the seam is `DragonMechJebCore.tuneFile`, and **T18 does not touch it.** Pitch Rate, Pitch Start Velocity,
+LimitQa, MaxAoA and the attitude PID are left exactly where the loaded profile put them.
+**T18 writes three things into MechJeb, each with its own authority and none of them a tune:**
+1. **`Autostage = false`** — §B8 owner directive, 2026-09-03. ⛔ **BOTH profiles ship it ON**, checked:
+   `ApplyRODefaults()` contains `Autostage = true;`, and the shipped cfg has `_autostage = True`. So it
+   OVERRIDES both, which is why it is not a tune. Set through the **property**, never the field — only the
+   property removes the ascent autopilot from `Core.Staging.Users`.
+2. **`AscentType = PSG`** — §B8 "Target PVG(1)". Already RO's default; asserted against a persisted CLASSIC.
+   (Plus `LimitQaEnabled = true`, which MechJeb's own menu calls *"mandatory for PSG"* — a no-op under
+   every profile in the tree. The LimitQa **value** is a tune and is NOT touched.)
+3. **the TARGET ORBIT**, from the resolved `MissionProfile` — §B5's own named exception (*"Target-orbit
+   values are the one exception … they are MISSION FACTS"*). ⚠ And it is NOT optional: `ApplyRODefaults`
+   sets `DesiredOrbitAltitude = 145000` and leaves inclination at its `0.0` field default, so a
+   RO-defaults-only core would fly a **145 km EQUATORIAL** ascent from a 28.6° pad.
+
+⛔ **THE ONE VALUE WITH NO IN-REPO SOURCE, RAISED RATHER THAN SETTLED — see Q1 at the end of this line.**
+MechJeb passes `DesiredInclination` into `Glueball.SetTarget` **sign and all**, so the sign carries a
+launch-azimuth meaning. The shipped cfg says **−51.6316**; `Missions.Catalog` says **+51.6**.
+`AscentTargets.For` therefore keeps the **magnitude from the mission and the SIGN from whatever is
+loaded**, and defaults an unset (0.0) core to positive. **That default is the invented bit**, it is the
+only one, and it is Q1 below.
+
+⛔ **NO OTHER NUMBER WAS INVENTED (§1.4 / C1.15), and every interval is cited in the file.** The four stage
+intervals are `docs/CREW_MISSION_TELEMETRY.md`'s own [P] tables — sep = **MECO + 3 s** (*"pneumatic
+pushers, ~3 s after MECO"*), SES-1 = **sep + 8 s** (*"MVac ignition, ~8 s after sep"*), Dragon sep =
+**SECO-1 + 190 s** (§5 gives 193 s; the verified anchors give 191 s Crew-2 / 190 s Crew-6), nose cone =
+**Dragon sep + 45 s**. The two engineering knobs both **ship inert**: `MecoPropellantFrac` = **0.0** (no
+early cutoff — run the stage to depletion, the honest un-tuned baseline) and the SECO periapsis backstop
+ships **disabled**, because an early SECO strands the vehicle short of orbit and a hold does not.
+
+⭐ **AND MECO IS MEASURED, NOT TIMED — `pure/BarEvent.cs`'s standing rule, now enforced by a test.**
+That file warns *"⛔ A `MECO` fired off a stopwatch would be the single worst thing this bar could do … Do
+not 'temporarily' wire one to MET."* Nothing in `AscentSequence` reads MET: MECO fires on measured
+propellant depletion or stock KSP's own `flameout` boolean, and every later step is a delay after a
+MEASURED event. Pinned by a check that flies **100 000 s with full tanks and does not produce MECO**.
+⚠ **The four callouts `BarEvent` says have NO DETECTOR now have one** (MECO / stage sep / SES-1 / SECO-1).
+Wiring them to the bar is a SCREEN change and out of this batch — logged as [[S198]], not done (C1.1).
+
+⭐ **THE FLIGHT LESSONS ARE PINNED, NOT RE-DERIVED.** `IgnitionGate` (W5/W34, owner-ruled) owns the clamp
+decision unchanged — release only at ≥99% of available thrust, and a stage that has not made thrust inside
+2 s is **SAFED with the hold-downs still holding**. And `Actuator.SeparateBooster`'s own recorded lesson —
+*"shut the octaweb, WAIT for its thrust to actually die, THEN SeparateBooster … (flight 194334)"* — is a
+hard AND, tested at 60 s of satisfied lead under 2 MN of live thrust.
+
+⚠⚠ **THE HAZARD T15d HANDED TO T18 BY NAME IS NOW OURS, AND THE MITIGATION IS A HYPOTHESIS.**
+`MechHost.cs` item (6): turning drive authority on re-arms `VesselState.Update` → `AnalyzeParts` → stock
+KSP's `ModuleGimbal.GetPotentialTorque`, which threw **6,935 times** on the 2026-09-05 glass. T15d closed
+it by never being master; **T18 has to be master.** `MechConductor.RefreshGimbalEngineLists` calls stock
+KSP's public `ModuleGimbal.CreateEngineList()` after every part-tree change, because
+`VesselState.cs:958-971` rebuilds that list **only when it is null** and then indexes it — a STALE list is
+the shape that indexes past the end. ⛔ **Read out of the vendored source, not measured; no vendored file
+edited; NOT claimed as a fix.** It is a numbered row on the flight checklist.
+
+⭐ **A MID-ASCENT RE-ENGAGE RESUMES RATHER THAN RESTARTS.** `AscentSequence.ResumeFrom` maps the live
+vehicle to the right stage step — the same rule `CrewProcedureOps.Engage` already applies to the mission
+PLAN, one level down. ⛔ It can never return `Ignition`: proven over **all sixteen** input combinations, so
+a re-engage can never re-light an octaweb or release a clamp.
+
+**VERIFIED (C1.3).** `python plugin/build.py test` — **ALL SUITES PASSED**; `AscentSequenceTest` **108
+checks, 0 failed**, `MissionWalkTest` **27 checks, 0 failed**. `python plugin/build.py previewdiff` —
+**0 of 127 pages changed, 0 new, 0 removed** (these draw nothing).
+**MUTATION-PROVEN, 11 mutations, ALL 11 KILLED, and every kill came from the suite under test (S167):**
+
+| mutation | killed by |
+|---|---|
+| **M1** MECO off a stopwatch instead of measured depletion | `AscentSequenceTest` — *"100000 s of flight with full tanks does NOT produce MECO"* |
+| **M2** separate on the documented lead ALONE (drop the thrust-dead test) | `AscentSequenceTest`, **3 checks** — *"still-lit engines making 2 MN: NO SEPARATION"* |
+| **M3** release the hold-downs without waiting for thrust | `AscentSequenceTest` — *"half thrust -> HOLD the clamps"* |
+| **M4** a SAFED pad may advance the mission plan | `AscentSequenceTest` — *"exactly one ascent step may advance the plan (got 2)"* |
+| **M5** command SES-1 once and hope | `AscentSequenceTest` — the RealFuels retry check |
+| **M6** the SECO periapsis backstop ships ENABLED | `AscentSequenceTest` |
+| **M7** "tune" the documented sep→SES-1 interval 8 s → 20 s | `AscentSequenceTest`, **5 checks** |
+| **M8** the booster counts as detached at MECO | `AscentSequenceTest` |
+| **W1** the ascent never terminates (NoseCone stays put) | `MissionWalkTest` — *"ended at NoseCone after 20000 ticks"* |
+| **W2** clamps released before the ignition command | `MissionWalkTest` |
+| **W3** MVac commanded once, then waited on | `MissionWalkTest` |
+
+⭐ **The literal pin the batch asked for:** `DocumentedIntervals` writes **3.0 / 8.0 / 190.0 / 45.0** out by
+hand rather than reading the constants, so a silent "tune" of one fails the suite (M7 proves it).
+
+**DONE when (unchanged):** PVG flies to insertion in-sim. **See the batch gate request at the end of this
+file for the numbered in-flight checklist.**
+
+#### Open questions for the owner (C1.14) — **HELD**
+
+**Q1 — the inclination SIGN.  Category: SOURCE / owner taste.** MechJeb passes `DesiredInclination` into
+PVG sign and all, so the sign selects a launch azimuth. The shipped Crew-Dragon cfg carries **−51.6316**;
+`Missions.Catalog` carries **+51.6**; the repo has no source stating which sign MechJeb reads as the real
+LC-39A north-easterly azimuth. T18 preserves the loaded sign and defaults an unset core to **positive**.
+**Options:** (1) leave it — the flight shows a wrong azimuth immediately and cheaply *(recommended — this
+is exactly what a first flight is for)*; (2) settle the convention from an out-of-repo source and pin it;
+(3) always force negative, matching the shipped cfg. **No gate needed; no `OVERRIDE` needed.**
+
+**Q2 — the profile, i.e. [[S195]].  Category: OWNER GATE / plan.** T18 is profile-neutral, so this is not
+blocking, but the FIRST RECORDED FLIGHT is what T22 tunes from, and it will be flown on the TUNED Crew-2
+target unless `tuneFile` is blanked. **Options:** (1) fly the target profile and re-read §B5 afterwards;
+(2) blank `tuneFile` so flight 1 flies RSS-RO defaults as §B5 says *(recommended — it is what the plan
+says, and it is one cfg field)*; (3) amend §B5. ⛔ **(2) and (3) both touch `docs/BUILD_PLAN.md` or the
+shipped profile and need the owner (C1.12 / G10).**
 
 ### T19 [O] On-orbit ops + re-plan loop — **TODO**
 - **Read:** §B10.2 / §B12.4 / §B9.  **DONE when:** rendezvous to the KOS in-sim.  **May SPLIT if large.**

@@ -330,6 +330,21 @@ public static class TestMain
         bad += Suite(CrewGateTest.Run);         // L4 crew gate machine + the real gate catalog + the phase sequencer
         bad += Suite(ConductorWalkTest.Run);    // W10: the gate WALK the restored glue composes, and the AutoAdvanceGates runaway
         bad += Suite(ConductorTest.Run);        // T16: the pure ConductorAction core — §B12.3's phase table, §B12.4's re-plan rule
+
+        // ---- PART B, THE CONDUCTOR INCREMENTS (T18 onward) ----
+        // T18: §B8's autostage-off DIRECT-CONTROL ascent chain — the half MechJeb does not do. PVG
+        // steers and throttles; the conductor ignites, releases the clamps, cuts, separates, relights,
+        // separates the Dragon and opens the nose cone. Every transition here is driven by MEASURED
+        // state or by a documented interval after a measured event; ⛔ none of them reads MET, which is
+        // `pure/BarEvent.cs`'s standing rule and is pinned by a 100000-second check in the suite.
+        bad += Suite(AscentSequenceTest.Run);
+
+        // T18-T21: ONE MISSION, WALKED END TO END, CLOSED-LOOP. The gates advance the plan, the plan hands
+        // a phase to `Conductor.Decide`, the decision hands work to that phase's sequencer, the sequencer
+        // commands a fixture VEHICLE, and the vehicle answers back. ⭐ A chain of individually correct
+        // decisions can still fail to TERMINATE, and a flight is an expensive place to find that out.
+        // ⚠ A CONTRACT test over the pure layer, not an execution of the glue - see its header.
+        bad += Suite(MissionWalkTest.Run);
         bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT
         bad += Suite(RecoveryPlanTest.Run);     // W9: §B16.7's physics-range lifecycle - wide before sep, always restored

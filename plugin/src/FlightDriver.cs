@@ -55,7 +55,18 @@ namespace DragonScreen
         // conductor names that phase again with no change to any screen file. Adding a phase to this table
         // ahead of a controller that flies it would be exactly the half-wiring §B12.5a(iv) forbids: a phase
         // word claiming a vehicle state that is not happening.
-        public static bool HasControllerFor(MissionPhase p) { return false; }
+        // ⭐ T18, 2026-09-07 — THE TABLE IS NO LONGER EMPTY. `MechConductor` flies `Ascent`: PVG steers
+        // and throttles, and the conductor works the stages directly (§B8's autostage-off rule, §B12.7).
+        // ⛔ GATED ON `MechConductor.Available`, NOT ON THE FILE EXISTING. A phase word is a claim about
+        // the VEHICLE, and if no embedded MechJebCore resolved on this vessel then nothing is flying it
+        // — so the conductor must fall back to the honest live classifier exactly as it did before T18
+        // (§B12.5a(iv): never half-wire a status). One property read, no search.
+        // ⚠ T19/T20/T21 add `Phasing`, `Approach`, `Docked`, `Entry` and `Drogues` HERE, each in the same
+        // diff as the controller that flies it (§B12.8 rider (c)) — never ahead of one.
+        public static bool HasControllerFor(MissionPhase p)
+        {
+            return p == MissionPhase.Ascent && MechConductor.Available;
+        }
 
         public void Start()
         {
@@ -73,6 +84,9 @@ namespace DragonScreen
         static void ResetAll()
         {
             CrewProcedureOps.ForceReset();
+            // T18, 2026-09-07: the MechJeb-facing executor holds static state too - the bound core, the
+            // ascent step, the latched launch GO. A fresh scene must start with none of it.
+            MechConductor.Reset();
             // W9, 2026-09-07: the conductor holds static warp + physics-range state that survives a scene
             // change, and a stale wide range on a fresh vehicle is exactly the kind of thing nobody would
             // think to look for. It resets with everything else.
@@ -136,14 +150,17 @@ namespace DragonScreen
                 // caller of Tick in the tree, and the reason W10 had to land both files together.
                 CrewProcedureOps.Tick(v);
 
-                // ⛔ THE LAUNCH GO IS CONSUMED AND GOES NOWHERE — §14.4(a), deliberately. Clearing G7 raises an
-                // ignition INTENT; the recovered host turned that into `StartLaunch` → plane-window hold →
-                // erector clear → `Ignite` → the hold-down clamp gate, every step of which commands the
-                // vehicle through `Actuator`. None of that is in scope here (§B12.6 step (3)). It is consumed
-                // rather than left latched so it cannot fire late at some future increment's first frame.
-                if (CrewProcedureOps.ConsumeLaunch())
-                    Debug.Log("[DragonScreen] LAUNCH GO cleared (G7) — no ignition path in this build; "
-                              + "the conductor is read-only until the actuation increments land. Nothing fired.");
+                // ⭐ T18's ONE LINE OF HOST GROWTH (§B12.8 rider (c): "every later Wave E / T-series line
+                // GROWS THIS SAME HOST by exactly the dispatch its own controller needs"). Everything the
+                // conductor does with MechJeb is behind it: `Conductor.Decide` → the embedded core → the
+                // §B12.7 direct-part actuation. It runs AFTER `CrewProcedureOps.Tick` because it reads the
+                // phase that tick just resolved.
+                //
+                // ⛔ THE LAUNCH GO IS NO LONGER CONSUMED HERE. W10 consumed it in this method and logged
+                // that nothing could act on it — correct then, §14.4(a). T18 gives it somewhere to go, so
+                // `MechConductor.Tick` consumes it and latches it into the ascent sequence. Consuming it
+                // in BOTH places would swallow the crew's GO on the frame it was pressed.
+                MechConductor.Tick(v);
             }
             catch (Exception e)
             {
