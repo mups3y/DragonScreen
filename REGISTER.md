@@ -22382,7 +22382,7 @@ them.
   marked to say what is no longer held, with the SHA rows kept so a restore can be verified. ⛔ C1.16:
   the manifest is under `docs/` and is **not** to be deleted or trimmed to match.
 
-### S181 [O] UNIT 2a — the VRIO Health LEDs page: geometry and construction from the export — **DOING** — [the overseer's per-page rebuild programme, unit 2; SPLIT per C1.7 — 2b is [[S182]]; §14.2a (G13) + [[S162]]'s ruling]
+### S181 [O] UNIT 2a — the VRIO Health LEDs page: geometry and construction from the export — **DONE 2026-09-07 — built, verified, and the page ACCEPTED by the owner; ⚠ his word was "will do for now", NOT "approved", and Q1 is live with the overseer** — [the overseer's per-page rebuild programme, unit 2; SPLIT per C1.7 — 2b is [[S182]]; §14.2a (G13) + [[S162]]'s ruling]
 - 🟢 **OWNER, 2026-09-07, verbatim:** *"approved, give copy paste prompt for overseer to plan the next page
   not you"* — closing unit 1 ([[S176]]) and handing the choice of the next page to the overseer. **This unit
   was planned by the overseer; this chat did not choose the page and does not rewrite the plan.**
@@ -22622,3 +22622,35 @@ comparison the owner was shown: the reference reads *"Far Field Pointing Deorbit
 `—`, and that difference is **correct**. `plugin/src/pure/BottomBar.cs` and
 `plugin/GameData/DragonScreen/art/` are **untouched by this unit** (`git diff HEAD~2 HEAD` on both: empty).
 Nothing else on this page is live — every string is a literal — so there was nothing else to get wrong.
+
+#### ✅ DONE 2026-09-07 — and the owner's words are quoted, not paraphrased or upgraded (C1.12)
+
+🟢 **OWNER, 2026-09-07, verbatim, on being shown `ui_vriotest.png`:**
+
+> *"that page will do for now. overseer will handle the questions with me. finish what you were told then
+> commit etc"*
+
+⛔ **AND THE DIFFERENCE FROM [[S176]] IS RECORDED RATHER THAN SMOOTHED OVER, BECAUSE IT IS THE WHOLE POINT
+OF C1.12's EVIDENTIARY STANDARD.** Unit 1 closed on the word ***"approved"***. This one did not. *"Will do
+for now"* is an ACCEPTANCE — it releases the unit and it is why this line is DONE — but it is not the same
+word, and writing "the owner approved unit 2a" would be inventing a ruling he did not give. `LZ1` recorded
+a ruling that was never made and it took `S89` to unwind; the cheap way not to repeat that is to quote what
+was actually said and let it mean exactly what it says.
+
+⚠ **SO THIS LINE'S OWN DONE-WHEN IS MET ON ITS FIRST FOUR CLAUSES AND ACCEPTED-NOT-APPROVED ON THE FIFTH.**
+Rebuilt on the export's coordinates ✅ · tier-2 fills marked in the code ✅ · census unmoved (`0 regressed,
+0 improved`) ✅ · `previewdiff` this page alone ✅ · owner sign-off **provisional**.
+
+⚠ **Q1 IS STILL LIVE AND IT WOULD CHANGE THIS PAGE.** The panel outlines — white as the reference draws
+them, or `Panel` as the build does — went to the overseer with the owner, by his own instruction. **If it
+comes back as white, that is a NEW EDIT LINE against this page, not a re-opening of 2a**, which is how
+[[S176]]'s four edits were carried and it worked.
+
+⚠ **[[S182]] (unit 2b) IS NOT STARTED, AND THIS CHAT DOES NOT OPEN IT.** Its line reads *"starts only after
+the owner approves [[S181]]"*. What was given is the acceptance quoted above; whether that satisfies its
+gate is the owner's and the overseer's to say, not a build chat's (C1.12). The task prompt was explicit —
+*"THEN STOP. Do not begin 2b."* — and it did not.
+
+**Commits:** `7e26213` (DOING + the split + S183) · `4d6c98e` (step 0, S180 closed) · `3e6a2a2` (the
+rebuild + `VrioGeometryTest`) · `abdc39a` (the two owner questions, C1.14) · `3f821d0` (traps 1 and 4) ·
+this one. **No `git push` — the owner pushes from GitHub Desktop.**
