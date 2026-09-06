@@ -57,6 +57,22 @@ namespace DragonScreen
         // ⚠ The erased BLOCK is deliberately larger than the marker drawn into it (S103 finished that
         // erase — the original left the pill's glow behind, so every page carried a ghost marker under
         // icon 0 whatever tab was really active; QC C-12). Do not shrink the block to fit these.
+        //
+        // ⭐ SUPERSEDED IN PLACE 2026-09-06 (S175) — THERE IS NO ERASED BLOCK ANY MORE, AND THAT IS WHY
+        // QC C-12 IS CLOSED. The paragraph above is kept because it is the record of how the marker came
+        // to be dynamic and why the constants are what they are; only its premise has changed. S103 was
+        // erasing a `filter10_dd` DROP SHADOW — a soft gradient with no edge — which is why two attempts
+        // still left ink behind. The owner supplied the component's own per-element export on 2026-09-06,
+        // and one of the five variants (the zip whose Component 48 carries the marker under NO icon) is
+        // simply the art WITHOUT the pill: MEASURED 0 non-ground pixels in the marker band under all
+        // five icons, against 707 in the file S103 left. `component_48.png` is now that export, so the
+        // marker area is clean BY CONSTRUCTION rather than by erasure. The 707 were the owner's "white
+        // smudge"; the swap removed exactly those and changed nothing else outside them.
+        // ⛔ ONE THING MUST BE RE-APPLIED IF THIS ASSET IS EVER RE-EXPORTED, and it is not this block —
+        // it is the CURRENT STATE value erase at x 1098..1461, y 170..208 (see the S147 block below).
+        // The raw export still carries the baked sentence "Far Field Pointing Deorbit" there, and that
+        // box is now the ONLY difference between the shipped PNG and the export. Dropping a fresh export
+        // in without re-cutting it re-bakes a frozen literal behind a live readout.
         const float MarkY = BarY + 223f, MarkH = 10f, MarkW = 108f;
 
         /// <summary>

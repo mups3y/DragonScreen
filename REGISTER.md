@@ -20873,19 +20873,163 @@ flight control wired (§14.4(a)). **Declared outputs, and the commit is exactly 
 `docs/BUILD_PLAN.md` + `REGISTER.md`.
 
 
-### S175 [O] PER-PAGE REBUILD, STEP 0 — land the 303 per-element exports as a repo input, and swap `component_48.png` for the CLEAN export — **DOING**
+### S175 [O] PER-PAGE REBUILD, STEP 0 — land the 319 per-element exports as a repo input, and swap `component_48.png` for the CLEAN export — **DONE 2026-09-06** — [clears the C7 flag [[G13]] raised; closes QC `C-12`]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
-it or as for more edits. Only then do we move onto the next page."* This is the programme's **STEP 0** —
-the one that clears the C7 flag [[G13]] raised, before any page or the bottom bar is rebuilt. **No page is
-rebuilt here and the bar is NOT rebuilt here** (that is unit 1, its own line).
+it or as for more edits. Only then do we move onto the next page."* **No other authority is claimed.**
 
-**WHY IT IS A UNIT OF ITS OWN.** [[G13]] wrote the conformance rule and, at its end, flagged that the rule
-is not yet actionable: *"The 319 per-element PNGs are **not in the repo tree** as of this commit"*, and C7
-says a build input that is not in the repo is a STOP. This line resolves that, and does the one asset swap
-the owner named in the same directive.
+**WHAT THIS LINE IS.** Step 0 of the per-page rebuild programme: the exports become a repo input, and the
+one asset the owner named is swapped. ⛔ **NO PAGE WAS REBUILT AND THE BOTTOM BAR WAS NOT REBUILT** — the
+bar is unit 1 and is its own line. Nothing about how any page is *constructed* changed here.
 
-**DONE-WHEN:** the per-element exports are in the tree under `assets/figma/`, the manifest that survives
-the gitignore is written, `component_48.png` is the clean export with the [[S147]] erase re-applied,
-`build.py test` green, `previewdiff` reports only pages that draw the bar, preview shown to the owner.
+**WHY IT HAD TO COME FIRST.** [[G13]] wrote the conformance rule (§14.2a) and then flagged that the rule
+was not yet actionable: *"The 319 per-element PNGs are **not in the repo tree** as of this commit"*, and C7
+is explicit — a build input that is not in the repo is a STOP. Every later unit slices from these files.
+
+---
+
+#### WHAT LANDED, AND THE ONE THING ABOUT IT THAT IS NOT OBVIOUS
+
+**Seven zips, but only FOUR distinct element sets.** The Desktop zip is a **bundle**, not a seventh export:
+it contains the six `Downloads` zips verbatim plus the nine frame SVGs and five whole-frame PNGs. The six
+`Downloads` zips are **four sets, each exported twice**, and the duplicate pairs differ *only* in which
+navigation tab `Component 48.png` shows as active. **319 element PNGs, 300 unique basenames** — a name
+repeats across sets when the same component appears on more than one page, so **the sets are kept apart:
+flattening them into one directory would silently collide 19 differently-drawn elements.**
+
+| set | files | attribution |
+|---|---:|---|
+| `cover` | 75 | ⭐ **HARD — Frame 67.** 68 of its 72 top-level names, snake-cased, are **already shipped** in `art/cover/`. This is the export the Cover art was cut from. |
+| `procedure_vrio` | 51 | read off its own contents (`1. Thermal pre-chill` … `4.700 - Deorbit Preparation`) |
+| `hud_numerals` | 145 | read off its own contents (short numeric readouts, `Union`/`Vector` fragments) |
+| `settings_displays` | 48 | read off its own contents (`Cabin Displays`, `- Display 1..3`) |
+
+⚠ **ONLY `cover` IS PROVED AGAINST A NAMED FRAME, AND THE OTHER THREE ARE NOT GUESSED IN THE FILE.** The
+frame SVGs render **all text as paths**, so no string match can confirm which frame `hud_numerals` or
+`procedure_vrio` belongs to. That was tried and it failed, so **no attribution was manufactured** — see
+S175-Q1 below.
+
+⭐ **THE EXPORTS ARE GITIGNORED, SO THE COMMIT DOES NOT CARRY THEM — WHICH IS WHY THE MANIFEST EXISTS.**
+`.gitignore:82` excludes `assets/figma/` as *"exports of the REFERENCE UI's design, not ours to
+republish"*, and C7.1 names `assets/` as REFERENCE, look-don't-ship. That placement is kept. But it means a
+clone holds none of this, and the tree would otherwise hold 319 files that **no committed artefact names**.
+`docs/reference/FIGMA_ELEMENT_EXPORTS.md` is the tracked record of the untracked input: provenance, the set
+map, the layout, and **every file with its pixel size and md5**, so a later chat can tell whether the copy
+in its tree is the one this line describes. C1.16's argument, applied to an input rather than a document.
+
+Two shapes came from the exporter, not from us, and both are recorded: **four elements are named with a
+`/`** (`600°/m altitude rate`, `Deorbit, entry and landing Go/No-Go`, `inertial velocity 7.69km/s`,
+`-0.031 m/s`), which the zip encoded as directories — landed with the slash written ` ~ `; and **one name
+is 220 chars and exceeds the Windows path limit** — truncated at the tail, with the full original name
+written out in the manifest.
+
+---
+
+#### `component_48.png` — MEASURED FIRST, AND THE PROMPT'S FIGURES DID NOT REPRODUCE
+
+The task prompt said *"three of the seven fresh exports have **31**"* residual glow pixels against **466**
+shipped, and told me to verify before swapping. **I verified, and both numbers are wrong.** Non-ground
+pixels (vs the bar's ground `#111B52`, tolerance 2) in the marker band `y 207..232`, per icon:
+
+| variant | icon 0 | icon 1 | icon 2 | icon 3 | icon 4 | |
+|---|---:|---:|---:|---:|---:|---|
+| `[z1]` = `(1).zip` = `(5).zip` | **0** | **0** | **0** | **0** | **0** | ⭐ **the ONE marker-free variant** |
+| `[z2]` = `(2).zip` | 3475 | 431 | 0 | 0 | 0 | marker under icon 0 |
+| `[z3]` = `(3).zip` | 1639 | 3464 | 425 | 0 | 0 | marker under icon 1 |
+| `[z6]` = `.zip` | 3475 | 431 | 0 | 0 | 0 | marker under icon 0 |
+| `[z7]` = bundle | 0 | 0 | 0 | 1644 | 3475 | marker under icon 4 |
+
+**There is ONE clean variant, not three, and it has 0, not 31. The file it replaced carried 707, not 466** —
+counting *pixels that are ink in the old file and ground in the clean export*, i.e. the smudge itself. **The
+direction of the finding is unchanged and the swap is the same swap**; only the arithmetic is mine. The five
+variants are the same art with the active-tab pill under a different icon — they are per-page instances, not
+cleaner copies, which is why four of them are useless for this and one is exactly right.
+
+⛔ **AND A STRAIGHT SWAP WOULD HAVE RE-BAKED A LIVE READOUT — THE PROMPT'S OWN RULE, HIT ON THE FIRST FILE.**
+The shipped PNG is **not** the raw export. It carries **two** deliberate cuts, and only one of them is the
+marker. The other is [[S147]]'s: the raw export still has the baked sentence **"Far Field Pointing Deorbit"**
+in the CURRENT STATE value box — the frozen literal 21 pages showed whatever the vehicle was doing — and
+`BottomBar.Draw` now **types the live phase over it**. Dropping the export in unmodified would have undone
+that silently, which is precisely *"DO NOT 'CORRECT' A LIVE READOUT BACK TO ITS BAKED VALUE"*.
+
+**So the shipped file is the clean export with that ONE box re-cut**, at [[S147]]'s own measured coordinates
+`x 1098..1461, y 170..208`, filled with the bar's ground. Measured before cutting: the baked ink's exact
+bbox is `x 1098..1441, y 175..202` — **fully inside S147's box**, so the re-cut reproduces the old erase
+rather than approximating it.
+
+**Three checks define the swap being correct, and all three hold:**
+1. **731 px changed against the old shipped file, ALL within `x 36..136, y 188..199`** — under icon 0 and
+   nowhere else. **707 of them went from ink to ground: the smudge, gone.** (The other 24 were already ink
+   in both and only changed shade — glow lying over the icon's own antialiasing.)
+2. **The only difference from the raw export is inside the S147 box** — 3666 px, all of them the baked
+   sentence. Nothing else in the export was altered, and this was checked over the whole 3427×235 image.
+3. The caption band (`y 143..158`, 1248 px of ink) and the vertical rule (`x 1462..1469`, 150 px) are
+   untouched, as S147 required.
+
+**QC `C-12` — the owner's "white smudge" — is closed by construction rather than by erasure.** [[S103]] was
+trying to erase a `filter10_dd` **drop shadow**, a soft gradient with no edge, which is why two attempts
+still left ink behind. The element that was never rasterised has nothing to erase.
+
+**C1.16 / G12 respected in `BottomBar.cs`: NOTHING WAS DELETED.** The S103 paragraph is kept verbatim and
+**marked SUPERSEDED IN PLACE** with the date, the reason and the measurement — it is still the record of
+how the marker came to be dynamic and why the constants are what they are. The note adds the one thing a
+future chat must know: **if this asset is ever re-exported, the S147 cut is the thing to re-apply**, and it
+is now the only difference between the shipped PNG and the export.
+
+---
+
+#### VERIFICATION
+
+- **`python plugin/build.py test` — green, ALL SUITES PASSED.** 127 clean report lines; the S167 harness
+  fault check ok; `previewdiff` selftest 19 checks; SELFTEST OK — 13 sections, 416 report lines.
+- **`python plugin/build.py previewdiff` ([[S168]] — renders its baseline in a separate clean worktree, so
+  it cannot report a false green): 96 existing pages changed, 0 new, 0 removed, of 125 compared.**
+- ⭐ **THE CHANGED LIST WAS CONFIRMED BY EXCLUSION AND BY PIXEL, NOT BY EYE.** Reproducing the baseline in
+  my own worktree and diffing page-by-page: **the diff is ONE identical patch — `(145,1371)-(249,1405)`, at
+  the bottom bar's left end — on 94 of the 96, and a tighter `(166,1372)-(231,1384)` on the other two.
+  299–560 changed pixels per page. ZERO pages differ anywhere outside the bar's left end.** The two tighter
+  ones are `ui_suitcheck_popup` and `ui_suitcheck_leak_popup`, where the modal dim already darkens part of
+  the patch — a coherent reason, not an anomaly. (The patch is wider than the 12-px source change because
+  the bar is downscaled 3427→2281 and the renderer's filtering spreads it; the *location* is exact.)
+- **The 29 unchanged pages are exactly the ones that do not draw this asset** — the legacy pre-Figma
+  `page0_`…`page4_` screens (they draw `ChromeBar`), the four `panel_*` command-panel renders,
+  `abort_overlay`, `page_gallery` and `ui_turntable_sheet`. No Figma page is missing from the changed list.
+- ⚠ **A FALSE 107 WAS CAUGHT AND IS WORTH RECORDING.** My first hand-rolled baseline reported **107**
+  changed, not 96. The cause is the one `build.py`'s own header warns about: a bare `git worktree` does not
+  contain the **gitignored input directories** (`assets/figma`, `assets/reference`), so the baseline
+  rendered without art the working tree could see. `previewdiff` mirrors them; my worktree did not. After
+  mirroring, my count matched previewdiff's 96 exactly. **The 96 is the trustworthy number** — and this is
+  the S130 failure mode, met again by anyone who diffs renders without that mirror.
+- Renders confirmed **deterministic** first (same tree, re-render, 0 pages differ), so no diff above is noise.
+- `install` and glass are SPENT ([[S171]]) and were not touched; preview-only stands. `docs/QC_FINDINGS.md`
+  untouched (QC's own file). `docs/BUILD_PLAN.md` untouched (guarded, G10). No flight control wired (§14.4(a)).
+
+**DECLARED OUTPUTS — the commit is exactly these four files:**
+`plugin/GameData/DragonScreen/art/cover/component_48.png` · `plugin/src/pure/BottomBar.cs` ·
+`docs/reference/FIGMA_ELEMENT_EXPORTS.md` · `REGISTER.md`. The 319 element PNGs and the frame/variant
+rasters are in the working tree under `assets/figma/` and are **gitignored by design**, so they are not in
+the commit — that is what the manifest is for.
+
+---
+
+#### Open questions for the owner
+
+**S175-Q1 — three of the four element sets are named from their own contents, not proved against a frame.**
+`cover` is proved (68 of 72 names already shipped as `art/cover/`). `procedure_vrio`, `hud_numerals` and
+`settings_displays` are named from what is inside them; the frame SVGs render all text as paths, so the
+obvious string match cannot settle it and I did not invent an attribution. Options: (1) leave it — the unit
+that first needs one of those sets establishes the mapping and records it in the manifest **(recommended:
+it costs that unit almost nothing, since it will be looking at the frame anyway, and it avoids a guess
+being written down as fact now)**; (2) settle all three now by rendering each frame SVG and matching
+elements by pixel; (3) ask the owner which Figma frame each zip was exported from. **No owner gate is
+involved.**
+
+⚠ **NOTICED, NOT TOUCHED (C1.1):** `previewdiff` still warns `assets/kenney_ui_scifi` is now EMPTY — the
+same warning [[S174]] logged. It is untracked reference art, is not this line's scope, and was not modified
+here. Still flagged so it is not lost quietly.
+
+⚠ **NOTICED, NOT TOUCHED (C1.1): the bottom bar's five nav icons are still the flattened raster.** This
+line swapped the flattened component for a *cleaner* flattened component; it did not un-flatten anything.
+§14.2a clause (1) is satisfied for the bar only when the icons are sliced from the export. That is **unit 1**
+and belongs to it.
