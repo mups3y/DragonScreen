@@ -24,6 +24,21 @@
 //   MechJebModuleNodeExecutor, MechJebModuleDockingAutopilot, MechJebModuleSmartASS, and
 //   Operation{Circularize,Periapsis,Apoapsis,Plane,Transfer,CourseCorrection,KillRelVel}.
 //
+// ⛔ SUPERSEDED IN PLACE, 2026-09-07 (T19) — ONE OF THOSE SEVEN NAMES IS WRONG, AND THE CHECK ABOVE IS
+// WHY IT WAS NOT CAUGHT. Marked here rather than edited out, per C1.16 / G12: the claim is a record of
+// what was checked and how, and how it missed is the useful part.
+//   The `find` that "confirmed" the seven was a FILE-name search, and it is right for six of them. But
+//   the file `Maneuver/OperationTransfer.cs` declares a class called **`OperationGeneric`** (`:17`), and
+//   **no class named `OperationTransfer` exists in the pinned tree** — `grep "public class Operation\w*
+//   : Operation"` over that directory lists nineteen operations and that is not one of them. §B10.2's own
+//   ⚠ anticipated exactly this: *"Verify exact C# class names vs the pinned MechJeb source when
+//   embedding."*
+//   ✅ The correction lives in `pure/RendezvousOps.cs`'s `MechOps`, which maps every `ConductorOp` to the
+//   class that ACTUALLY exists and is re-derived from the pinned source text on every build by
+//   `test/RendezvousOpsTest.cs` — including a check that `OperationTransfer` does NOT exist, so this
+//   correction cannot silently rot back. **`ConductorOp.Transfer` itself is unchanged and correct**; only
+//   the name written in this comment was wrong.
+//
 // ⛔ `MechJebModuleRendezvousAutopilot` EXISTS IN THE TREE AND IS DELIBERATELY NOT IN THIS ENUM.
 // §B1/§B12.4: MechJeb's rendezvous *autopilot* is unreliable in RSS/RO, so the conductor composes
 // planner operations itself and re-plans. Naming it here would invite a later chat to engage it.
@@ -62,7 +77,7 @@ namespace DragonScreen
         Periapsis,          // OperationPeriapsis  — also the deorbit burn (§B12.3 "deorbit via OperationPeriapsis")
         Apoapsis,           // OperationApoapsis
         MatchPlane,         // OperationPlane
-        Transfer,           // OperationTransfer
+        Transfer,           // ⛔ `OperationGeneric`, in the file OperationTransfer.cs - see the header
         CourseCorrection,   // OperationCourseCorrection
         KillRelVel,         // OperationKillRelVel
         KillRot,            // SmartASS: §B12.3's "idle/KILL-ROT" while docked

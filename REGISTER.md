@@ -4513,7 +4513,7 @@ not 'temporarily' wire one to MET."* Nothing in `AscentSequence` reads MET: MECO
 propellant depletion or stock KSP's own `flameout` boolean, and every later step is a delay after a
 MEASURED event. Pinned by a check that flies **100 000 s with full tanks and does not produce MECO**.
 ⚠ **The four callouts `BarEvent` says have NO DETECTOR now have one** (MECO / stage sep / SES-1 / SECO-1).
-Wiring them to the bar is a SCREEN change and out of this batch — logged as [[S198]], not done (C1.1).
+Wiring them to the bar is a SCREEN change and out of this batch — logged as [[S206]], not done (C1.1).
 
 ⭐ **THE FLIGHT LESSONS ARE PINNED, NOT RE-DERIVED.** `IgnitionGate` (W5/W34, owner-ruled) owns the clamp
 decision unchanged — release only at ≥99% of available thrust, and a stage that has not made thrust inside
@@ -4759,7 +4759,7 @@ FLIGHT BUTTONS ARE NOT IN SCOPE. These wire the autopilot, not the UI's command 
 the mechanism — `RequestManualDocking()` / `ResumeAutoDocking()` / `ManualDocking`, live and tested,
 feeding `ConductorInputs.ManualDockingRequested` — and **nothing in the tree calls it**, which is exactly
 §14.4(a). The screen-side press (the Manual ISS Docking page, §B12.5's front-end) is logged as
-**[[S202]]**, not built (C1.1).
+**[[S209]]**, not built (C1.1).
 
 ⭐⭐ **THE FINDING THAT SHAPED THIS LINE: `ModeManager`'s PLAN HAS TWO `Fly(Docked)` STEPS AND §B12.3's
 PHASE TABLE HAS ONE ROW.** The plan is
@@ -4774,7 +4774,7 @@ toward **G14**. The discrimination is **pure and tested** (`DockingLadder.LegFor
 the glue where it would rot; the glue's redirect is one `if`, and the suite checks the real plan really is
 in the order capture → G13 → berthed → G14.
 ⚠ **LOGGED, NOT FIXED (C1.1):** §B12.3's single row does not distinguish them and `docs/BUILD_PLAN.md` is
-guarded (G10) — **[[S203]]**.
+guarded (G10) — **[[S210]]**.
 
 ⛔ **NO NUMBER WAS INVENTED, AND THE ONE JUDGEMENT CALL IS STATED AS A PRINCIPLE.** Two of the ladder's
 three rungs are single documented values taken as they stand: **1.0 m/s** far (§B10.3 *"keep-out approach
@@ -4912,7 +4912,7 @@ press the screen's UNDOCK button, and that button calls `MissionOps.Undock()`
 (`ScreenPainter.cs:1188`) — **which is still the demolition stub's log-only no-op**
 (*"no flight/actuation software installed"*). The real `Actuator.Undock(v)` exists and is unwired.
 ⚠ **That button is the UI COMMAND SURFACE, which this batch put explicitly out of scope**, so it is
-**logged as [[S204]] and NOT built** (C1.1). The documented flow — `CrewProcedureOps`'s own comment,
+**logged as [[S211]] and NOT built** (C1.1). The documented flow — `CrewProcedureOps`'s own comment,
 *"press UNDOCK, then press AUTO SEQUENCE"* — means the conductor was never going to undock anyway; what
 is missing is the crew's button working. **Workaround for the flight: undock from the docking port's own
 right-click menu.** It is a numbered row on the checklist.
@@ -4975,7 +4975,7 @@ T21 — close the return half on the flight, and give the abort its own line dep
 are the owner's: (1) edits the register's criteria, (2) is an `OVERRIDE`, (3) is a plan decision.**
 
 **Q3 — the UNDOCK button.  Category: SCOPE.** `MissionOps.Undock()` is a log-only no-op and the real
-`Actuator.Undock(v)` is unwired, so the crew cannot undock from the screens (logged as [[S204]]).
+`Actuator.Undock(v)` is unwired, so the crew cannot undock from the screens (logged as [[S211]]).
 The batch put the UI command surface out of scope, so T21 left it. **Options:** (1) undock from the
 docking port's right-click menu on this flight and wire the button on its own line *(recommended — it
 keeps the batch's scope line intact and costs one right-click)*; (2) wire it now as a one-line exception.
@@ -24822,3 +24822,240 @@ map is rotated. Nothing was fixed here — the defect is [[S42]]'s (C1.1).** New
   owner's.
 - **DONE when:** the owner has landed the captures (or declined), and if landed, a manifest with hashes
   sits beside them and `docs/INDEX.md` knows what they are.
+
+### S206 [S] The four ascent callouts now have real detectors — the event bar could raise them — **TODO** — [logged by the T18–T21 batch per C1.1, 2026-09-07; TIER 3: a screen wiring, not a defect]
+
+`pure/BarEvent.cs` states, in its own header, that four of its callouts have no source:
+> `MECO / SECO-1 / MAX-Q / STAGE SEPARATION` — **⛔ NO DETECTOR EXISTS ANYWHERE IN THE TREE**
+and warns *"⛔ A `MECO` fired off a stopwatch would be the single worst thing this bar could do … Do not
+'temporarily' wire one to MET."*
+⭐ **[[T18]] built real, measured detectors for three of those four** and for SES-1: `AscentSequence`'s
+steps `Meco` (propellant depletion or a stock KSP `flameout`), `Separation`, `Ses1` and `Seco1` (PVG's own
+`PSGStatus.FINISHED`) — **none of them a timer**, which is what `BarEvent`'s warning is about.
+`MechConductor.Ascent` exposes the live step. **Max-Q still has no detector.**
+- ⛔ **NOT DONE HERE (C1.1).** Wiring a callout to the bar is a SCREEN change, and the batch's own scope
+  line put the screens out of it; `previewdiff` was required to come back empty and did.
+- **DONE when:** the bar raises MECO / STAGE SEPARATION / SES-1 / SECO-1 from `MechConductor.Ascent`, and
+  a preview PNG shows each, with Max-Q still dark for want of a source.
+
+### S207 [S] `assets/kenney_ui_scifi` is EMPTY and `previewdiff` warns on every run — **TODO** — [logged by the T18–T21 batch per C1.1, 2026-09-07; TIER 2: a possible asset loss, unverified]
+
+Every `python plugin/build.py previewdiff` run in this session ended with:
+> `!! WARNING: C:\Users\User\Desktop\DragonScreen\assets\kenney_ui_scifi is now EMPTY - check it against
+> your backups`
+- **Measured here:** the directory exists, contains nothing, and is dated **2026-09-06 12:49** — i.e. it
+  was already empty before this session began. `git ls-files assets/kenney_ui_scifi` returns **nothing**,
+  so the tree is untracked/ignored and git cannot say what was in it.
+- ⚠ **This chat did not empty it and cannot say who did.** C7.1 lists `assets/` (DillonBaird, Kenney, MAS)
+  as REFERENCE material — look, don't ship — so nothing shippable depends on it, and no preview page
+  changed. But the warning exists precisely because an empty asset directory is usually a loss.
+- **DONE when:** the directory is restored from the owner's backups, or it is confirmed deliberately
+  emptied and the warning's expectation is updated so it stops crying wolf every build.
+
+### S208 [S] Gate G9's title says "(7.5 km)" but the conductor raises it at whatever range the phasing orbit is established at — **TODO** — [logged by [[T19]] per C1.1, 2026-09-07; TIER 3: fidelity, not a malfunction]
+
+`CrewGates` titles G9 **"GO FOR APPROACH INITIATION (7.5 km)"**, and §B14.2 puts that poll *"~96 min
+before dock, from 7.5 km behind/below"*. But §B12.3's phase table gives the whole rendezvous op chain to
+`Approach`, so the `Phasing` leg ends when the insertion trim is flown and G9 comes up at whatever range
+that is — typically hundreds of kilometres.
+- ⭐ **Nothing malfunctions.** The crew still poll before the transfer, which is the operational point.
+  The gate's own words just do not describe where it appears.
+- ⛔ **NOT FIXED (C1.1), and one of the two options is not a build chat's:** holding the phasing leg until
+  the range is inside 7.5 km would put the chain in `Phasing` and contradict §B12.3, and
+  `docs/BUILD_PLAN.md` is guarded (G10). Raised as T19's Q2.
+- **DONE when:** either the gate is raised near 7.5 km, or its wording says what it means.
+
+### S209 [S] The manual-docking override is live but no button calls it — **TODO** — [logged by [[T20]] per C1.1, 2026-09-07; TIER 3: a screen wiring]
+
+§B12.3 / §B10.3 / O6: *"Pressing the manual docking button switches to the Manual ISS Docking screen and
+SHUTS DOWN the Docking Autopilot."* **[[T20]] built the mechanism** —
+`MechConductor.RequestManualDocking()` / `ResumeAutoDocking()` / `ManualDocking`, feeding
+`ConductorInputs.ManualDockingRequested`, tested, and it genuinely takes the autopilot off. **Nothing in
+the tree calls it**, which is §14.4(a) exactly.
+- ⛔ **NOT DONE HERE.** The button is the UI COMMAND SURFACE and the batch put that out of scope in as
+  many words. Wiring it also couples to the Manual ISS Docking page (register S28).
+- **DONE when:** the manual docking button calls `RequestManualDocking()`, the page opens, and the
+  docking lamp goes dark on the press.
+
+### S210 [S] §B12.3's phase table has ONE `Docked` row and the mission plan has TWO `Fly(Docked)` steps — **TODO** — [logged by [[T20]] per C1.1, 2026-09-07; TIER 2: a plan/plan divergence]
+
+`pure/ModeManager.cs` (W4, restored from `8b81816^`) builds:
+`Fly(Docked,"Soft → hard capture")` → **G13** → `Fly(Docked,"Docked — crew aboard")` → **G14**.
+§B12.3's phase table has a single `Docked` entry — *"idle/KILL-ROT"* — which describes the SECOND. The
+FIRST is §B9 Phase 4's *"capture at IDA-2"*, which the same §B12.3 sentence hands to the Docking AP.
+⇒ `pure/Conductor.cs` returns KILL-ROT for both, and on the capture leg that would try to re-dock a
+hard-mated vehicle.
+- ⭐ **T20 resolved it in code** — `pure/DockingLadder.LegFor(nextGate)` tells them apart from the gate
+  each walks toward (the seam `CrewProcedureOps.NextGateId` exists for), pure and tested, with the glue's
+  redirect a single `if`. **So nothing is broken today.**
+- ⛔ **The PLAN still reads as though there is one Docked phase**, and `docs/BUILD_PLAN.md` is a guarded
+  file (C1.12 / G10), so a build chat cannot reconcile it.
+- **DONE when:** a `G`-line records the two-step split in §B12.3, or the owner rules that the code's
+  resolution is the whole answer and the plan text stands as shorthand.
+
+### S211 [S] Nothing undocks the vehicle — `MissionOps.Undock()` is still the demolition stub — **TODO** — [logged by [[T21]] per C1.1, 2026-09-07; TIER 2: a real gap in the crew's flow]
+
+Gate G14 is **"GO FOR UNDOCK"**. The screen's UNDOCK button dispatches
+`case PageAct.Undock: MissionOps.Undock(); break;` (`ScreenPainter.cs:1188`), and `MissionOps.Undock()`
+is still `_AutopilotStub.cs`'s log-only no-op: *"UNDOCK pressed — no flight/actuation software installed
+(screens-only build)"*. **The real `Actuator.Undock(v)` exists (`Actuator.cs:457`) and is unwired.**
+- ⭐ **The conductor was never going to undock**, and that is by design: `CrewProcedureOps`'s own comment
+  describes the flow as *"press UNDOCK, then press AUTO SEQUENCE"*, and `MarkDockedThisMission` (which
+  the press is supposed to call) is what makes the next engage resume at departure. So the missing piece
+  is the crew's BUTTON, not a conductor capability.
+- ⛔ **NOT DONE (C1.1).** The UI command surface was explicitly out of the T18–T21 batch's scope.
+- ⚠ **CONSEQUENCE FOR THE FIRST FLIGHT:** the return leg cannot start from the screens. **Workaround:
+  undock from the docking port's own right-click menu**, then press AUTO SEQUENCE. It is a numbered row
+  on the flight checklist.
+- **DONE when:** `MissionOps.Undock()` calls `Actuator.Undock(v)` and `CrewProcedureOps.
+  MarkDockedThisMission()`, and the UNDOCK button releases the hooks in the capsule.
+
+### S212 [S] `Actuator.OpenNoseShroud` / `CloseNoseShroud` now have their first callers and have never been flown from the conductor — **TODO** — [logged by [[T18]]/[[T21]] per C1.1, 2026-09-07; TIER 3: coverage note]
+
+`Actuator`'s nose-shroud path was restored by W2 with the note *"Nothing on any screen calls Actuator
+today (verified by grep, 2026-09-04), so no screen behaviour changed with the swap — the callers arrive
+with Waves C/D."* **T18 and T21 are those callers**: `OpenNoseShroud` at the end of the ascent,
+`CloseNoseShroud` before entry. Neither path has been exercised since the deletion.
+- ⚠ **`ToggleNoseShroud` drives a `ModuleAnimateGeneric` by name**, so a craft revision that renames the
+  animation would fail silently — the class of failure §B12.7's binding rule warns about.
+- **DONE when:** a flight confirms the nose cone opens after Dragon separation and closes before entry
+  interface, or the binding is made to say so when it finds nothing.
+
+---
+
+## 🟠 GATE REQUEST — `install` + glass, ONE flight, the WHOLE mission profile (T18–T21 batch, 2026-09-07)
+
+⛔ **A BUILD CHAT DOES NOT OPEN THIS GATE AND HAS NOT (C1.12).** This is the paste-ready overseer prompt
+C1.13 requires. Nothing was installed, nothing was flown, and none of T18–T21 is marked `DONE`.
+
+**Where the batch stands.** T18, T19, T20 and T21 are all **NEEDS-WORK — built, awaiting the in-sim
+criterion**. Every one of their DONE-criteria is *"in-sim"*, and `install` + glass were spent on the T15b
+flight, so a single flight is what closes all four. **T22 is NOT in this batch** — it tunes against flight
+data that does not exist until this flight happens, which is the point of flying it.
+
+**What is proven without the game.** `python plugin/build.py test` — **ALL SUITES PASSED**. Five new/grown
+suites: `AscentSequenceTest` **108**, `RendezvousOpsTest` **122**, `DockingLadderTest` **39**,
+`ReturnSequenceTest` **88**, `MissionWalkTest` **79** — and the last of those walks **one Crew-2 mission
+from the pad to splashdown**, closed-loop, against fixtures that miss their burns and refuse their
+ignitions. **51 mutations across the four pure files; all 51 killed, every kill from the suite under
+test.** `python plugin/build.py previewdiff` — **0 of 127 pages changed**: these draw nothing.
+
+**What the flight is for.** Everything above is DECISIONS. Not one of these suites has engaged a MechJeb
+module, fired a decoupler, or moved a vessel — they cannot, because that needs the game. The flight tests
+exactly the seam between a correct decision and a real part.
+
+---
+
+### 1. THE IN-FLIGHT CHECKLIST — in the order he will meet it
+
+*One line per item: what to do · what SUCCESS looks like · **what FAILURE looks like**, so it can be
+reported in one line rather than diagnosed in the seat · and which register line a failure routes to.*
+
+#### Before the pad — setup (2 items)
+
+| # | Do this | Success | **Failure looks like** | Routes to |
+|---|---|---|---|---|
+| **0a** | Launch a craft **named `Crew-2`** (or any catalog mission name) from LC-39A, with the **ISS targeted**. | KSP.log: `AUTO SEQUENCE engaged: Crew-2 (N steps)`. | `craft name '…' matches no mission profile — NO-GO`. The conductor will not fly a guessed mission. | [[T18]] |
+| **0b** | Note the tune line at load. | `MechJeb tune applied from the mod: … 51 module(s) … 11 carried values` | Anything else, or absent → the core did not load our profile. | [[T15b]] / [[S195]] |
+
+#### Pad and ascent — T18 (7 items)
+
+| # | Do this | Success | **Failure looks like** | Routes to |
+|---|---|---|---|---|
+| **1** | Press **AUTO SEQUENCE**. Work gates **G1–G7**: tap the crew items, press **GO** on each. | Each gate clears on one GO. Log: `LAUNCH GO latched (G7)`. | A gate will not clear with every item ticked → the gate machine. A GO clearing two gates → the consume rule. | [[W10]] |
+| **2** | Watch the pad at G7. | Log: `octaweb liftoff ignition — 9 all-engines module(s) lit`, then `thrust good — hold-downs released`, and it flies. | ⛔ **`PAD SAFED — ignition did not reach 99% thrust inside 2 s. Engines shut, HOLD-DOWNS STILL HELD.`** That is the gate working; report the thrust it reached. ⛔ **Clamps releasing on a cold or half-lit stage is the one unrecoverable failure** — report immediately. | [[T18]] |
+| **3** | ⚠ **THE ONE THAT MOST NEEDS WATCHING — the exception storm.** Check KSP.log for `ArgumentOutOfRangeException` / `GetPotentialTorque`. | None, or a handful. Frame rate normal. | **Thousands of them**, frame rate on the floor. That is the failure T15d fixed by never being master, and T18 has to be master. The mitigation (`RefreshGimbalEngineLists`) is a **HYPOTHESIS, not a proven fix**. **Report the COUNT.** | [[T18]] |
+| **4** | Watch the ascent. | PVG steers; AoA sane through max-Q. Log: `ASCENT Liftoff -> Meco`, `Meco -> Separation`, `Separation -> Ses1`. | ⛔ **MECO never fires** and the stage runs dry still throttled → the propellant reader. ⛔ **The booster separates while still thrusting** and rams the S2 → the thrust-dead test (flight 194334's failure returning). | [[T18]] |
+| **5** | Watch SES-1. | Log: `S2 (MVac) ignition — 1 engine(s) lit`, possibly after several tries. | The MVac never lights and the log repeats `re-commanding ignition` forever → RealFuels ullage. **Report how many tries.** | [[T18]] |
+| **6** | Watch insertion. | Orbit ≈ **210 km × 51.63°**. Log: `ASCENT S2Flight -> Seco1`. | ⛔ **A 145 km EQUATORIAL orbit** → the target-orbit write did not take. ⛔ **The right inclination but the wrong AZIMUTH** (launched south instead of north-east) → **that is T18's Q1, the inclination SIGN**, and it is the cheap answer we flew for. | [[T18]] |
+| **7** | Watch Dragon sep + nose cone. | ~190 s after SECO the Dragon separates; 45 s later the nose cone opens. | Neither happens → the decoupler role or the `ModuleAnimateGeneric` binding. | [[T18]] / [[S212]] |
+
+#### Rendezvous — T19 (4 items)
+
+| # | Do this | Success | **Failure looks like** | Routes to |
+|---|---|---|---|---|
+| **8** | Let the phasing leg run, then work **G9**. | A circularise node is planned and flown; G9 comes up. | ⚠ **G9 comes up hundreds of km out despite saying "(7.5 km)"** — **EXPECTED**, logged as [[S208]], not a fault. | [[T19]] / [[S208]] |
+| **9** | Watch the approach chain. | Log: `planned MatchPlane (OperationPlane)`, `Transfer (OperationGeneric)`, `CourseCorrection`, `KillRelVel`, with `chain step n/4` between. | ⛔ **`OperationGeneric` throws or plans nothing** → the transfer's flag defaults (T19's Q1). ⛔ **A burn planned with no target** → `no target selected`; re-target the ISS. | [[T19]] |
+| **10** | Watch the re-plan loop. | Occasional `RE-PLAN — closest-approach error exceeds tolerance`, then it closes. | ⛔ **Re-planning every tick and never converging** → the tolerances. ⛔ **The range stops closing at a round number (4000 m, 1000 m, 400 m)** → the ladder stalling, which is the defect the walk found; report the number it stuck at. | [[T19]] |
+| **11** | Work **G10 (WP0)**, **G11 (WP1)**, **G12 (WP2)**. | Each hold arrives with the range roughly at its waypoint and the relative velocity nulled. | A gate arriving with the vehicle still closing fast → the arrival test. | [[T19]] |
+
+#### Docking — T20 (2 items)
+
+| # | Do this | Success | **Failure looks like** | Routes to |
+|---|---|---|---|---|
+| **12** | Let the capture leg run. | Log: `DOCKING AUTOPILOT engaged (O6 default) … roll-align ON`, then `docking speedLimit -> 0.30` at 200 m and `-> 0.10` at 5 m. Hard dock. | ⛔ **The Dragon backs AWAY from the station continuously** → `safeDistance` (T20's Q1) — the failure predicted from the vendored source. ⛔ **Contact faster than 0.2 m/s** → the ladder. | [[T20]] |
+| **13** | After capture, work **G13** and watch the berth. | Log: `SmartASS KILL-ROT engaged`. The plan **stops** there. | ⛔ **The plan walking on through G14 by itself** → the berthed leg completing itself, which is the failure that would undock a mated vehicle. | [[T20]] |
+
+#### Return — T21 (5 items)
+
+| # | Do this | Success | **Failure looks like** | Routes to |
+|---|---|---|---|---|
+| **14** | ⚠ **UNDOCK BY HAND** — right-click the docking port → *Undock*. **The UNDOCK button on the screen does nothing** ([[S211]], out of the batch's scope). Then press **AUTO SEQUENCE**. | It resumes at *"Departure & phasing"*. | If the screen's UNDOCK button ever DOES release the hooks, that is a surprise worth reporting. | [[S211]] |
+| **15** | Watch the departure. | Backs away to 4 km, then `RETURN Backout -> TrunkJettison`, trunk away. | ⛔ **The trunk firing while still docked or inside 4 km** — the failure the suite sweeps 12 steps to prevent. Report immediately. | [[T21]] |
+| **16** | Work **G15**. | Log: `DEORBIT authorised (crew cleared G15)`, then `deorbit node planned — target periapsis 50 km (⛔ a T21 ENGINEERING ESTIMATE…)`. | ⛔ **A deorbit before G15** → the gate. | [[T21]] |
+| **17** | ⚠ **THE OTHER ONE THAT MOST NEEDS WATCHING — the entry.** Ride it down. **Report the peak g and the entry FPA off the black box.** | Heat shield forward, no bank. Peak decel roughly **4–4.5 g**. | ⛔ **7–8 g or a skip back out of the atmosphere** → **the 50 km periapsis is wrong, which is T21's Q1** and the single invented number in the batch. This is the measurement the flight exists to take. | [[T21]] |
+| **18** | Watch the chutes. | Drogues at ~**5486 m**, mains at ~**1830 m**, splash, then control released. | ⛔ **No chutes** → the deploy binding. ⛔ **Chutes on the way up** → the descent gate (should be impossible; the suite sweeps it). | [[T21]] |
+
+#### The abort — ⛔ NOT TESTABLE ON THIS FLIGHT (1 item)
+
+| # | Do this | Success | **Failure looks like** | Routes to |
+|---|---|---|---|---|
+| **19** | **Press EJECT at any point.** | **NOTHING HAPPENS — click, no light, no action, no red.** That is the correct, designed behaviour. | ⛔ **Anything at all happening** — a red overlay, a klaxon, a SuperDraco light — is a defect, because there is no abort executor in this build. | [[W19]] (HELD) |
+
+---
+
+### 2. THE QUESTIONS — all **HELD**, categorised
+
+⛔ **None of these was decided by this chat.** Each is written out in full on its own register line.
+
+#### Category: **OWNER GATE**
+
+- **G-1 · `install` + glass for this flight.** The whole of section 1 needs it. Only the owner opens it.
+- **T21-Q2 · [[W19]] is HELD, and half of T21's DONE-when depends on it.** *"EJECT abort works"* cannot
+  ever be satisfied while `AbortControl` is blocked on `Steering.cs`. **Recommendation: SPLIT T21** — close
+  the return half on this flight, give the abort its own line dependent on W19 — so one blocked half does
+  not hold a proven half hostage.
+- **T18-Q2 · [[S195]], which profile flight 1 flies.** The installed stack is *RO defaults + the TUNED
+  Crew-2 profile on top*; §B5 says flight 1 should fly RO defaults with Crew-2 demoted to a §B11 TARGET.
+  **T18 is profile-neutral and wrote no ascent-shaping value**, so this does not block the flight — but the
+  first RECORDED flight is what T22 tunes from. **Recommendation: blank `DragonMechJebCore.tuneFile` so
+  flight 1 flies RSS-RO defaults, as §B5 says.** It is one cfg field. ⛔ Touches the shipped profile.
+
+#### Category: **`OVERRIDE` / tier-3 invention (§1.4)**
+
+- **T21-Q1 · the deorbit target periapsis, 50 km.** ⛔ **The only invented number in the entire batch.**
+  §B10.2 gives a shape, not a value; §B11's entry FPA is itself [EST]. **Recommendation: fly it and read
+  the entry g-trace and FPA off the black box, then pin it in T22** — which is exactly what §B11 says its
+  four [EST] numbers are for.
+- **T20-Q1 · the Docking AP's `safeDistance`.** §B10.3 says *"≈ the Keep-Out Sphere"*, but the vendored
+  field is a **hull-clearance** radius; 200 m would back the Dragon away from the station continuously.
+  T20 left MechJeb's default, which is also what §0's deferred-tune gate says. **Recommendation: leave it
+  and read the flown approach**; re-wording §B10.3 needs the owner (G10).
+- **S210 · §B12.3 has one `Docked` row, the plan has two `Fly(Docked)` steps.** Resolved in code and
+  tested; the PLAN still reads as one phase, and it is a guarded file. **Recommendation: a later `G`-line.**
+
+#### Category: **TASTE / no right answer**
+
+- **T18-Q1 · the inclination SIGN.** The cfg says −51.6316, the catalog says +51.6, and the repo has no
+  source for which MechJeb reads as the real north-easterly LC-39A azimuth. **Recommendation: leave it —
+  checklist item 6 answers it in ninety seconds and costs nothing.**
+- **T19-Q1 · `OperationGeneric`'s four flags.** §B10.2 names them in kRPC's vocabulary; the vendored class
+  has different fields and the repo carries no mapping. T19 set **none** of them. **Recommendation: leave
+  the defaults — §B5's own "begin from defaults" — and read the flown transfer.**
+- **T20-Q2 · the corridor speedLimit rung, 0.3 vs 0.5.** §B10.3 gives a band. T20 took the slower end
+  under a stated principle. **Recommendation: 0.3.** (0.5 halves an eleven-minute corridor crossing.)
+- **T19-Q2 · G9's stated range** ([[S208]]) and **T21-Q3 · the UNDOCK button** ([[S211]]).
+  **Recommendations: leave both for flight 1** — the first is cosmetic, the second costs one right-click.
+
+---
+
+### 3. ⛔ WHAT THIS CHAT DID **NOT** DO
+
+- **Did not install, did not fly, did not open a gate** (C1.12).
+- **Did not mark any of T18–T21 `DONE`** — every one is `NEEDS-WORK`, awaiting section 1.
+- **Did not touch `docs/BUILD_PLAN.md`** (guarded, G10) or `docs/QC_FINDINGS.md`.
+- **Did not touch the screens' command surface** — `FlightCommands.Run` is byte-for-byte unchanged and
+  still returns false for every flight command. All six §B12.5a facade properties are now live, and every
+  one is a **status read** lit by the conductor, never by a button press.
+- **Did not `git push`.**
+
