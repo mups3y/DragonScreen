@@ -16581,7 +16581,7 @@ is nothing for it to contradict. A check pins the harder half anyway: **the wors
   [[S132]]'s two patches and two values plus up to twelve alert rows at two commands each.
 - comment-loss **0** · no `install`, no glass, no `git push`.
 
-### S134 [S] The settings family: five layouts that can render one, a stranded writer, and a tab strip in two incompatible forms — **DOING** — [H12 + QC `A-01` `A-03` `A-04` `F-03` `F-04` `VV-02`; TIER 2: contains a real coordinate-system defect]
+### S134 [S] The settings family: five layouts that can render one, a stranded writer, and a tab strip in two incompatible forms — **SPLIT 2026-09-06 into [[S134a]]–[[S134e]]; F-04 re-measured and it is REAL but not yet WRONG** — [H12 + QC `A-01` `A-03` `A-04` `F-03` `F-04` `VV-02`; TIER 2: contains a real coordinate-system defect]
 - **The findings, and they are one cluster:** the page has five layouts and can render exactly one forever
   (`A-01`); the audio ± and fan buttons have **no HitTest in the file** and the video page's camera rows
   draw a live selection **whose only writer is stranded** by `FigmaMode` (H12, `VV-02` part-closed — the
@@ -16597,6 +16597,79 @@ is nothing for it to contradict. A check pins the harder half anyway: **the wors
 - ⛔ **SPLIT THIS BEFORE STARTING (C1.7)** — six findings across four files will not finish in one session.
   `F-04` first, then the stranded writer, then layout.
 - **DONE when:** each split line lands with a preview at 2560 and a hit-test/draw round-trip test.
+
+#### ✅ SPLIT 2026-09-06, as this line's own instruction requires — with `F-04` re-measured first
+
+⭐ **F-04's ARITHMETIC WAS RECOMPUTED RATHER THAN QUOTED, and the result changes how urgent it is.**
+The defect is exactly as QC describes: three pages share one hit block (`FigmaUI.cs:342-351`) that maps a
+touch with `dx = px * RefW / w` — a **full-width stretch** — while `Cabin` draws its strip **letterboxed**
+through `FigmaFramePage` (`ox + x * sc`). Two coordinate systems, one control.
+
+At the shipped 2560×1406 (`sc` 0.66572, `ox` 139.29):
+
+| tab | drawn at design x | hit-tested as | error |
+|---|---|---|---|
+| Audio | 1585 | 1599.0 | **+14.0** |
+| Cabin | 1716 | 1715.7 | −0.3 |
+| Video | 1846 | 1831.6 | **−14.4** |
+
+⚠ **So the error is 14.4 px, not QC's "up to 17"** — a small correction, and mine is stated because it is
+the one I measured. The bands are 130 px wide, so all three tabs land well inside their own with ~50 px
+to spare.
+
+⭐ **AND IT DOES NOT MISS AT ANY PLAUSIBLE PANEL.** Swept width against the same 1406 height: the error
+grows with `ox` as QC says, but the first tab to leave its own band does so at **w = 4416 px — a 3.14:1
+panel**. At 4096 the worst error is 58.7 px and every tab still hits. **The defect is REAL and it is not
+yet WRONG**, and that is worth writing down because it decides the order: `F-04` is a correctness fix
+against a class of bug, not a live mis-hit the crew can find today.
+
+⛔ **It is still first**, for the reason the parent gives: it is [[H-04]]'s failure mode — one rectangle
+drawn, another hit-tested — and every other line here touches the same three pages. Fixing the geometry
+under them first means the rest are not built on a mapping that is about to change.
+
+#### The five splits
+
+### S134a [S] The settings tab strip: draw it once, hit it from the same function — **TODO** — [split 1 of 5 of [[S134]]; QC `F-04`; do this FIRST]
+- **The defect, measured:** see the table above. Two mappings for one strip; 14.4 px of disagreement at
+  the shipped panel, first actual miss at a 3.14:1 aspect.
+- ⭐ **The fix is the standing rule**: one geometry function, used by the draw and by the hit test.
+  `VehicleTabBar` already does exactly this for the eight vehicle sub-tabs and is the model in this file.
+- ⚠ **`Cabin`'s strip is BAKED into `frame66.png`**, so drawing it in code means suppressing the baked
+  one — the move `CoverPage` makes with `SkipKeys`, which `FigmaFramePage` has no mechanism for. Adding
+  one is part of this line. ⭐ [[S132]] established the alternative on a different page (patch the region
+  in its own flat ground and redraw); either is acceptable, but say which and why.
+- ⚠ **The two strips do not look alike** — Audio's is text with an accent underline, Cabin's is baked
+  icons above labels. Drawing one strip for all three settles that too, and it is a visible change to
+  three pages, so all three need a render.
+- **DONE when:** one function supplies both geometries, each drawn tab's centre hit-tests back to its own
+  page on **all three pages at two aspects**, and the previews show the three strips identical.
+
+### S134b [S] The video page's camera rows draw a selection whose only writer is stranded — **TODO (blocked: [[S134a]])** — [split 2 of 5 of [[S134]]; H12 + QC `VV-02` (part-closed)]
+- **The finding.** The camera rows draw a live selection and the only thing that WRITES it is unreachable
+  behind `FigmaMode` — the fixture renders, so the drawing is right and the state never moves.
+- ⚠ `VV-02` is **part-closed**: the render half was answered, the stranded writer was not.
+- **DONE when:** the selection has a reachable writer or the rows honestly show that they cannot change,
+  with a test that the drawn selection and the written one are the same value.
+
+### S134c [S] The settings page has five layouts and can render exactly one, forever — **TODO (blocked: [[S134a]])** — [split 3 of 5 of [[S134]]; QC `A-01`]
+- Five layouts, one reachable. ⚠ Read [[S121c]] first: that line gave this file its RefPanelW pass, so
+  the geometry has moved since QC measured it.
+- **DONE when:** every layout is reachable or the unreachable ones are removed with their reasoning kept
+  in place (C1.16), and a preview shows each.
+
+### S134d [S] Frame 66's LIGHTING panel draws fifteen controls where one is bindable — **TODO (blocked: [[S134a]])** — [split 4 of 5 of [[S134]]; QC `F-03`]
+- ⛔ **A recorded finding says exactly ONE light group is bindable** — `TE_CD2_POD.cfg` carries a single
+  `ModuleColorChanger`. [[S135]] already draws the honest version of this on the CABIN settings tab (*"the
+  count of lights actually found"*), so the answer exists; this is the same fix on Frame 66's own panel.
+- **DONE when:** the panel draws what is bindable, and a preview shows it.
+
+### S134e [S] The audio page's dividers and its signal glyph — **TODO (blocked: [[S134a]])** — [split 5 of 5 of [[S134]]; QC `A-03` + `A-04`; TIER 4: layout]
+- `A-03`: the dividers' five equal cells do not contain AUX's value or two of the four button clusters.
+- `A-04`: the signal glyph is drawn below its own button and too small to read as one.
+- ⚠ Both are layout on a page [[S135]] and [[S121c]] have both touched since QC measured them — re-measure
+  before moving anything.
+- **DONE when:** the cells contain what they divide, the glyph reads as part of its button, and a 2560
+  preview shows both.
 
 ### S135 [S] The audio page paints ten controls a dated owner decision says should not exist — **DONE 2026-09-06 — four channels are the GAME's own audio layers and four buttons really move them; A-05 and A-06 answered from the export** — [QC `A-02` `A-05` `A-06`]
 - 🟢 **Owner answered Q6, verbatim:** *"make the volume controls control the game sound levels. Music,
