@@ -23226,3 +23226,40 @@ are tier-2 like `Overview.vue`, or something weaker.
 2. **Treat them as tier-2 alongside `Overview.vue`** and move them to `assets/reference/interface/`, keeping
    the manifest as one file naming both locations — [[S184]] Q2's option (2).
 3. **Leave the naming as it is** — [[S184]] Q2's option (1), which it recommended.
+
+---
+
+### S192 [O] UNIT 3b — the owner's marked-up edits to the VEHICLE OVERVIEW page — **DOING** — [owner directive on the [[S185]] preview, 2026-09-07; supersedes/absorbs [[S186]] and [[S188]] and parts of [[S189]]]
+
+🟢 **OWNER, 2026-09-07, verbatim**, on a marked-up copy of the [[S185]] preview with green boxes over the
+areas to edit:
+
+> *"green boxes show the areas that need editing. Loop a loop b net pwr 1 net pwr 2 need to be arranged in
+> the same layout. our 3d render is short and fat, it should be the same size and proportions as the one in
+> green box. Systems cabin buttons are missing. Clicking cabin switches the white to that side and switches
+> to the cabin screen and vice versa. Except we are going to put replace them with systems tree and systems
+> p&id buttons. So keep "SYSTEMS" the same as in green box but change "CABIN" to " SYS P&ID" . Overview tab
+> bottom bar is missing its background and icons. The consumable list on the right hand side text is to
+> small and the whole list looks plain and out of place. Fix these issues and then show me a preview"*
+
+**The five named items.**
+1. **LOOP A / LOOP B / NET PWR 1 / NET PWR 2 → one row of four**, flanking the capsule, as the mock lays
+   them out. This is [[S186]]'s whole scope; **S186 is closed by this line.**
+2. **The 3D render is "short and fat" → the mock's size AND proportions.** Proportions = the 22.2 %
+   horizontal stretch [[S188]] measured; size = the mock draws it **1.30× taller** than this build does.
+   **[[S188]] is answered here** — the owner chose the render's own proportions over the slot's.
+3. **The SYSTEMS / CABIN button pair is missing** → add it, relabelled **SYSTEMS** and **SYS P&ID**, taking
+   over the job `VehicleDeepViewLinks` does today, with the white fill following the active side.
+4. **The tab strip has no background and no icons** → add both.
+5. **CONSUMABLES: type too small, and the block "looks plain and out of place"** → raise the type and give
+   the block structure. ⚠ **This is the owner ruling that the type on this block is too small**, which is
+   the direction [[S153b]] is HELD awaiting — so the R-01 census will read **improved**, not regressed.
+
+⚠ **TWO FORCED MOVES the owner did not name but his green boxes cover, and which his named changes make
+unavoidable** — recorded here rather than smuggled in: enlarging the capsule to the mock's size makes it
+overlap **CONNECTIONS** at its current x, and clearing the new tab-strip panel makes it overlap **CABIN
+MICS** at its current y. Both are moved to the positions **both sources already put them at** — the
+mock's own CONNECTIONS x, and CABIN MICS centred on the page — which is [[S189]]'s first and fourth items.
+- **DONE when:** the five named items are built, the two forced moves are reported, `test` is green and
+  mutation-proved, `previewdiff`'s changed list is reported in full **including the sibling pages the
+  shared tab strip reaches**, and the owner has seen the preview.
