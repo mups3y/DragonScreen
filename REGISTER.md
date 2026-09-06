@@ -16409,7 +16409,7 @@ right of `Split` (1500), so the fill-to-fit reflow adds `extra = 2560 − 3427 �
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S132 [S] Frame 58's `FRAME`/`CAMERA` labels and the `0s / RESET / START` timer are baked with no hit rects — **TODO** — [H11; TIER 3]
+### S132 [S] Frame 58's `FRAME`/`CAMERA` labels and the `0s / RESET / START` timer are baked with no hit rects — **DOING** — [H11; TIER 3]
 - **The finding, split by class:** `FRAME LVLH` / `CAMERA Virtual` as **readouts** → (A), and
   `HullCams.Labels()` already supplies real camera names. The timer → (A), purely local.
   ⛔ `FAR FIELD POSITIONING` is a **GNC mode command** → **(B)**, §14.4(a), Part B's.
