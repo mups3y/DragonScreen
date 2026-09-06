@@ -34,6 +34,8 @@ public static class AudioGridTest
         Glyph(2560, 1406);
         Glyph(4416, 1406);
         Capacity();
+        ExportAnchors(2560, 1406);
+        ExportAnchors(4416, 1406);
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + "   (thirteen positions on one grid, and a glyph on its siblings' line)");
@@ -323,6 +325,82 @@ public static class AudioGridTest
     // ⚠ The rebuilt glyph draws four commands where the old one drew two. `Commands` is what the glue
     // sizes its buffer from, and a DisplayList that overflows drops commands SILENTLY (it only sets a
     // flag), so the page would lose its tail rather than fail.
+    /// <summary>
+    /// ⭐ [[S166]]: THE THREE PANEL-WIDE POSITIONS, PINNED AGAINST THE EXPORT'S OWN NUMBERS.
+    ///
+    /// `assets/figma/dashboard_ui/A-Settings-Cabin.svg` has viewBox `0 0 3427 2112`, so its coordinates
+    /// ARE this page's design frame, and it settles all three — but it settles them DIFFERENTLY, which
+    /// is the finding:
+    ///
+    ///   · the page title's glyph paths span x 1548.4–1878.5, centre **1713.5** — the frame's own
+    ///     centre. The page had **1692**: a slip of 21.5 px.
+    ///   · the two speaker rings are `&lt;circle cx="1718.31"&gt;`, read straight off the attribute. The
+    ///     page had **1696**: a slip of 22.31 px, and 19.7/20.1 px in y as well.
+    ///   · the panel heading's ink centre is **1721.0** — exactly what the page already had. It sits
+    ///     8.5 px right of the panel below it, and THAT ASYMMETRY IS THE DRAWING'S.
+    ///
+    /// ⛔ SO THE THREE WERE NOT ONE FINDING, and this suite pins them as three. A check that simply
+    /// asserted "all three agree with a computed centre" would have been WRONG about the heading and
+    /// would have overruled §1.4's tier-2 source on a hunch.
+    ///
+    /// ⚠ THE NUMBERS ARE THE EXPORT'S, TRANSCRIBED — this suite cannot read the SVG (it is gitignored
+    /// reference under `assets/`, off-limits as a build input by C7, and 4.9 MB besides). What it CAN
+    /// do is fail if the page drifts off them again, which is the failure that actually happened.
+    /// </summary>
+    static void ExportAnchors(int w, int h)
+    {
+        string at = " @" + w + "x" + h;
+        float sx = w / 3427f, sy = h / 2112f;
+        DisplayList dl = new DisplayList(SettingsAudioPage.Commands + 80);
+        SettingsAudioPage.Build(dl, w, h, SettingsAudioPage.CabinScope, new PageState());
+
+        // ---- the page title: the export centres it on the frame's own centre ----
+        float titleX = -1f;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == "AUDIO SETTINGS") titleX = c.A;
+        }
+        Check("S166 the page title is drawn" + at, titleX >= 0f, "");
+        Check("S166 ⭐ the title sits on the export's centre 1713.5, not the old 1692" + at,
+              titleX >= 0f && Math.Abs(titleX - 1713.5f * sx) < 0.5f,
+              "drew at design " + (titleX / sx) + ", want 1713.5");
+
+        // ---- the panel heading: the export's own asymmetric 1721, NOT the panel centre ----
+        float headX = -1f;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind == DrawKind.Text && c.Str == "CABIN AUDIO") headX = c.A;
+        }
+        Check("S166 the panel heading is drawn" + at, headX >= 0f, "");
+        Check("S166 ⭐ the heading stays at the export's 1721 — the asymmetry is the drawing's" + at,
+              headX >= 0f && Math.Abs(headX - 1721f * sx) < 0.5f,
+              "drew at design " + (headX / sx) + ", want 1721");
+        // ⛔ AND IT IS NOT THE PANEL CENTRE. Stated as its own check because "snap it to the panel" is
+        // the change this line deliberately did not make, and a later reader should meet the reason.
+        float panelCx = (SettingsAudioPage.PanelX0 + SettingsAudioPage.PanelX1) * 0.5f;
+        Check("S166 ...and that is 8.5 design px right of the panel it sits over" + at,
+              headX >= 0f && Math.Abs(headX / sx - panelCx - 8.5f) < 0.6f,
+              "heading " + (headX / sx) + " vs panel centre " + panelCx);
+
+        // ---- the two speaker rings: <circle cx>, both axes ----
+        int rings = 0;
+        bool allAtCx = true;
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            if (c.Kind != DrawKind.ArcBand) continue;
+            if (Math.Abs(c.B - 583.689f * sy) > 0.5f
+                && Math.Abs(c.B - 747.129f * sy) > 0.5f) continue;
+            rings++;
+            if (Math.Abs(c.A - 1718.31f * sx) > 0.5f) allAtCx = false;
+        }
+        Check("S166 ⭐ four ring arcs sit at the export's two circle CENTRES, in y" + at, rings == 4,
+              "got " + rings + " (the old 564/727 would give 0)");
+        Check("S166 ⭐ ...and at its cx 1718.31, not the old 1696" + at, allAtCx, "");
+    }
+
     static void Capacity()
     {
         DisplayList dl = new DisplayList(SettingsAudioPage.Commands);

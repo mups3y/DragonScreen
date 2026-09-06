@@ -17165,7 +17165,7 @@ not have fired earlier: until S153a moved the cards, one state maximised both me
 detected`, from the `const bool` debug-flag pattern. Confirmed pre-existing by stashing this change and
 recounting: 7 before, 7 after. Not this line's, and not worth a register line of its own.
 
-### S166 [S] The audio page's three PANEL-WIDE positions are each a few px off the centre they look centred on — **DOING** — [noticed by [[S134e]]; TIER 4: layout]
+### S166 [S] The audio page's three PANEL-WIDE positions are each a few px off the centre they look centred on — **DONE 2026-09-06 — settled from the EXPORT: two were slips, the third is the drawing's own asymmetry** — [noticed by [[S134e]]; TIER 4: layout]
 - ⚠ **LOGGED, NOT DONE (C1.1).** QC `A-03` enumerates exactly thirteen positions — five labels, five
   values, and the button clusters — and [[S134e]] moved those onto the dividers' grid. These three are
   **not** among them, so touching them would have been scope creep on a line that was already editing
@@ -17185,6 +17185,58 @@ recounting: 7 before, 7 after. Not this line's, and not worth a register line of
   no comparable majority here, only three isolated numbers, so the same argument does NOT carry over.
 - **DONE when:** each of the three is either shown to match the export (and left alone, with the finding
   recorded) or corrected against a stated centre, with a 2560 preview and a render-read check.
+
+#### ⭐ DONE 2026-09-06 — and the line's §1.4-first instinct was right: the export answers all three
+
+`assets/figma/dashboard_ui/A-Settings-Cabin.svg` has `viewBox="0 0 3427 2112"`, so **its coordinates ARE
+this page's design frame** and it can be read directly. ⚠ It is REFERENCE, not a build input (C7) — the
+numbers below are transcribed into the code and pinned by a test; nothing reads the SVG at build time.
+
+| | code had | the export says | verdict |
+|---|---|---|---|
+| page title `AUDIO SETTINGS` | 1692 | glyph paths x 1548.4–1878.5, **centre 1713.5** | ⛔ **slip of 21.5 px** — corrected |
+| the two speaker rings | 1696 / cy 564, 727 | `<circle cx="1718.31" cy="583.689">` and `cy="747.129"` | ⛔ **slip of 22.31 px in x and ~20 px in y** — corrected |
+| panel heading `CABIN AUDIO` | 1721 | ink x 1618.3–1823.7, **centre 1721.0** | ✅ **exact match — left alone** |
+
+⭐ **SO THE THREE WERE NEVER ONE FINDING**, and that is the useful part. The line offered three
+possibilities and **two of them are true at once**: two numbers are transcription slips like `A-03`'s
+three, and the third is *"the frame's own layout really is asymmetric there"*. The heading genuinely sits
+**8.5 design px right of the panel below it** (468–2957, centre 1712.5) and 7.5 right of the frame's
+centre, in the export.
+⛔ **A pass that had snapped all three to a computed centre would have been WRONG about the heading, and
+would have overruled §1.4's tier-2 source on a hunch** — exactly the inversion [[S111]] caught in
+[[S110]]. Mutation `Z4` does precisely that and is killed.
+
+#### ⚠ ONE MEASUREMENT WAS DISCARDED BEFORE IT WAS USED
+
+The first attempt read every number in each `d` attribute as an alternating x,y pair. ⛔ **That is wrong
+whenever a path contains `H`, `V` or `A`**, which break the alternation — and it produced obviously
+absurd clusters (single "glyphs" 1500 design px tall). It was thrown away and replaced with a parser
+that honours the command letters. ⚠ **The rings needed none of that**: `<circle cx cy r>` is read
+straight off the attributes, and their `transform="rotate(-172.928 1718.31 583.689)"` is a rotation
+about their own centre, which moves nothing. The file has **no enclosing `<g transform>` at all** —
+checked, because a group transform would have invalidated every number here.
+
+#### ⚠ THE RADII ARE A SEPARATE FINDING, AND THEY GO TO [[S135b]] (C1.1)
+
+The export draws each speaker as **three thin concentric rings plus a centre** — r 43.71/42.30,
+28.20/26.79, 15.51/14.10, inside a 57.09 bound — where this page draws **one band 34→44 and a disc r
+13**. That is a fidelity question about the transcription, which is S135b's declared scope, so the
+measurement is recorded there rather than acted on here. ⭐ S135b now starts from evidence instead of
+re-deriving it.
+
+#### Verified
+
+- `python plugin/build.py test` → **ALL SUITES PASSED**; `AudioGridTest` gained **10 checks at two
+  aspects**.
+- **4 mutations, 4 killed** — each of the two slips put back, the ring `cy` put back, and `Z4`, the
+  "helpful" snap of the heading to the panel centre.
+- **`previewdiff`: 3 existing pages changed, 0 new, 0 removed, of 125** — the three audio renders, and
+  nothing else.
+- ⭐ **RENDER-READ CHECK, which the DONE-when asks for by name**, at 2560: the title's ink centre
+  measures **1712.2** against the export's 1713.5, and the speaker ring's **1718.9** against 1718.31 —
+  both within the glyph-metric difference between our font and the export's. The anchors are right.
+- No `install`, no glass, no `git push`. §14.4(a) untouched.
 
 ### S167 [S] A suite that THROWS instead of failing a check hides every suite after it — **DONE 2026-09-06 — measured at 29 suites hidden; the guard, the self-test and a process-level check that cannot go stale** — [logged by [[S164]] per C1.1, 2026-09-06; TIER 3: harness]
 
@@ -17616,6 +17668,19 @@ edited in place, caught, and restored verbatim with the new material added benea
 `install`, no glass, no `git push`.
 
 ### S135b [S] Ten button boxes and two speaker rings are transcribed off the Figma frame's own positions — **TODO** — [logged by [[S135]] per C1.1, 2026-09-06; TIER 3: fidelity]
+- ⭐ **[[S166]] HAS ALREADY MEASURED THE SPEAKER RINGS OFF THE EXPORT, 2026-09-06 — start from this.**
+  `assets/figma/dashboard_ui/A-Settings-Cabin.svg` (viewBox `0 0 3427 2112`, so design-frame
+  coordinates) carries each speaker as **`<circle>` elements read straight off their attributes**, no
+  path parsing involved:
+  - **centres** `cx 1718.31`, `cy 583.689` and `cy 747.129` — ✅ **already corrected by S166**, and pinned.
+  - **radii, NOT yet applied and this line's to judge:** `57.0947` (an outer bound), then
+    `43.71 / 42.30`, `28.20 / 26.79`, `15.51 / 14.10` — i.e. **three thin concentric rings** about 1.41
+    design px thick, plus a centre.
+  - the page draws **one band 34→44 and a filled disc r 13**, which is one thick ring where the export
+    has three thin ones.
+- ⚠ **Whether to follow the export exactly is this line's call, not S166's** — three 1.41-px rings at
+  the shipped scale is ~0.94 device px each, so `Strokes.Px` rounding is part of the answer and a
+  faithful transcription may not survive rasterisation. Measure before deciding.
 - **The finding, measured against `assets/figma/dashboard_ui/A-Settings-Cabin.svg`** (33 `<rect>`, ten of
   them the `138×138` button boxes at `y 1599`): the audio panel and its four dividers match this build to
   **≤1 px**, GROUND's three boxes match **exactly**, AUX's three are **+4 px**, and **INTERCOM's and

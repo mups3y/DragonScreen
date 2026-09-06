@@ -247,18 +247,52 @@ namespace DragonScreen
                 Img(SeatKey[i], SeatBox[i, 0], SeatBox[i, 1], SeatBox[i, 2], SeatBox[i, 3]);
 
             // ---- Cabin speaker icons (Group 61/62): two stacked rings in the Cabin panel ----
+            // ⭐ [[S166]]: THESE CAME FROM THE EXPORT'S OWN `<circle>` ELEMENTS, 2026-09-06, and the
+            // three numbers they replace were a transcription slip in BOTH AXES.
+            // `assets/figma/dashboard_ui/A-Settings-Cabin.svg` (viewBox `0 0 3427 2112`, so its
+            // coordinates ARE design-frame coordinates) carries the two rings as concentric circles at
+            //
+            //     cx 1718.31   cy 583.689   and   cx 1718.31   cy 747.129
+            //
+            // against the 1696 / 564 / 727 that were here — out by 22.31 in x and 19.7/20.1 in y, a
+            // consistent offset that looks like a group bounding box read where a centre was wanted.
+            // ⚠ NO PARSING JUDGEMENT IS INVOLVED: these are `<circle cx cy r>` attributes, read
+            // directly. Their `transform="rotate(-172.928 1718.31 583.689)"` is a rotation ABOUT THEIR
+            // OWN CENTRE, which leaves the centre where it is, and the file has no enclosing
+            // `<g transform>` at all (checked).
+            //
+            // ⚠ THE RADII ARE NOT FIXED HERE AND THAT IS DELIBERATE (C1.1). The export draws THREE thin
+            // concentric rings plus a centre — r 43.71/42.30, 28.20/26.79, 15.51/14.10, inside a 57.09
+            // bound — where this draws ONE band 34→44 and a disc r 13. That is a fidelity question and
+            // it belongs to [[S135b]], which owns the transcription; the measurement is recorded there
+            // so that line starts from evidence instead of re-deriving it.
+            const float SpeakerCx = 1718.31f;
             for (int k = 0; k < 2; k++)
             {
-                float cyd = k == 0 ? 564f : 727f;
-                dl.ArcBand(1696f * sx, PY(cyd), SZ(34), SZ(44), 0, 360, T3);
-                dl.ArcBand(1696f * sx, PY(cyd), 0, SZ(13), 0, 360, T3);
+                float cyd = k == 0 ? 583.689f : 747.129f;
+                dl.ArcBand(SpeakerCx * sx, PY(cyd), SZ(34), SZ(44), 0, 360, T3);
+                dl.ArcBand(SpeakerCx * sx, PY(cyd), 0, SZ(13), 0, 360, T3);
             }
 
             // ---- title ----
-            CTxt("AUDIO SETTINGS", 1692, 55, 46, White);
+            // ⭐ [[S166]]: 1692 WAS A SLIP AND THE EXPORT SAYS SO. The title's glyph paths in
+            // `A-Settings-Cabin.svg` span x 1548.4–1878.5, centre **1713.5** — which is also the design
+            // frame's own centre (3427 / 2). It was 1692, 21.5 px left of both.
+            // ⚠ Measured with a path parser that honours the command letters; a naive "every number in
+            // `d` is a coordinate" scan gets this wrong, because `H`/`V`/`A` break the x,y alternation.
+            // The first attempt at this measurement did exactly that and was discarded.
+            CTxt("AUDIO SETTINGS", 1713.5f, 55, 46, White);
 
             // ---- audio panel ----
             dl.Rect(PX(PanelX0), PY(PanelY0), (PanelX1 - PanelX0) * sx, (PanelY1 - PanelY0) * sy, Panel);
+            // ⭐ [[S166]]: 1721 IS CORRECT AND IS LEFT ALONE — the export puts this heading's own ink
+            // at x 1618.3–1823.7, **centre 1721.0**, which is exactly what was here. It sits 8.5 px
+            // right of the panel below it (468–2957, centre 1712.5) and 7.5 px right of the frame's
+            // centre, and that asymmetry is the DRAWING'S, not a transcription error.
+            // ⛔ SO THE THREE "OFF-CENTRE" POSITIONS S166 LISTED WERE NOT ONE FINDING. Two were slips
+            // and this one was the frame being asymmetric — which is why each was measured against the
+            // export separately rather than all three being snapped to a computed centre. Snapping this
+            // one would have been a build chat overruling §1.4's tier-2 source on a hunch.
             CTxt(sel == CabinScope ? "CABIN AUDIO" : "SEAT " + (sel + 1) + " AUDIO", 1721, 1264, 34, White);
             // ---- ⛔ S134c / QC A-01: AND THE PAGE SAYS WHAT THE SELECTION DOES NOT CHANGE --------
             // QC's own warning about making the seats selectable: *"today `ChValue` is one literal array
