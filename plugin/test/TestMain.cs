@@ -356,6 +356,12 @@ public static class TestMain
         // phase enum cannot answer - which of `ModeManager`'s TWO `Fly(Docked)` steps we are standing on.
         bad += Suite(DockingLadderTest.Run);
 
+        // T21: the return leg - undock, back away, trunk, deorbit, entry attitude (O8), chutes, splash.
+        // ⛔ The four checks that would cost the vehicle: nothing on the return acts while the hooks
+        // are still closed, the chute gates need altitude AND DESCENT, a resume can never land on a step
+        // that fires hardware, and the drogue/main altitudes are read from `Mission` rather than copied.
+        bad += Suite(ReturnSequenceTest.Run);
+
         bad += Suite(MissionWalkTest.Run);
         bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT

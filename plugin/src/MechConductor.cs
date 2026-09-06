@@ -111,6 +111,41 @@ namespace DragonScreen
         /// <summary>The docking lamp's caption. Null when nothing is engaged.</summary>
         public static string DockingNote { get { return DockingEngaged ? dockingNote : null; } }
 
+        // ── T21: the return leg (§B9 P6-P10) ─────────────────────────────────────────
+        static ReturnStep returnStep = ReturnStep.Idle;
+        static double returnStepStartUT;
+        static string returnNote;
+
+        /// <summary>Where the return has got to.</summary>
+        public static ReturnStep Return { get { return returnStep; } }
+
+        /// <summary>⭐ THE §B12.5a FACADE READ FOR `UndockOps` — T21 increment 1. True while the
+        /// conductor is flying §B9 Phase 6: the back-away and the trunk jettison, out to §B11's
+        /// Approach Ellipsoid. ⛔ Dark once the departure is done and dark on the deorbit side.</summary>
+        public static bool UndockEngaged
+        {
+            get
+            {
+                return Flying && (returnStep == ReturnStep.Backout
+                               || returnStep == ReturnStep.TrunkJettison);
+            }
+        }
+
+        /// <summary>⭐ THE §B12.5a FACADE READ FOR `DeorbitOps` — T21 increment 2. True from the moment
+        /// the crew's G15 GO starts the deorbit plan through to splashdown. ⛔ Dark on the departure
+        /// leg — §B12.5a is explicit that these are ONE task and TWO increments, never both at once.</summary>
+        public static bool DeorbitEngaged
+        {
+            get { return Flying && ReturnSequence.Beyond(returnStep)
+                                && returnStep != ReturnStep.Complete; }
+        }
+
+        /// <summary>The return lamps' caption.</summary>
+        public static string ReturnNote
+        {
+            get { return (UndockEngaged || DeorbitEngaged) ? returnNote : null; }
+        }
+
         /// <summary>Which on-orbit leg is being flown. `None` when the conductor is not on one.</summary>
         public static RendezvousLeg Leg { get { return leg; } }
 
@@ -147,6 +182,7 @@ namespace DragonScreen
             ResetLeg();
             leg = RendezvousLeg.None;
             dockLeg = DockingLeg.None; dockingEngaged = false; dockingNote = null;
+            returnStep = ReturnStep.Idle; returnStepStartUT = 0.0; returnNote = null;
             manualDockingRequested = false;
             smartAssTarget = MuMech.MechJebModuleSmartASS.Target.OFF;
             lastRangeM = 0.0; lastRangeUT = 0.0; openingRateMps = 0.0;
@@ -224,7 +260,24 @@ namespace DragonScreen
                     return;
 
                 case ConductorVerb.Engage:
+                    // ⭐ T21: the RETURN owns its own phases outright. `Conductor.Decide` is still the
+                    // safety order above (abort ⟩ complete ⟩ hold ⟩ advance) and its Entry row still
+                    // names the Node Executor and SmartASS — but the ORDER of the return's events (back
+                    // away, trunk, plan, burn, nose cone, attitude, drogues, mains, splash) is
+                    // `ReturnSequence`'s, exactly as the ascent's is `AscentSequence`'s.
+                    if (OnReturnLeg(snap.Phase)) { RunReturn(v, a, snap.Phase); return; }
                     Engage(v, a);
+                    return;
+
+                // ⛔ `Idle` IS NOT "DO NOTHING" ON THE RETURN, AND THIS IS THE CASE THAT SAYS SO.
+                // `pure/Conductor.cs` returns Idle for `Drogues`/`Mains` — "under chutes, the conductor
+                // flies nothing here" — which is true about MECHJEB and not about the vehicle: §B12.3's
+                // own Drogues/Mains row is "chute triggering", which is an actuation, not a module. So
+                // the return sequencer keeps running through the Idle decision, exactly as
+                // `AscentSequence` runs alongside `Engage AscentPvg`.
+                case ConductorVerb.Idle:
+                    if (OnReturnLeg(snap.Phase)) { RunReturn(v, a, snap.Phase); return; }
+                    StandDown(v, a.Reason);
                     return;
 
                 default:
@@ -298,8 +351,22 @@ namespace DragonScreen
                                                 RendezvousOps.NulledRelativeSpeedMps);
 
             // Only a phase this increment actually flies can report itself complete.
+            // ⭐ T21: the RETURN Phasing step is the same `MissionPhase.Phasing` as the outbound
+            // rendezvous — `CrewProcedureOps.IsReturn` is what tells them apart, and it is set the
+            // moment gate G14 clears. Without this the departure leg would be handed to the rendezvous
+            // executor and asked to close on a station it is trying to leave.
+            bool onReturn = CrewProcedureOps.IsReturn;
+            if (onReturn && s.Phase == MissionPhase.Phasing) leg = RendezvousLeg.None;
+
             s.PhaseComplete =
                 (s.Phase == MissionPhase.Ascent && AscentSequence.CanAdvancePlan(ascentStep))
+             // T21: the departure leg ends when the trunk is away and the vehicle is clear; the
+             // descent leg ends on the splash. ⛔ Neither ends on a timer.
+             || (onReturn && s.Phase == MissionPhase.Phasing
+                 && ReturnSequence.DepartureComplete(returnStep))
+             || ((s.Phase == MissionPhase.Drogues || s.Phase == MissionPhase.Mains
+                  || s.Phase == MissionPhase.Splashdown)
+                 && ReturnSequence.ReturnComplete(returnStep))
              || (OnOrbit(s.Phase) && RendezvousOps.LegComplete(leg, rangeM, relSpeedMps,
                                                                RendezvousOps.NulledRelativeSpeedMps))
              // ⛔ The CAPTURE leg ends on a MEASURED dock; the BERTHED leg never ends on its own — the
@@ -313,10 +380,23 @@ namespace DragonScreen
             return s;
         }
 
-        /// <summary>The two phases the on-orbit executor flies. `Docked` is T20/T21's.</summary>
+        /// <summary>The phases the T19 on-orbit executor flies. `Docked` is T20's, the return T21's.</summary>
         static bool OnOrbit(MissionPhase p)
         {
+            if (CrewProcedureOps.IsReturn && p == MissionPhase.Phasing) return false;   // T21's
             return p == MissionPhase.Phasing || p == MissionPhase.Coast || p == MissionPhase.Approach;
+        }
+
+        /// <summary>
+        /// The phases `ReturnSequence` owns. ⚠ `Phasing` appears in BOTH this and <see cref="OnOrbit"/>
+        /// and is disambiguated by `CrewProcedureOps.IsReturn` in each — the same flag, read once per
+        /// question, so the two can never both claim a step.
+        /// </summary>
+        static bool OnReturnLeg(MissionPhase p)
+        {
+            if (p == MissionPhase.Entry || p == MissionPhase.Drogues || p == MissionPhase.Mains
+                || p == MissionPhase.Splashdown) return true;
+            return CrewProcedureOps.IsReturn && p == MissionPhase.Phasing;
         }
 
         // ============================ ENGAGE ============================
@@ -1074,6 +1154,224 @@ namespace DragonScreen
 
         /// <summary>True while the crew hold the docking approach by hand.</summary>
         public static bool ManualDocking { get { return manualDockingRequested; } }
+
+        // ============================ THE RETURN EXECUTOR (T21) ============================
+        //
+        //  §B9 Phases 6-10. Undock, back away, drop the trunk, burn the deorbit, close the nose cone,
+        //  ride it down heat-shield-forward (O8: NO commanded bank), drogues, mains, splash, release.
+        //
+        //  ⛔ THE ABORT HALF OF T21 IS **NOT** HERE, AND THAT IS DELIBERATE. T21's title includes
+        //  "abort wiring", and §B13.4 routes it through `FlightDriver.RequestAbort` / `AbortControl` -
+        //  which is register **W19**, and W19 is **HELD**: blocked on `src/Steering.cs`, which §B12.8
+        //  rider (b) forbids recovering. Building an abort executor here would be executing a held line
+        //  sideways. So the abort path remains exactly what it was: `Conductor` can DECIDE `Abort`, and
+        //  all this file does with that is stop flying and hand the vehicle back (see the `Abort` case
+        //  in `Tick`). §14.4(a): no light, no action, and NO RED. Logged on T21's register line.
+
+        /// <summary>The return, one tick. Driven by `pure/ReturnSequence.cs`; actuated through
+        /// `Actuator` (§B12.7) and MechJeb's SmartASS / Node Executor.</summary>
+        static void RunReturn(Vessel v, ConductorAction a, MissionPhase phase)
+        {
+            try
+            {
+                core.AuthorizeDrive(true);
+
+                double now = Now();
+                ReturnInputs s = ReturnInputs.Nominal();
+                double rel;
+                Measure(v, out s.RangeM, out rel);
+                s.Docked         = DockedSide.Docked(v);
+                s.TrunkAttached  = HasTrunk(v);
+                s.AltitudeM      = v.altitude;
+                s.Descending     = v.verticalSpeed < -1.0;
+                s.DroguesOut     = ChutesOut(v, true);
+                s.MainsOut       = ChutesOut(v, false);
+                s.Splashed       = v.situation == Vessel.Situations.SPLASHED
+                                || v.situation == Vessel.Situations.LANDED;
+                s.NodeExists     = nodePlanned;
+                s.NodeBurned     = nodeBurned;
+                s.SinceStepS     = now - returnStepStartUT;
+
+                // ⭐ THE CREW'S G15 GO IS WHAT STARTS THE DEORBIT, AND IT ARRIVES AS A PHASE CHANGE.
+                // `ReturnSequence.Step` never walks from `Departed` into the deorbit by itself; the plan
+                // reaching `MissionPhase.Entry` is the crew having cleared the gate, and `BeginDeorbit`
+                // is the separate entry point that turns that into a step.
+                if (phase == MissionPhase.Entry || phase == MissionPhase.Drogues
+                    || phase == MissionPhase.Mains)
+                {
+                    ReturnStep began = ReturnSequence.BeginDeorbit(returnStep);
+                    if (began != returnStep)
+                    {
+                        Debug.Log("[DragonScreen] conductor: DEORBIT authorised (crew cleared G15) - "
+                                  + returnStep + " -> " + began);
+                        returnStep = began; returnStepStartUT = now;
+                    }
+                }
+
+                ReturnDecision d = ReturnSequence.Step(s, returnStep);
+                if (d.Act != ReturnAct.None) PerformReturn(v, d.Act, s);
+
+                if (d.Next != returnStep)
+                {
+                    Debug.Log("[DragonScreen] RETURN " + returnStep + " -> " + d.Next + "  (" + d.Reason
+                              + ")  [range " + (s.RangeM / 1000.0).ToString("F2") + " km, alt "
+                              + (s.AltitudeM / 1000.0).ToString("F1") + " km, "
+                              + (s.Descending ? "descending" : "not descending") + "]");
+                    returnStep = d.Next; returnStepStartUT = now;
+                }
+                returnNote = d.Reason;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: return tick failed: " + e.Message);
+            }
+        }
+
+        /// <summary>§B12.7 direct part control for the return. ⛔ No staging, no action groups.</summary>
+        static void PerformReturn(Vessel v, ReturnAct act, ReturnInputs s)
+        {
+            switch (act)
+            {
+                // §B9 P6: "SmartASS (retrograde/target) for the backout". TARGET_MINUS points away from
+                // the station, which is the direction the RCS translation has to push.
+                case ReturnAct.BackAway:
+                    if (core.SmartASS != null && v.targetObject != null)
+                        SetSmartAssIfChanged(MuMech.MechJebModuleSmartASS.Target.TARGET_MINUS);
+                    else if (core.SmartASS != null)
+                        SetSmartAssIfChanged(MuMech.MechJebModuleSmartASS.Target.RETROGRADE);
+                    Actuator.EnableRcs(v);
+                    break;
+
+                // ⛔ THE TRUNK DECOUPLER BY ROLE, NEVER THE DRAGON ONE. `Actuator.JettisonTrunk` fires
+                // `DecouplerRole.TrunkJettison`; `SeparateDragon` fires `DragonSep` and is the ascent's.
+                case ReturnAct.JettisonTrunk:
+                    Actuator.JettisonTrunk(v);
+                    break;
+
+                case ReturnAct.PlanDeorbit:
+                    PlanDeorbitNode(v, s);
+                    break;
+
+                case ReturnAct.BurnDeorbit:
+                    BurnNode(v, ConductorAction.Of(ConductorVerb.Engage, ConductorModule.NodeExecutor,
+                                                   ConductorOp.Periapsis, "deorbit burn"));
+                    break;
+
+                case ReturnAct.CloseNoseCone:
+                    Actuator.CloseNoseShroud(v);
+                    break;
+
+                // §B10.5 / O8: "entry (P8) = surface_retrograde (heat-shield forward), attitude-hold
+                // baseline - `force_roll` is NOT engaged at baseline (O8: pure ballistic, no commanded
+                // bank; `force_roll` is reserved for the later off-target-steering increment)."
+                case ReturnAct.HoldHeatShieldForward:
+                    SetSmartAssIfChanged(MuMech.MechJebModuleSmartASS.Target.SURFACE_RETROGRADE);
+                    break;
+
+                // §B12.3's "chute triggering (the real 5486/1830 m constants already in
+                // MissionPhase.cs)". ⚠ MechJeb's Landing Autopilot also has a `DeployChutes` flag
+                // (§B10.4), and it is INERT here because nothing ever adds that module to a user pool -
+                // so there is exactly one thing deploying chutes and it is this.
+                case ReturnAct.DeployDrogues:
+                    Actuator.DeployChutes(v, true);
+                    break;
+                case ReturnAct.DeployMains:
+                    Actuator.DeployChutes(v, false);
+                    break;
+
+                // §B9 P10: "MechJeb done; conductor releases control."
+                case ReturnAct.ReleaseControl:
+                    StandDown(v, "splashdown - control released to the crew");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// The deorbit node: `OperationPeriapsis` with the entry-corridor periapsis (§B10.2/§B12.3).
+        /// ⛔ THE PERIAPSIS IS THE ONE ENGINEERING ESTIMATE IN THIS BATCH - see
+        /// `pure/ReturnSequence.cs`'s header and T21's Q1. It is passed in rather than typed here.
+        /// </summary>
+        static void PlanDeorbitNode(Vessel v, ReturnInputs s)
+        {
+            try
+            {
+                MuMech.OperationPeriapsis pe = new MuMech.OperationPeriapsis();
+                pe.NewPeA.Val = s.DeorbitPeriapsisM;
+                Orbit o = v.orbit;
+                List<MuMech.ManeuverParameters> nodes = pe.MakeNodes(o, Now(), core.Target);
+                if (nodes == null || nodes.Count == 0)
+                {
+                    string why = pe.GetErrorMessage();
+                    LogOnce("deorbit-plan-fail", "[DragonScreen] conductor: the deorbit burn would not "
+                            + "plan" + (string.IsNullOrEmpty(why) ? "" : ": " + why));
+                    return;
+                }
+                ClearNodes(v);
+                for (int i = 0; i < nodes.Count; i++)
+                    MuMech.VesselExtensions.PlaceManeuverNode(v, o, nodes[i].dV, nodes[i].UT);
+                nodePlanned = true; nodeBurned = false; nodeExecuting = false;
+                lastNodeDvLeft = 0.0; nodeResidualMps = 0.0;
+                Debug.Log("[DragonScreen] conductor: deorbit node planned - target periapsis "
+                          + (s.DeorbitPeriapsisM / 1000.0).ToString("F0")
+                          + " km (⛔ a T21 ENGINEERING ESTIMATE, not a sourced value - see T21 Q1)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: deorbit planning failed: " + e.Message);
+            }
+        }
+
+        static void SetSmartAssIfChanged(MuMech.MechJebModuleSmartASS.Target tgt)
+        {
+            MuMech.MechJebModuleSmartASS sa = core == null ? null : core.SmartASS;
+            if (sa == null || smartAssTarget == tgt) return;
+            SetSmartAss(sa, tgt);
+            Debug.Log("[DragonScreen] conductor: SmartASS -> " + tgt);
+        }
+
+        /// <summary>Is a trunk part still on this vessel? `VehicleParts.IsTrunk` is the classifier.</summary>
+        static bool HasTrunk(Vessel v)
+        {
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                    if (VehicleParts.IsTrunk(PartNames.Of(v.parts[i]))) return true;
+            }
+            catch { }
+            return false;
+        }
+
+        /// <summary>
+        /// Have the drogues (or mains) actually deployed? Read off the parts, not off a flag we set -
+        /// the whole point of the re-command path is that a deploy can silently not happen.
+        /// </summary>
+        static bool ChutesOut(Vessel v, bool drogue)
+        {
+            try
+            {
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    string nm = PartNames.Of(p);
+                    if (drogue ? !VehicleParts.IsDrogues(nm) : !VehicleParts.IsMains(nm)) continue;
+                    for (int m = 0; m < p.Modules.Count; m++)
+                    {
+                        PartModule pm = p.Modules[m];
+                        // RealChute and the stock chute both expose a deployment state as a string
+                        // field; neither type can be referenced here without a hard dependency, so the
+                        // field is read by name and a miss is simply "not deployed yet".
+                        BaseField f = pm.Fields["depState"];
+                        if (f == null) continue;
+                        string st = f.GetValue(pm) as string;
+                        if (!string.IsNullOrEmpty(st)
+                            && st.IndexOf("DEPLOYED", StringComparison.OrdinalIgnoreCase) >= 0)
+                            return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
 
         // ============================ STAND DOWN ============================
 

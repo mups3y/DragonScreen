@@ -4847,8 +4847,139 @@ figure; T20 takes the slower end under a stated principle. **Options:** (1) 0.3 
 time, fast costs the vehicle, and flight 1 is not in a hurry)*; (2) 0.5, on the reading that a 200 m
 corridor at 0.3 m/s is eleven minutes; (3) leave it to T22 with no preference. **No gate needed.**
 
-### T21 [O] Deorbit/entry/chutes + abort wiring — **DOING**
+### T21 [O] Deorbit/entry/chutes + abort wiring — **NEEDS-WORK — the RETURN is built and awaiting the in-sim criterion; the ABORT half is BLOCKED on [[W19]] and was not built**
 - **Read:** §B13 / §B10.4 / §B9.  **DONE when:** return + splash in-sim, EJECT abort works.
+
+#### ⚠ NEEDS-WORK 2026-09-07 — THE RETURN IS BUILT AND PROVEN HEADLESS; **THE ABORT HALF IS BLOCKED ON [[W19]] AND WAS NOT BUILT**
+
+T21's DONE-when is *"return + splash in-sim, EJECT abort works"*. **The return half is built.** The
+**abort half is not, and could not be** — see the block below. `install` + glass are spent and a build
+chat never opens a gate (C1.12).
+
+**Files: one pure, one suite, three glue.**
+`plugin/src/pure/ReturnSequence.cs` (new — undock → back-away → trunk → deorbit → nose cone → entry →
+chutes → splash) · `plugin/test/ReturnSequenceTest.cs` (new, **88 checks**) ·
+`plugin/src/MechConductor.cs` (+the return executor) · `plugin/src/FlightDriver.cs` (phase table now
+**COMPLETE** for the Dragon's own mission) · `plugin/src/_AutopilotStub.cs` (**two facade flips**) ·
+`plugin/test/MissionWalkTest.cs` (the walk now runs **pad → splashdown**, **79 checks**).
+
+⛔⛔ **THE ABORT HALF: STOPPED AND LOGGED, NOT EXECUTED SIDEWAYS.**
+§B13.4 routes every abort through **`FlightDriver.RequestAbort` / `AbortControl` / `AbortMode`**. That is
+register **[[W19]]**, and W19 is **HELD** — blocked on `src/Steering.cs`, which §B12.8 rider (b) says is
+**never recovered**. The batch's own instruction was *"T21's abort wiring runs straight at W19's
+`AbortControl`. If a phase leads into either, STOP and log it — never execute a held line sideways."*
+**So it was stopped.** What stands instead is honest and unchanged:
+· `pure/Conductor.cs` can **DECIDE** `Abort`, and that decision still **outranks a gate hold and a
+  finished plan** — asserted in `MissionWalkTest`;
+· `MechConductor`'s only response is to **stop flying and hand the vehicle back**, logged with the reason;
+· `AbortControl.Mode` is still the idle stand-in, `CrewProcedureOps.PressAbort()` is still an honest
+  no-op, and `FlightDriver.Aborting` is still constant false — so **no red** anywhere (§14.4(a)).
+⚠ **T21 CANNOT BE `DONE` ON ITS OWN EVEN AFTER A FLIGHT.** Half its DONE-when needs W19 unheld, and only
+the owner can do that. Raised as **Q2**.
+
+⛔ **§14.4(a) — EXACTLY WHAT BECOMES LIVE.**
+**LIVE after T21**, in `Phasing`(return) / `Entry` / `Drogues` / `Mains` / `Splashdown` with AUTO
+SEQUENCE engaged: SmartASS **TARGET_MINUS** back-away + RCS; **trunk jettison** (`DecouplerRole.
+TrunkJettison`, re-commanded until it fires); the **deorbit node** (`OperationPeriapsis`) and its burn;
+**nose-cone close**; SmartASS **SURFACE_RETROGRADE** entry hold (**O8: no commanded bank**); **drogues at
+5486 m** and **mains at 1830 m**; and the release at splashdown.
+**STILL AN HONEST NO-OP:** every flight button on every screen, and **ABORT**.
+⭐ **FACADE FLIPS: `UndockOps` then `DeorbitOps`** — §B12.5a: *"ONE task, TWO increments … Never both in
+one step."* They are **disjoint by construction**: `UndockEngaged` covers only `Backout`/`TrunkJettison`,
+`DeorbitEngaged` only the steps `ReturnSequence.Beyond` names. **All six §B12.5a facade properties are now
+live** — and all six are STATUS READS: `FlightCommands.Run` was not touched by this batch and still
+returns false for everything that would fly.
+
+⛔⛔ **THE ONE INVENTED NUMBER IN THE WHOLE BATCH, AND IT IS ON THIS LINE: THE DEORBIT PERIAPSIS.**
+§B10.2 gives only a SHAPE — *"deorbit `new_periapsis` = a low/negative value putting entry FPA
+in-corridor"*. §B11 gives the entry interface as **122 km [DOC]** and the entry FPA as **−1.4° to −1.6°
+[EST]**, and lists that FPA among *"the four numbers to pin empirically in-sim"*. **There is no target
+periapsis anywhere in this repo.**
+`ReturnInputs.DeorbitPeriapsisEstimateM = 50 km` is a **TIER-3 ENGINEERING ESTIMATE BY THIS BUILD CHAT**,
+and the whole of its reasoning is: comfortably **below** the documented 122 km entry interface so the
+trajectory cannot skip, and well **above** zero so the entry is not needlessly steep (§B11 puts Dragon's
+nominal peak decel at 4–4.5 g against a 7–8 g capsule worst case, and periapsis is the knob that moves
+it). ⚠ **That is a justification, not a source.** §1.4 reserves tier-3 invention for owner discussion, so
+it is **Q1** below, it is pinned as a literal in the suite so it cannot drift, the log line says so every
+time it plans, and it is the flight-checklist row most likely to need changing.
+**Everything else on this line is sourced:** drogues/mains read from `Mission.DrogueAltitude` /
+`MainAltitude` (the real §8 figures, **not copied** into a second constant — a mutation proves it), and
+the departure clearance is §B11's own **4 km Approach Ellipsoid**, so the Dragon leaves by the boundary
+it arrived through.
+
+⛔⛔ **AND A GAP THE WALK FOUND: NOTHING UNDOCKS THE VEHICLE.** Gate G14 is *"GO FOR UNDOCK"*, the crew
+press the screen's UNDOCK button, and that button calls `MissionOps.Undock()`
+(`ScreenPainter.cs:1188`) — **which is still the demolition stub's log-only no-op**
+(*"no flight/actuation software installed"*). The real `Actuator.Undock(v)` exists and is unwired.
+⚠ **That button is the UI COMMAND SURFACE, which this batch put explicitly out of scope**, so it is
+**logged as [[S204]] and NOT built** (C1.1). The documented flow — `CrewProcedureOps`'s own comment,
+*"press UNDOCK, then press AUTO SEQUENCE"* — means the conductor was never going to undock anyway; what
+is missing is the crew's button working. **Workaround for the flight: undock from the docking port's own
+right-click menu.** It is a numbered row on the checklist.
+
+⭐ **FOUR THINGS THE SUITE PROVES THAT WOULD OTHERWISE END A MISSION.**
+1. ⛔ **NOTHING ON THE RETURN ACTS WHILE HARD-MATED.** Swept over **all twelve** return steps with every
+   trigger satisfied: a docked vehicle actuates **nothing** and does not advance — above all it does not
+   fire the trunk decoupler on a Dragon attached to a space station. Undock and the same state acts, so
+   the guard is the dock flag and nothing else.
+2. ⛔ **THE CHUTE GATES NEED ALTITUDE *AND* DESCENT.** A vehicle can be below 5486 m on the way UP — an
+   abort, a lofted trajectory — and a drogue deployed into that is a drogue destroyed.
+3. ⛔ **THE DEORBIT IS ENTERED ONLY THROUGH THE CREW'S G15 GO.** `Departed` HOLDS; `BeginDeorbit` is a
+   separate entry point the plan reaching `MissionPhase.Entry` triggers, and the walk counts zero
+   deorbits before the GO.
+4. ⛔ **NO RESUME LANDS ON A STEP THAT FIRES HARDWARE.** Swept over all 48 resume cases (every phase ×
+   docked × trunk): none returns `TrunkJettison`, `DeorbitBurn`, `Drogues` or `Mains`.
+
+**VERIFIED (C1.3).** `python plugin/build.py test` — **ALL SUITES PASSED**; `ReturnSequenceTest` **88
+checks, 0 failed**, `MissionWalkTest` **79 checks, 0 failed**. `previewdiff` — **0 of 127 pages changed**.
+**MUTATION-PROVEN, 14 mutations, ALL 14 KILLED, every kill from a suite under test (S167):**
+
+| mutation | killed by |
+|---|---|
+| **E1** the return acts while the vehicle is still HARD-MATED | `ReturnSequenceTest` |
+| **E2** the trunk goes before the vehicle is clear | `ReturnSequenceTest` + `MissionWalkTest` |
+| **E3** a decoupler that did not fire is not re-commanded | `ReturnSequenceTest` |
+| **E4** `Departed` walks itself into the deorbit without the G15 GO | `ReturnSequenceTest` |
+| **E5** the drogue gate is altitude-only | `ReturnSequenceTest` |
+| **E6** the main gate is altitude-only | `ReturnSequenceTest` |
+| **E7** the chute altitudes are swapped | `ReturnSequenceTest` + `MissionWalkTest` |
+| **E8** the deorbit periapsis is aimed ABOVE the entry interface (a skip) | `ReturnSequenceTest` |
+| **E9** a resume lands straight on the trunk jettison | `ReturnSequenceTest` |
+| **E10** a resume under chutes skips the chute gates | `ReturnSequenceTest` |
+| **E11** the departure completes before the trunk is away | `ReturnSequenceTest` + `MissionWalkTest` |
+| **E12** the return completes at splashdown, before control is released | `MissionWalkTest` |
+| **E13** the deorbit burn is declared done before the node is flown | `ReturnSequenceTest` + `MissionWalkTest` |
+| **E14** the departure clearance is the KOS, not the Approach Ellipsoid | `ReturnSequenceTest` + `MissionWalkTest` |
+
+**DONE when (unchanged):** return + splash in-sim, **EJECT abort works** — and the second half needs
+[[W19]] unheld first.
+
+#### Open questions for the owner (C1.14) — **HELD**
+
+**Q1 — the deorbit target periapsis.  Category: `OVERRIDE` / tier-3 invention (§1.4).** 50 km is this
+build chat's engineering estimate, not a source, and it is the only invented number in the batch. It sets
+the entry flight-path angle and therefore the peak decel the crew feel. **Options:** (1) fly it and read
+the entry g-trace and FPA off the black box, then pin it in T22 *(recommended — this is precisely what
+§B11 says its four [EST] numbers are for, and the first flight is the cheapest measurement available)*;
+(2) settle a value from an out-of-repo source first; (3) refuse the invention and hold T21's deorbit
+until a source exists — which means no return leg on flight 1. ⛔ **A tier-3 value needs owner discussion
+under §1.4; (3) is the strict reading.**
+
+**Q2 — [[W19]], and therefore half of T21's DONE-when.  Category: OWNER GATE.** T21 cannot ever be
+`DONE` while W19 is HELD, because *"EJECT abort works"* is half its criterion. W19's own held-note says
+it is blocked on `src/Steering.cs`, which §B12.8 rider (b) forbids recovering. **Options:** (1) SPLIT
+T21 — close the return half on the flight, and give the abort its own line dependent on W19
+*(recommended — it stops one blocked half holding a proven half hostage)*; (2) unblock W19 with an
+`OVERRIDE` of rider (b) so `Steering.cs` can come back; (3) re-design the abort executor to need no
+`Steering` (SmartASS + `Actuator.FireAbort` only), which is a new register line, not W19. ⛔ **All three
+are the owner's: (1) edits the register's criteria, (2) is an `OVERRIDE`, (3) is a plan decision.**
+
+**Q3 — the UNDOCK button.  Category: SCOPE.** `MissionOps.Undock()` is a log-only no-op and the real
+`Actuator.Undock(v)` is unwired, so the crew cannot undock from the screens (logged as [[S204]]).
+The batch put the UI command surface out of scope, so T21 left it. **Options:** (1) undock from the
+docking port's right-click menu on this flight and wire the button on its own line *(recommended — it
+keeps the batch's scope line intact and costs one right-click)*; (2) wire it now as a one-line exception.
+**No gate needed; it is a scope call.**
 
 ### T22 [O] Empirical tune (one param at a time vs §B11) — **TODO**
 - **Read:** §B5 / §B7-11.  **DONE when:** profile matches nominal, the 4 `[EST]` numbers pinned into the cfg.

@@ -193,23 +193,27 @@ namespace DragonScreen
     //                     that calls it is §B12.5's front-end and is NOT wired — see T20's register line.
     //                     (Not W21 — that is a reference READ, kept for the IDSS envelope + corridor
     //                     geometry MechJeb lacks.)
-    //  UndockOps        → the conductor's §B9 Phase 6: SmartASS backout + small departure burns → Node
-    //                     Executor. NO-OP: not built. **T21, increment 1** (§B12.5a: one property per
-    //                     increment, undock before deorbit).
+    //  UndockOps        → the conductor's §B9 Phase 6: SmartASS backout + the trunk jettison, out to
+    //                     §B11's Approach Ellipsoid. **LIVE since T21 increment 1, 2026-09-07** —
+    //                     `MechConductor.UndockEngaged`.
     //  DeorbitOps       → the conductor's §B9 Phase 7: `OperationPeriapsis` → Node Executor, then P8 entry
-    //                     attitude hold (O8) and P9 chutes. NO-OP: not built. **T21, increment 2.**
+    //                     attitude hold (O8) and P9 chutes. **LIVE since T21 increment 2, 2026-09-07** —
+    //                     `MechConductor.DeorbitEngaged`. ⚠ The two are disjoint by construction; §B12.5a
+    //                     forbids them being lit together and the sets make that impossible.
     //  BoosterRecovery  → the SCRIPTED booster autopilot on its OWN vessel (§B16) — ours, not MechJeb's —
     //                     surfaced through gen-2 `MissionConductor.RecoveryBooster`'s §B16.7 range machine.
     //                     **LIVE since W9, 2026-09-07.** `Tracked` is the booster `src/BoosterHost.cs` is
     //                     flying, gated on the conductor's recovery stage. No `BoosterControl` byte is
     //                     back and no focus moves — it is the hull-camera follow, not a command.
     //
-    // ⛔ FOUR OF THESE ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) flipped `AutoPilot.Engaged`;
-    // W9 (2026-09-07) flipped `BoosterRecovery.Tracked`; T19 (2026-09-07) flipped
-    // `StationApproach.Engaged`/`.Note`; T20 (2026-09-07) flipped `DockingOps.Engaged`/`.Note` — one
-    // property per increment, every time (§B12.5). `UndockOps` and `DeorbitOps` still return false/null,
-    // so their lamps are dark, and every flight command on every screen is still §14.4(a)'s honest
-    // no-op — click, no light, no action, and no red.
+    // ⛔ ALL SIX ARE NOW LIVE, AND NONE OF THEM LIES. W10 (2026-09-05) `AutoPilot.Engaged`; W9
+    // (2026-09-07) `BoosterRecovery.Tracked`; T19 `StationApproach`; T20 `DockingOps`; T21 `UndockOps`
+    // then `DeorbitOps` — one property per increment, every time (§B12.5).
+    // ⛔ AND THAT CHANGES NOTHING ABOUT §14.4(a) ON THE SCREENS. These six are STATUS READS. Every
+    // flight COMMAND on every screen is still an honest no-op — `FlightCommands.Run` returns false for
+    // everything that would fly, and this batch did not touch it. Click, no light, no action, no red.
+    // ⚠ The lamps are lit by the CONDUCTOR, which the crew engage with AUTO SEQUENCE; they are not lit
+    // by pressing a flight button, because pressing a flight button still does nothing.
     // `AutoPilot.Engaged` lighting means the CONDUCTOR is engaged, not that anything is flying: the host
     // behind it is read-only and commands nothing (§B12.6 step (3)). `BoosterRecovery.Tracked` going
     // non-null means a hull camera has something to look at on a SEPARATE vessel; the Dragon's own flight
@@ -239,8 +243,22 @@ namespace DragonScreen
         public static bool Engaged { get { return MechConductor.DockingEngaged; } }
         public static string Note { get { return MechConductor.DockingNote; } }
     }
-    public static class DeorbitOps { public static bool Engaged { get { return false; } } }
-    public static class UndockOps { public static bool Engaged { get { return false; } } public static string Note { get { return null; } } }
+    // ---- ⭐ LIVE SINCE T21 (2026-09-07) — TWO PROPERTIES, TWO INCREMENTS, IN §B12.5a's OWN ORDER. ----
+    // §B12.5a: "⚠ `UndockOps` and `DeorbitOps` are ONE task, TWO increments … T21 flips `UndockOps` on
+    // the departure leg, then `DeorbitOps` on the return leg. Never both in one step." They cannot both
+    // be lit: `UndockEngaged` covers only `Backout`/`TrunkJettison`, and `DeorbitEngaged` covers only
+    // the steps `ReturnSequence.Beyond` names — the two sets are disjoint by construction, and both
+    // read `Flying`, so neither can light ahead of the vehicle.
+    public static class DeorbitOps
+    {
+        public static bool Engaged { get { return MechConductor.DeorbitEngaged; } }
+        public static string Note { get { return MechConductor.ReturnNote; } }
+    }
+    public static class UndockOps
+    {
+        public static bool Engaged { get { return MechConductor.UndockEngaged; } }
+        public static string Note { get { return MechConductor.ReturnNote; } }
+    }
 
     // ---- ⭐ LIVE SINCE W9 (2026-09-07) — THIS INCREMENT'S ONE FACADE FLIP (§B12.5: exactly one). ----
     // `src/HullCams.cs:75` follows this vessel with the hull cameras. It is now the booster the §B16 host

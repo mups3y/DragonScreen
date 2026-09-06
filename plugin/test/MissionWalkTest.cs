@@ -266,6 +266,221 @@ public static class MissionWalkTest
 
         // ---- 6. AND ON INTO THE DOCKING (T20) ---------------------------------------------------
         WalkTheDocking(plan, ref index);
+
+        // ---- 7. AND HOME (T21) ------------------------------------------------------------------
+        WalkTheReturn(plan, ref index);
+    }
+
+    // ---- 7. UNDOCK, DEPART, DEORBIT, ENTER, SPLASH ------------------------------------------------
+    // T21's DONE-when is "return + splash in-sim". This walks the whole return closed-loop against a
+    // capsule that answers back, and asserts the four things that would end a mission:
+    //   ⛔ the trunk is never fired while docked, and never before the vehicle is clear;
+    //   ⛔ the deorbit is entered ONLY through the crew's G15 GO, never by walking;
+    //   ⛔ the chutes come out on the way DOWN, in order, at the real altitudes;
+    //   ⛔ and the whole thing TERMINATES, with control released.
+    static void WalkTheReturn(MissionStep[] plan, ref int index)
+    {
+        MissionProfile m = Missions.Resolve("Crew-2");
+
+        // ⭐ THE CREW PRESS UNDOCK. In the glue that is `CrewProcedureOps.MarkDockedThisMission`, which
+        // DISENGAGES AUTO SEQUENCE; the next engage resumes at the departure step past G14. Here the
+        // same jump is made directly, which is what that resume computes.
+        int g14 = -1;
+        for (int i = 0; i < plan.Length; i++)
+            if (plan[i].Kind == StepKind.Gate && plan[i].Gate == GateId.UndockGoG14) g14 = i;
+        Check(g14 >= 0, "the plan has a G14 undock gate");
+        int departure = -1;
+        for (int j = g14 + 1; j < plan.Length && g14 >= 0; j++)
+            if (plan[j].Kind == StepKind.Fly) { departure = j; break; }
+        Check(departure >= 0 && plan[departure].Phase == MissionPhase.Phasing,
+              "...and the step after it is the departure Phasing leg");
+        if (departure < 0) return;
+        index = departure;
+
+        // ⛔ The crew have ALREADY undocked by the time this leg runs — see `Capsule`.
+        Capsule c = new Capsule();
+        ReturnStep at = ReturnStep.Idle;
+        int ticks = 0, gatesCleared = 0, trunkWhileDocked = 0, trunkWhileClose = 0;
+        int deorbitBeforeGo = 0, chuteWhileClimbing = 0;
+        bool go15 = false, released = false;
+        ReturnAct[] order = new ReturnAct[24]; int acts = 0;
+
+        for (; ticks < 20000 && index < plan.Length; ticks++)
+        {
+            if (plan[index].Kind == StepKind.Gate)
+            {
+                Gate g = CrewGates.ById(m, plan[index].Gate);
+                bool[] sat = new bool[g.Items == null ? 0 : g.Items.Length];
+                for (int i = 0; i < sat.Length; i++) sat[i] = true;
+                CrewGateInputs gi;
+                gi.Gate = g; gi.Satisfied = sat;
+                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+                if (!CrewGate.Step(gi, GatePhase.Holding).Cleared)
+                { Check(false, "gate " + g.Id + " would not clear"); break; }
+                if (g.Id == GateId.DeorbitGoG15) go15 = true;
+                index = ModeManager.Advance(plan, index, new ModeInputs { GateGo = true }).Index;
+                gatesCleared++;
+                continue;
+            }
+
+            MissionPhase phase = plan[index].Phase;
+
+            // The crew's G15 GO arrives as the plan reaching the Entry phase — the glue's own rule.
+            if (phase == MissionPhase.Entry || phase == MissionPhase.Drogues
+                || phase == MissionPhase.Mains)
+            {
+                ReturnStep began = ReturnSequence.BeginDeorbit(at);
+                if (began != at && !go15) deorbitBeforeGo++;
+                at = began;
+            }
+
+            ReturnInputs s = c.Sense();
+            ReturnDecision d = ReturnSequence.Step(s, at);
+
+            if (d.Act == ReturnAct.JettisonTrunk)
+            {
+                if (c.Docked) trunkWhileDocked++;
+                if (c.RangeM < RendezvousOps.ApproachEllipsoidM) trunkWhileClose++;
+            }
+            if ((d.Act == ReturnAct.DeployDrogues || d.Act == ReturnAct.DeployMains) && !c.Descending)
+                chuteWhileClimbing++;
+            if (d.Act == ReturnAct.ReleaseControl) released = true;
+
+            if (d.Act != ReturnAct.None)
+            {
+                if (acts == 0 || order[acts - 1] != d.Act)
+                { if (acts < order.Length) { order[acts] = d.Act; acts++; } }
+                c.Apply(d.Act);
+            }
+            at = d.Next;
+
+            // the plan advances when this leg reports itself finished
+            bool legDone =
+                (phase == MissionPhase.Phasing && ReturnSequence.DepartureComplete(at))
+             || ((phase == MissionPhase.Drogues || phase == MissionPhase.Mains
+                  || phase == MissionPhase.Splashdown) && ReturnSequence.ReturnComplete(at))
+             || (phase == MissionPhase.Entry && (at == ReturnStep.Drogues || at == ReturnStep.Mains
+                                                 || at == ReturnStep.Complete));
+            if (legDone)
+            { index = ModeManager.Advance(plan, index, new ModeInputs { PhaseComplete = true }).Index; }
+
+            c.Advance();
+        }
+
+        Check(released, "⭐ T21's OWN DONE-WHEN: the return reaches splashdown and RELEASES control "
+              + "(ended at " + at + " after " + ticks + " ticks)");
+        Check(at == ReturnStep.Complete, "...from ReturnStep.Complete");
+        Check(index >= plan.Length, "and the mission plan is finished (step " + index + " of "
+              + plan.Length + ")");
+        Check(gatesCleared >= 1, "the G15 deorbit poll was worked on the way (got " + gatesCleared + ")");
+
+        Check(trunkWhileDocked == 0,
+              "⛔ the trunk decoupler was NEVER commanded while hard-mated (" + trunkWhileDocked + ")");
+        Check(trunkWhileClose == 0,
+              "⛔ ...nor inside §B11's 4 km Approach Ellipsoid (" + trunkWhileClose + ")");
+        Check(deorbitBeforeGo == 0,
+              "⛔ the deorbit was never entered before the crew's G15 GO (" + deorbitBeforeGo + ")");
+        Check(chuteWhileClimbing == 0,
+              "⛔ no chute was ever commanded while not descending (" + chuteWhileClimbing + ")");
+        Check(c.DroguesOut && c.MainsOut, "both chute stages deployed");
+        Check(c.DrogueAltM <= Mission.DrogueAltitude && c.DrogueAltM > Mission.MainAltitude,
+              "the drogues came out at/below 5486 m and above the main altitude (got "
+              + c.DrogueAltM.ToString("F0") + " m)");
+        Check(c.MainAltM <= Mission.MainAltitude,
+              "the mains came out at/below 1830 m (got " + c.MainAltM.ToString("F0") + " m)");
+
+        ReturnAct[] want = {
+            ReturnAct.BackAway, ReturnAct.JettisonTrunk, ReturnAct.PlanDeorbit, ReturnAct.BurnDeorbit,
+            ReturnAct.CloseNoseCone, ReturnAct.HoldHeatShieldForward, ReturnAct.DeployDrogues,
+            ReturnAct.DeployMains, ReturnAct.ReleaseControl
+        };
+        Check(acts == want.Length, "the return issued " + want.Length + " distinct commands in order "
+              + "(got " + acts + ")");
+        for (int i = 0; i < want.Length && i < acts; i++)
+            Check(order[i] == want[i], "return command " + (i + 1) + " is " + want[i]
+                  + " (got " + order[i] + ")");
+
+        // ⭐ THE ABORT, ASSERTED AS THE HONEST NO-OP IT STILL IS. T21's title includes "abort wiring";
+        // §B13.4 routes it through `AbortControl`, which is register W19 and W19 is HELD. So the core
+        // can DECIDE an abort and the glue's only response is to hand the vehicle back — and the abort
+        // decision must still outrank everything, including a gate hold, so it is checked here.
+        {
+            ConductorInputs ab = new ConductorInputs();
+            ab.Phase = MissionPhase.Entry; ab.Aborted = true; ab.Holding = true; ab.Complete = true;
+            ConductorAction aa = Conductor.Decide(ab);
+            Check(aa.Verb == ConductorVerb.Abort && aa.Module == ConductorModule.None,
+                  "⛔ an abort outranks a gate hold and a finished plan, and engages NO module — the "
+                  + "conductor's only honest response while W19 is HELD (got " + aa + ")");
+            // ⚠ `AbortControl` itself cannot be reached from here — it lives in `src/_AutopilotStub.cs`,
+            // which `build.py test` COMPILES but does not link into the test runner (that build is
+            // `src/pure` + `test` only). Its constant-`AbortMode.None` state is a glue fact, stated on
+            // T21's register line rather than asserted where it cannot be.
+        }
+    }
+
+    // ============================================================================================
+    //  THE CAPSULE — the return's vehicle, and it answers back
+    // ============================================================================================
+    class Capsule
+    {
+        // ⛔ STARTS UNDOCKED, AND THAT IS A FINDING, NOT A CONVENIENCE. **The conductor never undocks.**
+        // Gate G14 is "GO FOR UNDOCK", the crew press the screen's UNDOCK button, and that button calls
+        // `MissionOps.Undock()` (`ScreenPainter.cs:1188`) — which is still the demolition stub's
+        // log-only no-op. The documented flow in `CrewProcedureOps`'s own comment is *"press UNDOCK,
+        // then press AUTO SEQUENCE"*, so by the time the departure leg runs the hooks are already open.
+        // ⚠ Wiring that button is the UI COMMAND SURFACE, which this batch put out of scope — logged,
+        // not built, and it is a numbered row on the flight checklist with its manual workaround.
+        public bool Docked;
+        public double RangeM = 5.0;
+        public bool TrunkAttached = true;
+        public double AltitudeM = 420000.0;
+        public bool Descending;
+        public bool DroguesOut, MainsOut, Splashed;
+        public bool NodeExists, NodeBurned, NoseClosed, HeatShieldForward;
+        public double DrogueAltM = -1.0, MainAltM = -1.0;
+        int backAwayTicks, burnTicks, trunkTries;
+
+        public ReturnInputs Sense()
+        {
+            ReturnInputs s = ReturnInputs.Nominal();
+            s.RangeM = RangeM; s.Docked = Docked; s.TrunkAttached = TrunkAttached;
+            s.AltitudeM = AltitudeM; s.Descending = Descending;
+            s.DroguesOut = DroguesOut; s.MainsOut = MainsOut; s.Splashed = Splashed;
+            s.NodeExists = NodeExists; s.NodeBurned = NodeBurned;
+            return s;
+        }
+
+        public void Apply(ReturnAct a)
+        {
+            switch (a)
+            {
+                case ReturnAct.BackAway:      Docked = false; backAwayTicks++; break;
+                // ⭐ A DECOUPLER THAT SOMETIMES DOES NOT FIRE — the whole reason the sequencer
+                // re-commands it. It takes on the second try.
+                case ReturnAct.JettisonTrunk:
+                    trunkTries++;
+                    if (trunkTries >= 2) TrunkAttached = false;   // takes on the second command
+                    break;
+                case ReturnAct.PlanDeorbit:   NodeExists = true; break;
+                case ReturnAct.BurnDeorbit:   burnTicks++; if (burnTicks > 3) NodeBurned = true; break;
+                case ReturnAct.CloseNoseCone: NoseClosed = true; break;
+                case ReturnAct.HoldHeatShieldForward: HeatShieldForward = true; break;
+                case ReturnAct.DeployDrogues: DroguesOut = true; if (DrogueAltM < 0.0) DrogueAltM = AltitudeM; break;
+                case ReturnAct.DeployMains:   MainsOut = true;   if (MainAltM < 0.0) MainAltM = AltitudeM; break;
+            }
+        }
+
+        public void Advance()
+        {
+            if (!Docked && RangeM < 20000.0) RangeM += 60.0;          // backing away
+            if (NodeBurned)
+            {
+                Descending = true;
+                double rate = MainsOut ? 200.0 : DroguesOut ? 1200.0 : 4000.0;
+                AltitudeM -= rate;
+                if (AltitudeM <= 0.0) { AltitudeM = 0.0; Splashed = true; }
+            }
+        }
     }
 
     // ---- 6. CAPTURE, THE BERTH, AND THE CREW'S OVERRIDE ------------------------------------------

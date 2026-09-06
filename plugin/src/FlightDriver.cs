@@ -61,8 +61,11 @@ namespace DragonScreen
         // the VEHICLE, and if no embedded MechJebCore resolved on this vessel then nothing is flying it
         // — so the conductor must fall back to the honest live classifier exactly as it did before T18
         // (§B12.5a(iv): never half-wire a status). One property read, no search.
-        // ⚠ T21 adds `Entry` and `Drogues` HERE, in the same diff as the controller that flies them
-        // (§B12.8 rider (c)) — never ahead of one.
+        // ⭐ T21, 2026-09-07 — `Entry`, `Drogues`, `Mains` and `Splashdown` join it, and the RETURN
+        // half of `Phasing` with them. `pure/ReturnSequence.cs` flies the back-away, the trunk, the
+        // deorbit burn, the nose cone, the entry attitude (O8: no commanded bank) and the chutes.
+        // ⛔ The table is now COMPLETE for the Dragon's own mission: every Fly step in
+        // `ModeManager.Plan` has a controller behind it.
         // ⭐ T20, 2026-09-07 — `Docked` joins it, and it covers BOTH of the plan's two `Fly(Docked)`
         // steps: the Docking Autopilot flies the capture (O6 / §B10.3), SmartASS KILL-ROT holds the
         // berth (§B12.3). `pure/DockingLadder.cs` tells them apart from the gate each walks toward.
@@ -77,7 +80,11 @@ namespace DragonScreen
                 || p == MissionPhase.Phasing     // T19 — §B9 P2 insertion trim + the phasing orbit
                 || p == MissionPhase.Coast       // T19 — the free-flyer's dwell, same executor
                 || p == MissionPhase.Approach    // T19 — §B9 P3, out to the Keep-Out Sphere
-                || p == MissionPhase.Docked;     // T20 — §B9 P4 capture, then the berthed attitude hold
+                || p == MissionPhase.Docked      // T20 — §B9 P4 capture, then the berthed attitude hold
+                || p == MissionPhase.Entry       // T21 — §B9 P7/P8 deorbit, nose cone, entry attitude
+                || p == MissionPhase.Drogues     // T21 — §B9 P9 drogues at 5486 m
+                || p == MissionPhase.Mains       // T21 — §B9 P9 mains at 1830 m
+                || p == MissionPhase.Splashdown; // T21 — §B9 P10 release
         }
 
         public void Start()
