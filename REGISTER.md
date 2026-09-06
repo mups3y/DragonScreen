@@ -21042,7 +21042,7 @@ and belongs to it.
 
 ---
 
-### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DOING — edits 3 and 4 landed: the bar has its OWN named type floor (29 design px, owner `OVERRIDE`), and CURRENT STATE's value is now CENTRED under its caption and clamped inside its run (owner, 2026-09-07). S176-Q1/Q3 and S179-Q2 are closed; the unit stays OPEN for the owner's verdict on this preview** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
+### S176 [O] PER-PAGE REBUILD, UNIT 1 — THE BOTTOM BAR: rebuilt from the export, and it reaches the glass on every page that spreads — **DONE 2026-09-07 — ⭐ APPROVED BY THE OWNER, verbatim: *"approved, give copy paste prompt for overseer to plan the next page not you"*. UNIT 1 IS CLOSED: four edits, the bar rebuilt from the export, reaching the glass, with its own named type floor and its value centred under its caption. ⚠ S176-Q1 (typing the bar's four tile-borne text elements) is the one thing left OPEN against this component and is the owner's** — [unit 1 of the owner's per-page rebuild programme; closes [[S172]]; closes [[S175]]'s "noticed, not touched"]
 
 **🟢 OWNER DIRECTIVE, 2026-09-06, verbatim (C1.12's evidentiary standard):** *"I want a prompt to
 completely rebuild each page correctly one at a time. Build it then show me preview I will either approve
@@ -21079,6 +21079,36 @@ sources before any code was written.** Every item below was walked at Step C.
 ---
 
 ## STEP B — WHAT WAS BUILT
+
+---
+
+#### ✅ UNIT 1 CLOSED — THE OWNER'S APPROVAL, VERBATIM
+
+**🟢 OWNER, 2026-09-07:** *"approved, give copy paste prompt for overseer to plan the next page
+not you"*.
+
+That approves the bottom bar and, by the second half of the same sentence, **hands the PLANNING of unit 2
+to the overseer rather than to a build chat.** No build chat picks the next page or writes its plan.
+
+**WHAT UNIT 1 SHIPPED, ACROSS FOUR EDITS:**
+
+| | |
+|---|---|
+| the build | the bar rebuilt from the export — 11 sliced tiles, primitives for the chrome, no flattened raster; reaches the glass on all 16 spread page-views; draw, hit and marker moved together |
+| edit 1 | the Cover's two pills are one pair — no dash, one size, centred |
+| edit 2 | NEXT VIEW moves above SETTINGS — the two pills are a stack |
+| edit 3 | the bar gets its OWN named type floor, `Typography.BarDesign` = 29 design px (owner `OVERRIDE`), still inside the census; D2 built |
+| edit 4 | `CURRENT STATE`'s value CENTRED under its caption and clamped inside its run |
+| closed on the way | [[S172]] · [[S175]]'s "noticed, not touched" · S176-Q1's premise · S176-Q3 · S179-Q2 · [[S179]] itself |
+| logged, not fixed (C1.1) | [[S177]] · [[S178]] · [[S180]] |
+
+⚠ **STILL OPEN AGAINST THIS COMPONENT, AND IT IS THE OWNER'S — S176-Q1.** §14.2a clause (1) asks for
+text the export renders as text to be TYPED; four of the bar's elements (the two captions, `Sun + GEO`,
+the comm block) are still TILES. Edit 3 removed the ARITHMETIC objection — at 29 design px typing them
+no longer implies a 1.75–2.37× raise, because the export's own bar type is 20.3 / 27.5 / 30.4. What
+remains is that two of them would print `22:33` and `79/1450122`, **numbers with no source at all**
+([[S147b]]). ⛔ It is NOT closed by unit 1 and no build chat may close it.
+
 
 ### 1. ⭐ THE BAR REACHES THE GLASS — [[S172]], the owner's own finding
 
