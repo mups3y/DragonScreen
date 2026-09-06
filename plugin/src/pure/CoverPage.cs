@@ -177,6 +177,12 @@ namespace DragonScreen
         // never invented (§1.4). The card BACKGROUNDS (rectangle_179/180/181) are real Figma layout and
         // stay; only their baked captions/rows are swapped for the reference text.
         const int ReferencePhase = 5;
+        /// <summary>The rail slot the community export actually baked - "Coast to Trunk Jettison".
+        /// ⭐ Named so [[S127]]'s finding is checkable rather than only asserted in a comment: the baked
+        /// panel body belongs to THIS slot, so slot 1 is not one of the phases missing its content.
+        /// ⚠ Changing this without changing the baked assets would make the comment in `Build` false.</summary>
+        public const int PhaseCoastSlot = 1;
+
         static readonly string[] ReferenceSkipKeys = {
             "crew_interrupt_conditions", "union", "30deg_sustained_altitude_error", "far_field_pointing_1",
             "600deg_m_altitude_rate", "far_field_pointing", "crew_deorbit_preparation", "union_6",
@@ -440,6 +446,32 @@ namespace DragonScreen
 
             int sp = selectedPhase < 0 ? 0 : (selectedPhase >= PhaseCount ? PhaseCount - 1 : selectedPhase);
             bool refPhase = (sp == ReferencePhase);
+
+            // ---- ⛔ WHY FIVE OF THE SEVEN RAIL SLOTS SHOW THE SAME BODY, AND WHAT IS ACTUALLY WRONG
+            //      WITH THAT ([[S127]], 2026-09-06) ---------------------------------------------------
+            // Slots 0-4 all draw the baked panel body. `SCREEN_LIVENESS_AUDIT` H4 files that as five
+            // missing content sets. Looked at properly it is THREE different situations, not one:
+            //
+            //   slot 1  Coast to Trunk Jettison  ⭐ NOT MISSING. The baked body IS this phase's own
+            //           content. The export captured `active_phase_deorbit_coast`, and what it captured
+            //           is CREW DEORBIT PREPARATION - the timings, the three numbered steps and the
+            //           ENTRY ENABLED verdict a crew works through during the coast. Slot 1 is correct
+            //           and must not be "fixed"; `PhaseCoastSlot` names it so that is checkable.
+            //   slots 3, 4  Procedure, Procedure  ⛔ OWNER-DECLINED, and they stay that way. [[S27]] put
+            //           these two to the owner and the owner DECLINED TO ASSIGN THEM, because no source
+            //           names their content. Do not invent one, and do not route `DeorbitBurnPrep` or
+            //           `EntryProcedure` behind them merely because those pages exist and are unused.
+            //   slots 0, 2  Deport & Burn, Claw Separation Prep  ⚠ GENUINELY WRONG, and the content to
+            //           fix them is NOT IN THIS REPOSITORY. H4 says section 8 documents them "exactly as
+            //           slot 5's content was"; it does not. Slot 5's three cards came from THREE
+            //           separate section-8 paragraphs (the return sequence, the Mark 3 parachutes, and
+            //           section 4's real panel functions) - not from a per-phase source. Per phase
+            //           section 8 yields two facts each, and `docs/SCREEN_INVENTORY.md:94` records what
+            //           the real bodies actually hold - "numbered command steps (like 4.011, 4.700)" -
+            //           as NOT CAPTURED, from photographs of the expanded rail that the repo does not
+            //           have. Drawing a body from two facts, or from slot 5's cards a second time,
+            //           would be invention (section 1.4) either way. Written up as an owner question
+            //           on [[S127]], which is HELD on it.
 
             // every placed asset — anchored left/right of the split, bars stretched. rectangle_178 was
             // already drawn behind the bars above, so skip it here. The rail highlight (rectangle_183 +

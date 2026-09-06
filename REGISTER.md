@@ -15972,7 +15972,7 @@ the first run and two of those were REAL TEST DEFECTS**, which is the whole reas
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched — a target readout commands nothing.
 
-### S127 [S] Five of the Cover's seven rail phases draw identical content — **DOING** — [H4; TIER 3]
+### S127 [S] Five of the Cover's seven rail phases draw identical content — **HELD 2026-09-06 — it is not five, and the content for the two that ARE wrong is not in this repository** — [H4; TIER 3]
 - **The finding.** Only slots 5 (Reference Content) and 6 (Manual Chute) have their own bodies. Slots 0–4
   draw the same baked Coast-phase panel.
 - ⛔ **Slots 3/4 are OWNER-DECLINED and stay that way.** [[S27]] put the two generic "Procedure" slots to the
@@ -15981,6 +15981,90 @@ the first run and two of those were REAL TEST DEFECTS**, which is the whole reas
   as slot 5's content was, which is the precedent [[S123]] built on.
 - **DONE when:** slots 0/1/2 draw their own §8-sourced bodies, slots 3/4 are left as they are with a comment
   saying why, and the preview shows five distinct phases.
+
+#### ⛔ HELD 2026-09-06 — AND THE LINE'S OWN PREMISE DOES NOT SURVIVE BEING CHECKED
+
+**It is not five slots, and it is not one problem.** Read against the assets, `SCREEN_LIVENESS_AUDIT`'s H4
+covers three different situations:
+
+| slot | phase | what is actually true |
+|---|---|---|
+| 1 | Coast to Trunk Jettison | ⭐ **NOT MISSING.** The baked body **IS** this phase's content |
+| 3, 4 | Procedure, Procedure | ⛔ owner-DECLINED ([[S27]]); unchanged, and now say so in the code |
+| 0, 2 | Deport & Burn · Claw Sep Prep | ⚠ genuinely wrong — and the content is **not in the repo** |
+
+⭐ **SLOT 1 IS CORRECT, which no one had noticed.** The export baked `active_phase_deorbit_coast`, and what
+it baked is **CREW DEORBIT PREPARATION** — the `deorbit_burn_3_hrs` / `nlt_deorbit_burn_1_hr` /
+`nlt_deorbit_burn_30_min` timings, the three numbered steps, the interrupt conditions and the ENTRY ENABLED
+verdict. That is what a crew works through **during the coast to trunk jettison**. So one of the five
+"missing content sets" was never missing, and a task that had set out to replace it would have replaced
+correct content with something weaker.
+
+#### ⛔ AND THE CLAIM THAT UNBLOCKS SLOTS 0 AND 2 IS NOT TRUE
+
+H4 says giving slots 0/1/2 their own bodies *"is not [owner-gated] — the deorbit sequence they name … is
+documented in §8 exactly as slot 5's content was."* **Checked, and it is not.**
+
+- **Slot 5's three cards came from THREE different §8 paragraphs plus §4** — the Return/deorbit sequence,
+  the Mark 3 parachute paragraph, and §4's confirmed real panel functions. That is why it fills three
+  cards. It was never a per-phase extract.
+- **Per phase, §8 yields two facts each.** Deport & Burn: *"undock → distance"*. Claw Sep Prep: *"claw
+  separates ~1 h 20 m before splashdown; deorbit decision ~30 min before claw-sep prep"*. That is the
+  whole of it.
+- ⚠ **And "Burn" is ambiguous in §8's own ordering.** §8 puts the deorbit burn AFTER trunk jettison, while
+  the rail puts "Deport & Burn" FIRST — so the word is either a departure burn or the deorbit burn, and
+  nothing in the repo settles which.
+- ⛔ **What the real bodies hold is on record as NOT CAPTURED.** `docs/SCREEN_INVENTORY.md:94` describes
+  the rail's real items as *"each with numbered command steps (like 4.011, 4.700)"*, sourced from
+  **REAL PHOTOS (expanded rail)** and marked **not captured, many**. Those numbered procedures are the
+  content; two sequence facts are not a substitute for them.
+
+⭐ **So filling slots 0 and 2 means either inventing procedure steps or drawing slot 5's cards a second
+time — both of which §1.4 forbids without owner discussion.** That is why this line is HELD and not
+NEEDS-WORK: there is no version of the work that is correct to do.
+
+#### What DID land
+
+- **`CoverPage.PhaseCoastSlot = 1`**, named so the slot-1 finding is checkable rather than only asserted.
+- **A block in `Build`** setting out all three situations, so the next chat that reads H4 does not start
+  from its premise. ⚠ It states explicitly that slot 1 must not be "fixed" and that `DeorbitBurnPrep` /
+  `EntryProcedure` must not be routed behind slots 3/4 merely because they exist and are unused.
+- **The DONE-when's second clause is therefore satisfied**: slots 3/4 are left as they are, with the
+  comment saying why.
+- `build.py test` green · comment-loss **0** · no preview change (comments and one constant).
+
+⚠ **A near-miss worth recording, because it cost a file.** The script that wrote this comment carried a
+lone-surrogate escape for an emoji. `io.open(p, 'w')` **truncates at open**, and the `UnicodeEncodeError`
+fired on the write — leaving `CoverPage.cs` at **0 bytes**. Recovered whole from `HEAD` because the file
+was committed, and the script now **encodes before opening**. ⭐ Same shape as [[S158]]'s `git checkout`
+lesson: the danger is the tool's failure mode, not the content.
+
+**Paste-ready overseer prompt (C1.13):**
+> DragonScreen, S127 — the Cover's phase rail. The audit files this as "five of seven rail phases draw
+> identical content". Checked against the assets, it is three things:
+> ⭐ **Slot 1 (Coast to Trunk Jettison) is already correct** — the body the export baked IS that phase's
+> content (Crew Deorbit Preparation, its timings and numbered steps). Nothing to do, and replacing it
+> would be a loss.
+> ⛔ **Slots 3 and 4 stay as they are** — you declined to assign the two generic "Procedure" slots and no
+> source names their content. That is recorded in the code now.
+> ⚠ **Slots 0 and 2 (Deport & Burn, Claw Separation Prep) are genuinely wrong, and I cannot fix them from
+> anything in the repository.** The audit says §8 documents them "exactly as slot 5's content was", and
+> that is not so: slot 5's three cards came from three separate §8 paragraphs plus §4, whereas §8 gives
+> each of these phases two facts. `SCREEN_INVENTORY.md` records that the real bodies are numbered command
+> procedures (4.011, 4.700 style) from photographs of the expanded rail, marked NOT CAPTURED. §8 also
+> orders the deorbit burn AFTER trunk jettison while the rail puts "Deport & Burn" first, so even the
+> word "Burn" is ambiguous.
+> **What I need is one of:** **(a)** the expanded-rail photographs (or a transcription of slots 0 and 2's
+> steps) added to the repo, and I build both bodies from them; **(b)** a ruling that these two slots draw
+> a MARKED minimal body from the two §8 facts each — honest, thin, and explicitly not the real procedure;
+> **(c)** leave both showing the coast body and mark them in the UI as not-this-phase, which is at least
+> not a lie; **(d)** leave it entirely, and accept that two of seven rail slots show another phase's
+> procedure.
+> ⚠ **(d) is the current state.** My recommendation is **(b)** if you want the rail honest soon, **(a)** if
+> the photographs exist anywhere.
+
+- **DONE when:** slots 0 and 2 either draw content from a real source, or draw an owner-chosen marked
+  minimal body — and slot 1 is left alone.
 
 ### S128 [S] The Cover's four `Act*` buttons are silent no-ops — **TODO** — [H5; TIER 2; prerequisite [[S54]] is DONE]
 - **The finding.** `ActReview`, `ActAcknowledge`, `ActDeorbitBrief`, `ActOnSpaceX` have named hit rects, no
