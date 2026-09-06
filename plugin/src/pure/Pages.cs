@@ -63,6 +63,11 @@ namespace DragonScreen
         public bool CoverAckLatched;
         public bool CoverGroundGo;
 
+        /// <summary>S132: Frame 58's local stopwatch, in seconds. Per-screen display state like the two
+        /// above — the painter owns the clock and stamps the elapsed value here, so the pure page can
+        /// draw it and be tested without one.</summary>
+        public double HudTimerSeconds;
+
         public string Phase;
         public string Altitude;
         public string Velocity;

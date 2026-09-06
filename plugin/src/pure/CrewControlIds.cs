@@ -74,7 +74,9 @@ namespace DragonScreen
         Panel = 8,        // PanelButtons / PanelMap -> PanelCommand  (the console plate, not glass)
         /// <summary>S135: the audio page's ± buttons. Appended, never renumbered - a recording holds
         /// these ints and an older file must keep meaning what it meant.</summary>
-        Audio = 9         // SettingsAudioPage.AudioAct
+        Audio = 9,        // SettingsAudioPage.AudioAct
+        /// <summary>S132: Frame 58's RESET / START stopwatch. Appended, never renumbered.</summary>
+        Hud = 10          // Frame58Controls.TimerAct
     }
 
     public static class CrewControlIds
@@ -89,6 +91,7 @@ namespace DragonScreen
         public const string DockPrefix  = "dock.";
         public const string PanelPrefix = "panel.";
         public const string AudioPrefix = "audio.";
+        public const string HudPrefix   = "hud.";
 
         /// <summary>
         /// The `control_id` a touch that hit nothing carries. NOT null — the event is written with a
@@ -133,6 +136,15 @@ namespace DragonScreen
         {
             if (b == CoverPage.CoverButton.None) return null;
             return CoverPrefix + Name((int)b, typeof(CoverPage.CoverButton));
+        }
+
+        /// <summary>Frame 58's stopwatch: RESET and START. ⚠ The value is the ONLY thing on that page
+        /// a touch can act on - everything else there is a readout - so a `hud.` event in the recording
+        /// is unambiguous about which control was pressed (S132).</summary>
+        public static string HudTimer(TimerAct a)
+        {
+            if (a == TimerAct.None) return null;
+            return HudPrefix + Name((int)a, typeof(TimerAct));
         }
 
         /// <summary>The Suit Leak Check's plates. `Troubleshoot` is the one whose press can be

@@ -633,6 +633,23 @@ namespace DragonScreen
                 rec.ControlId = CrewControlIds.Dock(da);
                 DockAction(da, ref rec);
             }
+            else if (cur == UiPage.Hud)
+            {
+                // ---- S132 / H11: THE TIMER'S TWO BUTTONS, WHICH HAD NO HIT RECT AT ALL ----------
+                // ⛔ Tested against the BAKED plates in the DESIGN frame, because nothing redraws them
+                // — `Frame58Controls.HitTest` uses `Frame58Map`'s measured button rects, and the frame
+                // is fit-to-height and centred exactly as `Frame58Hud.Build` places it. Deriving the
+                // mapping here a second time is how a control ends up beside where it looks (H-04).
+                float fsc = h / 2112f;
+                float fox = (w - 3427f * fsc) * 0.5f;
+                TimerAct act = (fsc > 0f)
+                    ? Frame58Controls.HitTest((px - fox) / fsc, py / fsc)
+                    : TimerAct.None;
+                rec.Surface = CrewSurface.Hud;
+                rec.EnumValue = (int)act;
+                rec.ControlId = CrewControlIds.HudTimer(act);
+                rec.Acted = ApplyHudTimer(act);
+            }
             else if (cur == UiPage.Cover)
             {
                 // The rail selects a phase; the ◄/► arrows step through them (wrapping over all 7);
@@ -718,6 +735,57 @@ namespace DragonScreen
         /// <summary>The Cover's two action latches. Per-screen display state, like `brightness` —
         /// see `PageState.CoverAckLatched` for why they are not vessel state (S128).</summary>
         private bool coverAckLatched, coverGroundGo;
+
+        /// <summary>
+        /// S132: Frame 58's stopwatch. `hudTimerRunning` says whether it is counting; `hudTimerBase` is
+        /// the realtime at which the current run started, and `hudTimerHeld` the seconds banked by
+        /// previous runs.
+        ///
+        /// ⭐ ACCUMULATED, NOT RESTARTED. Stopping and starting again continues from where it stopped —
+        /// which is what a stopwatch does, and what RESET is for. Storing only a start time would make
+        /// every STOP a silent reset.
+        /// ⚠ `realtimeSinceStartup`, deliberately, not `Planetarium` time: this is a crew stopwatch on a
+        /// screen, not a mission clock, so it must not leap when the game warps.
+        /// </summary>
+        private bool hudTimerRunning;
+        private float hudTimerBase;
+        private double hudTimerHeld;
+
+        /// <summary>The stopwatch's reading now — banked seconds plus the run in progress.</summary>
+        private double HudTimerSeconds
+        {
+            get
+            {
+                double v = hudTimerHeld;
+                if (hudTimerRunning) v += Time.realtimeSinceStartup - hudTimerBase;
+                return v;
+            }
+        }
+
+        /// <summary>
+        /// S132: a press on Frame 58's timer. Returns whether anything changed (`CrewPress.Acted`).
+        ///
+        /// ⛔ The DECISION is `Frame58Controls`' and is pure; this owns the clock and nothing else.
+        /// ⚠ RESET STOPS THE RUN as well as zeroing it — a reset that left it running would start
+        /// counting from zero again, which is a restart wearing a reset's label.
+        /// </summary>
+        private bool ApplyHudTimer(TimerAct act)
+        {
+            if (act == TimerAct.StartStop)
+            {
+                if (hudTimerRunning) { hudTimerHeld = HudTimerSeconds; hudTimerRunning = false; }
+                else { hudTimerBase = Time.realtimeSinceStartup; hudTimerRunning = true; }
+                return true;
+            }
+            if (act == TimerAct.Reset)
+            {
+                bool was = hudTimerRunning || hudTimerHeld > 0.0;
+                hudTimerHeld = Frame58Controls.ResetElapsed;
+                hudTimerRunning = Frame58Controls.ResetRunning;
+                return was;
+            }
+            return false;
+        }
 
         /// <summary>
         /// S85: §2.9's area-microphone context — the alarm channel AS IT STOOD when the press was made.
@@ -1216,6 +1284,7 @@ namespace DragonScreen
             ps.ScreenPages = livePage;
             ps.CoverAckLatched = coverAckLatched;      // S128 — see PageState's note on both of these
             ps.CoverGroundGo = coverGroundGo;
+            ps.HudTimerSeconds = HudTimerSeconds;      // S132 — Frame 58's own stopwatch
 
             // The map follows the vehicle until the crew pans it by hand - see MapProjection.Pan.
             mapView = MapProjection.Track(mapView, ps.HasFix, ps.Latitude, ps.Longitude);

@@ -130,5 +130,27 @@ namespace DragonScreen
         public static readonly Box RangeLabel = new Box(1311.17f, 1250.16f, 1372.92f, 1264.66f);
         public static readonly Box RateLabel  = new Box(2046.17f, 1250.26f, 2090.23f, 1264.56f);
         public static readonly Box AccelLabel = new Box( 666.17f,  287.62f,  877.73f,  308.19f);
+
+        // ---- THE BOTTOM ROW: FRAME · CAMERA · THE TIMER ([[S132]], 2026-09-06) --------------------
+        // ⚠ THE FIRST TWO ARE ONE PATH EACH, CAPTION AND VALUE TOGETHER. `FRAME` sits directly over
+        // `LVLH` in a single merged glyph run, and `CAMERA` over `Virtual` — so a patch that erases the
+        // value erases its caption too, and anything redrawing one has to redraw both. Measured off the
+        // SVG like everything else in this file; the heights (46.5 and 46.9) are the giveaway, being
+        // two lines rather than one.
+        public static readonly Box FrameRow  = new Box(1198.80f, 1782.42f, 1265.40f, 1828.92f);
+        public static readonly Box CameraRow = new Box(2134.20f, 1782.34f, 2226.13f, 1829.20f);
+
+        /// <summary>The timer's own value — "0s" in the baked art.</summary>
+        public static readonly Box TimerValue = new Box(3113.83f, 1680.65f, 3186.48f, 1726.85f);
+
+        // ---- ⛔ THE TWO TIMER BUTTONS, AND THESE ARE HIT RECTS, NOT INK BOXES ---------------------
+        // Every other box in this file is the extent of the GLYPHS. These two are the extent of the
+        // BAKED BUTTON PLATE, because nothing redraws them — the artwork is the button, so the hit
+        // rect has to match the artwork or a tap lands beside a control the crew can see. That is QC
+        // `H-04` in one sentence, and it is why these were measured off `frame58.png` rather than off
+        // the label paths: a column/row profile of the bright plate outlines in the timer band, which
+        // gives the two verticals per button and one shared pair of horizontals.
+        public static readonly Box ResetButton = new Box(2953.4f, 1765.9f, 3134.2f, 1859.5f);
+        public static readonly Box StartButton = new Box(3164.3f, 1765.9f, 3345.0f, 1859.5f);
     }
 }

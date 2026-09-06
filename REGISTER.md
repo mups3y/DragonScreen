@@ -16435,12 +16435,96 @@ right of `Split` (1500), so the fill-to-fit reflow adds `extra = 2560 − 3427 �
 
 ⛔ No `install`, no glass, no `git push`. §14.4(a) untouched.
 
-### S132 [S] Frame 58's `FRAME`/`CAMERA` labels and the `0s / RESET / START` timer are baked with no hit rects — **DOING** — [H11; TIER 3]
+### S132 [S] Frame 58's `FRAME`/`CAMERA` labels and the `0s / RESET / START` timer are baked with no hit rects — **DONE 2026-09-06 — FRAME is a CONSTANT and that is the answer; CAMERA and the timer are live** — [H11; TIER 3]
 - **The finding, split by class:** `FRAME LVLH` / `CAMERA Virtual` as **readouts** → (A), and
   `HullCams.Labels()` already supplies real camera names. The timer → (A), purely local.
   ⛔ `FAR FIELD POSITIONING` is a **GNC mode command** → **(B)**, §14.4(a), Part B's.
 - **DONE when:** the two labels read live, the timer runs and resets locally, `FAR FIELD POSITIONING` is
   left inert with a comment naming it (B), and a test pins that it reaches no `FlightCommands`.
+
+#### ⭐ DONE 2026-09-06
+
+**`FRAME` IS A CONSTANT, AND CHECKING THAT WAS THE FIRST REAL RESULT.** LVLH is the frame this HUD works
+in and nothing offers a second one: `DockingPageCentral` draws the same literal, `SCREEN_EVIDENCE_MATRIX`
+records the row as *"FRAME: LVLH"*, and the reference UI has no frame selector anywhere. §14.4(f) asks a
+real readout to be FILLED, not for a constant to be made to wobble — so the baked row is correct, it is
+left exactly as it is, and `Frame58Controls`' header is the record of that being checked rather than
+assumed. ⛔ Do not "make FRAME live". There is nothing to make it live from.
+
+**`CAMERA` IS LIVE**, and reads the SAME flag that puts the picture in the bowl — `s.Steps.NoseConeOpen`,
+which is what `Frame58Hud.Build` switches on and what `FigmaUI.WantsDockingCam` claims the camera with.
+So the label cannot contradict what is in front of the crew, and a check pins all three agreeing.
+⚠ **One of its two words is ours and is flagged as such.** "Virtual" is the reference's own. No source
+names the second view — the frame was only ever captured in its Virtual state — so the value is
+**"Forward"**, taken from the crew-facing string this build already shows for that exact camera (the
+Video tab's *"FORWARD VIEW IN USE BY DOCKING"*). Using our own established term beats coining one, and
+beats leaving the row reading "Virtual" over a live feed, which is the only reading that is definitely
+false.
+
+**THE TIMER RUNS, STOPS AND RESETS**, and the two buttons have hit rects for the first time.
+⚠ The clock ACCUMULATES: stop and start again and it continues, because that is what a stopwatch does
+and it is what RESET is for. Storing only a start time would make every STOP a silent reset.
+⚠ `realtimeSinceStartup`, not `Planetarium` time — a crew stopwatch on a screen must not leap on warp.
+⛔ RESET stops the run as well as zeroing it; a reset that left it running is a restart wearing a
+reset's label, and a check pins that.
+
+#### ⛔ THE HIT RECTS ARE THE BAKED BUTTONS, MEASURED OFF THE RASTER
+
+Every other box in `Frame58Map` is the extent of the GLYPHS. These two are the extent of the **baked
+button plate**, because nothing redraws them — the artwork IS the button, so a hit rect that did not
+match it is QC `H-04`. Measured by a column/row profile of `frame58.png`'s bright plate outlines:
+**RESET x 2953.4–3134.2, START x 3164.3–3345.0, both y 1765.9–1859.5.**
+
+#### ⚠ AND THE FIRST DRAW WAS WRONG IN A WAY ONLY THE PREVIEW COULD SHOW
+
+`CameraRow` is **one merged path — caption and value together** (46.9 design px is two lines, not one),
+so the first version patched the whole box and redrew "CAMERA" above the value. It did not fit: the
+baked row is a 12 px caption over an 18 px value, both far under the floor, and two lines AT the floor
+need ~84 px in an 85 px plate. The result overflowed the plate and spilled onto the frame.
+⭐ **So only the value band is patched and the baked caption stays.** That is the right division of
+labour as well as the only thing that fits: making the row LIVE is this line's job, and raising the
+page's type to the floor is [[S153]]'s — the caption is existing artwork, not new below-floor text.
+⚠ The bands are measured, not chosen: row-profiling puts the caption's ink at y 1780.9–1792.6 and the
+value's at 1807.7–1826.1, and a fill scan puts the plate at x 2041.5–2319.2, y 1760.8–1846.1.
+
+⚠ **[[S153]]'s ratchet also caught an earlier version** that sized the caption at `live * 0.62` to match
+the baked proportions — correctly, because R-01 permits a static label at `Typography.Dense` and nothing
+below it, whatever the export did.
+
+#### The `FAR FIELD POSITIONING` clause
+
+⛔ It is a **GNC mode command → (B)**, §14.4(a), Part B's, and it stays inert. The pin is the same shape
+[[S128]] used: `Frame58Controls.HitTest` is the ONLY hit test this page has and it answers with a
+`TimerAct` — a type whose three values are a stopwatch's — so no value this page's touch handling can
+produce names a flight command. A check probes the button's own region and gets `None`; mutation **T7**
+widens the hit test to swallow it and dies on exactly that.
+
+#### Verified
+
+- **8 mutations, 8 killed** — CAMERA frozen, the two words swapped, a negative time printed, rounding,
+  RESET left running, the buttons transposed, the hit test grown over FAR FIELD, and START made
+  non-toggling.
+- **New suite `Frame58ControlsTest`, 22 checks** · `CrewPressTest` gained the `hud.` channel's pin.
+- ⚠ **Adding that channel exposed a gap in `CrewPressTest`**, recorded there and logged separately: its
+  header says the namespace is pinned "exhaustively over every one of the seven dispatch types", but the
+  seven is a hardcoded list of calls and **nothing checks it is still the whole set** — a new
+  `CrewSurface` can be added with no namer and the suite stays green.
+- **Preview: 4 existing pages changed** (all four Frame 58 renders) **+ 1 new**,
+  `frame58_hud_timer_running.png`, which carries both the running clock and CAMERA's second value.
+  ⭐ **Measured with a REBUILT harness** — see the correction on [[S130]]: the old one reported "0
+  changed" here because its before-render failed to compile and it read the stale PNGs as unchanged.
+- `build.py test` green · comment-loss **0** across eight files · no `install`, no glass, no `git push`.
+
+### S164 [S] `CrewPressTest` cannot tell when a control channel is added without a name — **TODO** — [logged by [[S132]] per C1.1, 2026-09-06; TIER 3]
+- **The finding.** The suite's header says it pins the `control_id` namespace *"exhaustively over every
+  value of every one of the seven dispatch types"*. The values are exhaustive; **the seven is not**. It is
+  a hardcoded list of calls in `Run`, so a new `CrewSurface` with no namer at all leaves the suite green.
+- ⭐ Found by adding one: [[S132]]'s `CrewSurface.Hud` compiled, dispatched and recorded with nothing in
+  `CrewPressTest` noticing until its pin was written by hand.
+- ⚠ **This is the black box's evidence channel** (§2.9). A surface with no `control_id` writes presses
+  that name no control — the recording keeps the event and loses what was pressed.
+- **DONE when:** the suite enumerates `CrewSurface` and fails if any value has no namer, and the count of
+  dispatch types is derived rather than written in prose.
 
 ### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **TODO** — [QC `H-05`; TIER 2]
 - **The finding.** A titled panel occupying 822 px of the busiest page in the build, showing nothing, while

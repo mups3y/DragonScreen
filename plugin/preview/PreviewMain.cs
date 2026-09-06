@@ -871,6 +871,23 @@ public static class PreviewMain
                 DockingCamStandIn = false;
                 ForgetRuntimeImages();
             }
+            // ---- S132 / H11: THE STOPWATCH RUNNING, and CAMERA reading the OTHER view ----
+            // ⛔ Every render above shows the timer at its baked 0s, so the one state a crew creates by
+            // pressing START appears in none of them. ⭐ The nose cone is OPEN here too, so this single
+            // page also carries the CAMERA row's second value - the row must not still read "Virtual"
+            // over a live feed, and that is only checkable in a picture.
+            {
+                ps.Steps.NoseConeOpen = true;
+                ps.HudTimerSeconds = 137.4;
+                DisplayList hdl = new DisplayList(Frame58Hud.Commands + 60);
+                Frame58Hud.Build(hdl, CW, CH, ps);
+                string path = Path.Combine(outDir, "frame58_hud_timer_running.png");
+                Render(hdl, CW, CH, path);
+                Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + hdl.Count
+                                  + " commands   timer " + Frame58Controls.TimerText(ps.HudTimerSeconds)
+                                  + ", CAMERA " + Frame58Controls.CameraText(ps));
+                ps.HudTimerSeconds = 0.0;
+            }
             ps.Steps.NoseConeOpen = savedNose;
         }
 

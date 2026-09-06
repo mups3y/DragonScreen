@@ -66,6 +66,7 @@ public static class CrewPressTest
         SuitIds();
         DockIds();
         AudioIds();
+        HudTimerIds();
         PanelIds();
         TreeIds();
         SubsysTabIds();
@@ -109,6 +110,9 @@ public static class CrewPressTest
         "MapPanUp", "MapPanDown", "MapPanLeft", "MapPanRight", "MapCentre", "MapZoomIn", "MapZoomOut" };
 
     static readonly string[] PinSuitAct = { "None", "Start", "Halt", "Close", "Finish", "Retime", "Troubleshoot" };
+
+    /// <summary>S132: Frame 58's stopwatch. Two acts and a miss.</summary>
+    static readonly string[] PinHudTimer = { "None", "StartStop", "Reset" };
 
     static readonly string[] PinAudioAct = {
         "None",
@@ -238,6 +242,26 @@ public static class CrewPressTest
         Check(CrewControlIds.Suit(SuitCheckPage.SuitAct.None) == null, "SuitAct.None must map to null (a miss)");
         Eq(CrewControlIds.Suit(SuitCheckPage.SuitAct.Troubleshoot), "suit.Troubleshoot",
            "§2.7's own worked example");
+    }
+
+    /// <summary>
+    /// S132: Frame 58's RESET / START, the eighth dispatch type.
+    ///
+    /// ⚠ AND ADDING IT EXPOSED A GAP IN THIS SUITE. The header says the namespace is pinned
+    /// "exhaustively over every value of every one of the seven dispatch types" - but the SEVEN is a
+    /// hardcoded list of calls in `Run`, and nothing checks that it is still the whole set. A new
+    /// `CrewSurface` can be added with no namer at all and this suite stays green. That is logged as
+    /// its own register line rather than fixed here (C1.1); this method is the pin the new channel
+    /// needs either way.
+    /// </summary>
+    static void HudTimerIds()
+    {
+        PinEnum(typeof(TimerAct), PinHudTimer, "TimerAct");
+        for (int i = 1; i < PinHudTimer.Length; i++)
+            Eq(CrewControlIds.HudTimer((TimerAct)i), "hud." + PinHudTimer[i],
+               "hud " + PinHudTimer[i]);
+        Check(CrewControlIds.HudTimer(TimerAct.None) == null,
+              "TimerAct.None must map to null (a miss)");
     }
 
     static void AudioIds()
