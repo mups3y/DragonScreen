@@ -16526,7 +16526,7 @@ widens the hit test to swallow it and dies on exactly that.
 - **DONE when:** the suite enumerates `CrewSurface` and fails if any value has no namer, and the count of
   dispatch types is derived rather than written in prose.
 
-### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **TODO** — [QC `H-05`; TIER 2]
+### S133 [S] The docking HUD's ALERT ACTIVITY panel is 822 px tall and permanently empty — **DOING** — [QC `H-05`; TIER 2]
 - **The finding.** A titled panel occupying 822 px of the busiest page in the build, showing nothing, while
   the alarm channel is computed every frame **and written to the black box**.
 - ⚠ **Same family as [[S130]] and [[S137]]** — three surfaces that each discard a live `Alarms` channel.
