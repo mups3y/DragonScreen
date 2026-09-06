@@ -8841,7 +8841,14 @@ flip, 5° offset and 2700 m aim are `[NOT SEEDED]` (start at 0/geometry); every 
 `pure/BoosterDescent.cs` — Q1 is the sharp one: **on the craft as dumped, an RTLS boostback has no
 ignition left** (`ThreeLanding` has one, owed to the entry burn), so the §B16.3 guard refuses it.
 
-### W9 [O] `src/MissionConductor.cs` — the warp + focus glue, blocked on the booster core and the host — **TODO** — [TIER 3: scheduled recovery]
+### W9 [O] `src/MissionConductor.cs` — the warp + focus glue — **DOING 2026-09-07** — [TIER 3: scheduled recovery]
+⭐ **BLOCKER SPENT, 2026-09-07 — owner brief.** This line's own header read *"blocked on the booster core
+and the host"*. Both are gone: **W10 landed the host** (`src/FlightDriver.cs`, read-only, DONE 2026-09-05)
+and the **§B16 booster core is built and actuates**. The owner's goal for this run, verbatim: *"no I want
+the whole thing wired up ready to go including the auto pilot, user gates, everything as if you were
+planning on it being the correct and complete build. Every page functioning as it should and auto pilot
+flying"* — and **W9 is step one of it**. ⛔ W9 is GLUE: it does NOT wire a flight control; §14.4(a) still
+binds until **T18** (ascent), which is a separate line.
 Logged by **W4**, 2026-09-04 (C1.1 — found on trying to restore it; §B12.8's Wave D row names it, and it
 does not compile in this tree).
 **The finding.** `plugin/src/MissionConductor.cs` (24,299 B at `8b81816^`, R1 §5.2 **RECOVER-CODE**) is two
