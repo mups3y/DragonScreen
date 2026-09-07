@@ -26375,3 +26375,21 @@ SPENT UPPER STAGE`, which is now the **correct** line to see after Dragon separa
 same flight*; (2) fly a subset; (3) hold.
 ⛔ **All three need an owner gate-open** (C1.12). This chat proceeds past none of them.
 
+
+---
+
+### S220 [S] Auto-target the station on the pad — **DOING** — [owner directive 2026-09-07; TIER 2: three things already depend on a target and all three depend on the crew remembering]
+🟢 **OWNER, 2026-09-07, verbatim:** *"we also need to auto target the iss as soon as the vehicle is on the pad"*
+- **Why it matters beyond convenience.** `G7` goes **NO-GO without a target in the same SoI** ([[S215]] Q4);
+  `LaunchWindow` needs `Core.Target.TargetOrbit.LAN` and `.inclination`; §7.5's launch-to-plane reads the
+  same. **No target, no window, no launch** — and today all three depend on the crew remembering.
+- ⛔ **NOT a name match.** §1.4 forbids inventing a mapping and a name match breaks on a rename. Selects on
+  KSP's own `VesselType.Station`. **Verified in `saves/test/persistent.sfs` 2026-09-07: exactly ONE vessel
+  of `type = Station` (`ISS USOS Real Size`), against 37 Crew, 13 Debris, 8 SpaceObject, 3 ServiceModule.**
+- ⛔ **Refuses rather than guesses on 0 or 2+ candidates** — [[S219]] job 1's finding, one day old: *"Select
+  refuses to pick between two candidates, so a qualifying spent upper stage standing beside the real
+  booster binds NEITHER."* A silent wrong pick is worse than a refusal, and a refusal is already handled:
+  `G7` then goes NO-GO with a reason.
+- ⛔ **Never stomps a manual selection.** Sets the target only when it is UNSET.
+- **DONE when:** the station is targeted on the pad without crew action, the 0/2+/already-set/off-pad cases
+  are each mutation-proved, and `previewdiff` is empty.
