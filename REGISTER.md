@@ -26531,3 +26531,30 @@ page cite. **Declared outputs only** (C1.11): `docs/reference/FALCON_USERS_GUIDE
 - **Q3 — the C7 gap.** Options: (1) **open `S221` as a real line: copy the PDF into `docs/reference/` and
   index it** *(recommended, one small task)*; (2) fold it into a later `G`-line; (3) accept the digest as the
   only in-repo record. ⛔ Creating that line is outside this task's declared outputs, so it was not created.
+
+---
+
+### S222b [O] STOP TUNING — native MechJeb, RO defaults, one sanctioned deviation — **DOING** — [owner directive 2026-09-08; TIER 1: the conductor wrote 47 of 77 boxes and called it "running RO's defaults"]
+🟢 **OWNER, 2026-09-08, verbatim:**
+> *"what I do not understand is if we are truely setting mechjebs default launch to rendezvous settings
+> for rss/ro mods, then why did it pitch over early at all? We are obviously using what is thought to be
+> "tuned" when they are clearly wrong. We need to make sure the chat fully understands how to use mechjeb
+> correctly and return everything back to default settings and using the methods I described for achieving
+> each stage. No guesses, no invented methods or "tuning" truely stock mechjeb methods and settings set for
+> auto accent, auto rendezvous and auto docking!"*
+> *"no you miss understand, we can set the orbit to 215km. Just do not mess with the tuning etc, let native
+> mechjeb do it AND THEN WE TUNE FROM TRUSTED CAPTURED VALUES!!!"*
+> *"the only change should be the auto stage being our way"*
+
+- **The test for every write:** would a user open the MechJeb UI and type this to fly this mission?
+  YES → keep it and name the control. NO → delete it and let RO's default stand.
+- **KEEP:** orbit altitude 215 km · launch into plane of target · autowarp · ascent type PSG ·
+  `Autostage = false` + our direct part activation (the one sanctioned deviation).
+- **DROP:** everything `ApplyRODefaults()` seeds.
+- ⛔ **Do not write the inclination** on the plane-launch path — `LaunchingToPlane` owns it (§7.5).
+- ⛔ **The withdrawn `PitchRate = 0.75`** from an earlier overseer prompt is NOT written.
+- **Establish, do not assume:** `DesiredAttachAlt` / `OptimizeStageFlag` — read the PSG settings menu and
+  answer whether the UI expects a user to set the attach altitude for a 215 km launch-to-rendezvous.
+- **DONE when:** the audit's written count is far below 47, every survivor carries a mission-fact /
+  UI-workflow / autostage-deviation justification, `build.py test` green, mutation-proven, `previewdiff`
+  empty, and the owner is asked for `install` + glass with a pad-to-orbit checklist.
