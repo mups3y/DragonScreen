@@ -24985,21 +24985,59 @@ no-ops is still true; the claim that the crew could START any of it was never ch
 A crew can engage the conductor and work a gate from the shipped Figma UI, and the first flight's
 checklist item 1 names a control that exists.
 
+#### 🟢 OWNER RULING, 2026-09-07, IN CHAT — THE INVENTION IS AUTHORISED, AND MY §14.2a CITATION WAS WRONG
+
+**Verbatim (C1.12's evidentiary standard):**
+> *"This is wrong, we are supposed to simulate/create whatever is missing. We do not have the full dragon
+> crew screens space x has because they have not been released to the public. So we need to invent what is
+> not readily available the best way we can. We will have to make educated guesses based on space x
+> behaviour/procedures so it feels like it fits not shoe horned in place"*
+
+⛔ **THE CITATION THIS RULING CORRECTS WAS MINE AND IT WAS BACKWARDS.** This line first said §14.2a
+forbade a build chat inventing the control. It does not. §14.2a(2) is a clause that **PROTECTS** our
+inventions from a chat that deletes them for "not conforming" — it names the alarm-channel tint (`S130`),
+the §B16.9 LZ coordinates and the §14.4(e)/(f) dash policy as tier-3 inventions **settled by discussion
+with the owner**, and its own closing sentence is: *"Absence in the export bounds what may be **ADDED**.
+It says nothing whatever about what must be **REMOVED**."* The real gate on inventing was never §14.2a;
+it is §1.4's *"invent ONLY by owner discussion"* — and §14.4(f) already requires that every real-screen
+feature be **INCLUDED and FILLED**. The ruling above IS that discussion. Recorded here rather than edited
+away, per C1.16.
+
+⛔ **THE ONE BOUND THE RULING ITSELF SETS:** *"so it feels like it fits not shoe horned in place"*. An
+invention is judged against SpaceX's own behaviour and procedure grammar, not merely against being
+present.
+
 #### Open questions for the owner (C1.14) — **HELD**
 
-⛔ **A build chat cannot choose the answer, for a reason with a rule behind it.** §14.2a (owner-authorised,
-G13) says an element **ABSENT from the Figma export STAYS EXACTLY AS IT IS — its absence is NEVER grounds
-for changing or removing it**. Inventing an AUTO SEQUENCE button and placing it on one of his pages is
-precisely what that forbids. **Where the engage lives is the owner's design call.**
+**Q1 — what SHAPE does the invention take?  Category: OWNER / TASTE.** (The ruling above settles that we
+invent; this is the *"feels like it fits"* half.)
 
-**Q1 — where does ENGAGE live?  Category: OWNER / TASTE + §14.2a.**
-1. **Bind it to an export element that already exists and currently commands nothing** — the strongest
-   candidate is **`FAR FIELD POSITIONING`**, drawn under **FLIGHT COMMANDS** on the Docking page
-   (`DockingPageCentral.cs:50-53`) as a usable button with no action behind it. *(Recommended: it is in
-   the export, it is already a "flight command", and it needs no new element.)*
-2. **A keybind**, no screen element at all — flyable immediately, touches no page, but adds a surface the
-   design does not have and tends to become permanent.
-3. **Build the gate card properly into the Figma UI** — the real answer, and the largest.
+⭐ **THE VEHICLE'S OWN ANSWER ALREADY EXISTS IN THIS TREE, WHICH IS WHY THIS IS NOT A NEW FORM.**
+The real Dragon runs the crew through **numbered procedure screens**, and two of them are built here from
+tier-1 photographs: `pure/VrioTestPage.cs` is **"4.700 Deorbit Preparation — Test VRIO Health LEDs"** (a
+checklist with n-of-5 state, numbered steps 4.1-4.5, three command buttons, NEXT, ENTER READ-ONLY) and
+`UiPage.SuitCheck` is **"4.011 - Suit Leak Check / ECLSS"** — whose own grammar the owner photographed:
+an **INITIATE SUIT LEAK CHECK** action, live per-row status going green **Nominal**, *"On SpaceX GO to
+pressurize — command:"*, *"On completion, contact SpaceX to report results"*, a **FINISH**, and a red
+**HALT SUIT LEAK CHECK**.
+
+⭐⭐ **AND THE TWO CATALOGUES ALREADY MEET AT A POINT.** `CrewGates`' gate **G2 is "SUIT LEAK CHECK"** —
+which IS procedure **4.011**, and it is already a built page. The crew gates are not a new kind of thing
+that needs a home; **they ARE procedures**, and one of them is on the glass already.
+
+1. **The mission gates render as PROCEDURES in that existing grammar**, one procedure page driven by the
+   conductor's `CurrentGate()`, carrying the gate's checklist rows, an **INITIATE** (which is the engage),
+   a **GO** where 4.011 has FINISH, and a red **HALT** where it has HALT. G2 routes to the built 4.011.
+   Reached the way `DeorbitBurnPrep` and `EntryProcedure` already are (the Menu grid), until a rail slot
+   is decided. *(Recommended — it invents a NUMBER and a TITLE, and nothing else; every other element is
+   the vehicle's own, and the crew never "engage an autopilot", which Dragon has no concept of.)*
+2. **A dedicated AUTO SEQUENCE master control** on a page of its own — simplest to build, and the thing
+   the ruling warns against: no real Dragon screen has one.
+3. **A keybind**, no screen element — flyable tonight, invents nothing, and leaves the real answer unbuilt.
+
+⚠ **What option 1 genuinely invents, stated so it can be judged:** the procedure's NUMBER and TITLE (the
+4.0xx family is where 4.011 sits, so the countdown gates sitting beside it is the educated guess), and
+which of the real command buttons each gate carries. Nothing else.
 
 **Q2 — how are the GATES worked?  Category: OWNER GATE.** Engage alone is not enough: the plan holds at
 G1 and the crew must be able to tick items and press GO, and that card is unreachable too. Options:
