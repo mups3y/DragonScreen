@@ -313,6 +313,9 @@ namespace DragonScreen
                 // The pages whose body is drawn with `sx = w / RefW, sy = h / RefH` — they already
                 // spread across the full panel, so a letterboxed bar was the odd element out.
                 case UiPage.Menu:
+                // S213: "4.100 Mission Sequence" draws with `sx = w/RefW` like the other
+                // procedure screens, so its bar spreads with it.
+                case UiPage.CrewGate:
                 case UiPage.Audio:
                 case UiPage.AudioVideo:
                 case UiPage.SuitCheck:

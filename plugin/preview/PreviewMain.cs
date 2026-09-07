@@ -970,7 +970,7 @@ public static class PreviewMain
             foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
                                           UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
                                           UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure,
-                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent, UiPage.NavOrbitPlot })
+                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent, UiPage.NavOrbitPlot, UiPage.CrewGate })
             {
                 DisplayList udl = new DisplayList(600);
                 FigmaUI.Build(udl, up, CW, CH, ps, MapProjection.Default());
@@ -978,6 +978,49 @@ public static class PreviewMain
                 string path = Path.Combine(outDir, "ui_" + up.ToString().ToLowerInvariant() + ".png");
                 Render(udl, CW, CH, path);
                 Console.WriteLine("  " + path + "   " + CW + "x" + CH + "   " + udl.Count + " commands");
+            }
+
+            // ---- S213: "4.100 MISSION SEQUENCE" AT A GATE, WHICH THE SHARED FIXTURE CANNOT SHOW ----
+            // The loop above renders it IDLE, because `ps.GateActive` is false in the shared fixture and
+            // an idle procedure is a page with one button on it. The state that matters - a gate up, its
+            // checklist half ticked, GO refused until it is not - only exists while the conductor is
+            // holding, so it is synthesised here. Two frames: crew-worked gates, and the owner's
+            // hands-off mode, because those are the two the crew choose between.
+            {
+                for (int variant = 0; variant < 2; variant++)
+                {
+                    PageState gs = ps;
+                    gs.AutoEngaged = true;
+                    gs.GateActive = true;
+                    gs.GateTitle = "GO/NO-GO FOR LAUNCH";
+                    gs.GateStage = GatePhase.Holding;
+                    // The REAL G7 checklist, out of the catalog rather than typed here.
+                    Gate g7 = CrewGates.ById(Missions.Resolve("Crew-2"), GateId.LaunchGoG7);
+                    int gn = g7.Items == null ? 0 : g7.Items.Length;
+                    GateItemView[] gv = new GateItemView[gn];
+                    for (int i = 0; i < gn; i++)
+                    {
+                        gv[i].Label = g7.Items[i].Label;
+                        gv[i].CrewActionable = g7.Items[i].Kind == ItemKind.CrewAck;
+                        // Half-ticked on purpose: a fully satisfied list hides the refused-GO state,
+                        // which is the one a reader most needs to be able to recognise.
+                        gv[i].Checked = i == 0;
+                    }
+                    gs.GateItems = gv;
+
+                    PageControls gc = PageControls.Default;
+                    gc.GateNumber = CrewGates.NumberOf(GateId.LaunchGoG7);
+                    gc.AutoGates = variant == 1;
+
+                    DisplayList gdl2 = new DisplayList(600);
+                    FigmaUI.Build(gdl2, UiPage.CrewGate, CW, CH, gs, MapProjection.Default(),
+                                  5, false, 1, CoverPage.CoverCam.Earth, Turntable.Front(), gc, 0u, false);
+                    if (gdl2.Overflowed) Console.WriteLine("  WARNING UI CrewGate gate OVERFLOWED");
+                    string gp = Path.Combine(outDir,
+                        variant == 0 ? "ui_crewgate_g7.png" : "ui_crewgate_g7_autogates.png");
+                    Render(gdl2, CW, CH, gp);
+                    Console.WriteLine("  " + gp + "   " + CW + "x" + CH + "   " + gdl2.Count + " commands");
+                }
             }
 
             // ---- S159 / QC AS-01: THE ASCENT PAGE'S ELEVEN EVENTS, AT THREE POINTS IN A FLIGHT ----

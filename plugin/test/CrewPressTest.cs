@@ -113,7 +113,8 @@ public static class CrewPressTest
         "EntryProcedure",
         "SystemsTree", "SystemsPid",
         "Ascent",
-        "NavOrbitPlot" };
+        "NavOrbitPlot",
+        "CrewGate" };
 
     static readonly string[] PinCoverButton = {
         "None", "Menu", "Back", "Forward",
@@ -128,6 +129,8 @@ public static class CrewPressTest
 
     /// <summary>S132: Frame 58's stopwatch. Two acts and a miss.</summary>
     static readonly string[] PinHudTimer = { "None", "StartStop", "Reset" };
+    static readonly string[] PinGateAct = {
+        "None", "Initiate", "Step", "Go", "NoGo", "Halt", "AutoGates" };
 
     static readonly string[] PinAudioAct = {
         "None",
@@ -173,7 +176,7 @@ public static class CrewPressTest
     static readonly string[] PinSurface = {
         "None",
         "Nav", "Cover", "Suit", "SubsysTab", "Chute", "Tree", "Dock", "Panel",
-        "Audio", "Hud", "Video" };
+        "Audio", "Hud", "Video", "CrewGate" };
 
     /// <summary>
     /// Assert an enum is exactly the pinned member list: same count, same names, contiguous ordinals
@@ -523,6 +526,16 @@ public static class CrewPressTest
             case CrewSurface.Video:
                 for (int i = 0; i < SettingsVideoPage.MaxRows; i++) Add(into, CrewControlIds.VideoCam(i));
                 return true;
+            case CrewSurface.CrewGate:
+                // ⚠ THE STEP TICK CARRIES AN INDEX, so this surface's id set is not one-per-enum-value
+                // like most of the others - it is five fixed ids plus one per step the procedure can
+                // show. A Go/No-Go poll is only reconstructable if the recording says WHICH line the
+                // crew acknowledged, so the index is part of the id and therefore part of this pin.
+                for (int i = 0; i < PinGateAct.Length; i++)
+                    if ((GateAct)i != GateAct.Step) Add(into, CrewControlIds.Gate((GateAct)i, 0));
+                for (int i = 0; i < CrewGatePage.MaxSteps; i++)
+                    Add(into, CrewControlIds.Gate(GateAct.Step, i));
+                return true;
         }
         return false;   // ⛔ including CrewSurface.None, which must have no namer at all
     }
@@ -546,6 +559,7 @@ public static class CrewPressTest
             case CrewSurface.Audio:     return CrewControlIds.AudioPrefix;
             case CrewSurface.Hud:       return CrewControlIds.HudPrefix;
             case CrewSurface.Video:     return CrewControlIds.VideoPrefix;
+            case CrewSurface.CrewGate:  return CrewControlIds.GatePrefix;
         }
         return null;
     }
@@ -629,7 +643,12 @@ public static class CrewPressTest
         //   — that is 162, and it was the whole count until S164.
         // ⭐ S164 adds the four sets nothing here was gathering: 8 audio ± + 5 audio scopes + 2 hud
         //   + 8 video = 23 more, so 185.
-        Check(all.Count == 185, "the namespace should hold 185 ids, it holds " + all.Count);
+        // ⭐ S213 adds 14: ONE more `nav.goto` (the mission-sequence page joins `UiPage`) and THIRTEEN
+        //   `gate.` ids — five fixed controls (Initiate, Go, NoGo, Halt, AutoGates) plus one per step the
+        //   procedure can show (`CrewGatePage.MaxSteps` = 8). So 199.
+        //   ⚠ The step ids are the reason this number moves when `MaxSteps` does, and that is deliberate:
+        //   a procedure that can show a row the recorder cannot name is the defect S164 exists to catch.
+        Check(all.Count == 199, "the namespace should hold 199 ids, it holds " + all.Count);
 
         Dictionary<string, string> seen = new Dictionary<string, string>();
         for (int i = 0; i < all.Count; i++)

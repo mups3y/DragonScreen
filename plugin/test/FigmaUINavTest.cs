@@ -3933,9 +3933,12 @@ public static class FigmaUINavTest
                       System.Math.Abs(bx + bw - VW) < 0.01f, "right " + (bx + bw));
             }
         }
-        // Counted, not asserted loosely: 16 spread page-views against 19 letterboxed ones. If a new
+        // Counted, not asserted loosely: 17 spread page-views against 19 letterboxed ones. If a new
         // page lands in the wrong half of FitFor, this moves and says so.
-        Check("16 page-views spread, 19 letterbox", spread == 16 && boxed == 19,
+        // ⭐ S213: 16 -> 17. "4.100 Mission Sequence" draws its body with `sx = w/RefW`, so it SPREADS
+        // like the other procedure screens. A page that landed in the letterbox half by accident would
+        // have read 16/20 here, which is exactly what this count exists to catch.
+        Check("17 page-views spread, 19 letterbox", spread == 17 && boxed == 19,
               spread + " spread, " + boxed + " letterboxed");
 
         // *** S172's SECOND defect, the one that reads as broken: the bar's first rule CONTINUES the

@@ -481,6 +481,17 @@ namespace DragonScreen
         /// no poll can ever see — whether the press ACTED. Nothing here reads `rec`, so its presence
         /// cannot change what a press does.
         /// </summary>
+        /// <summary>S213: the current gate's tick bits as a string, so "did the press change anything"
+        /// is answered by OBSERVING the conductor rather than by a second copy of its rules.</summary>
+        private static string TickString()
+        {
+            ProcState p = CrewProcedureOps.Proc;
+            if (p.Satisfied == null) return "";
+            var sb = new System.Text.StringBuilder(p.Satisfied.Length);
+            for (int i = 0; i < p.Satisfied.Length; i++) sb.Append(p.Satisfied[i] ? '1' : '0');
+            return sb.ToString();
+        }
+
         private void FigmaTouch(float px, float py, ref CrewPress rec)
         {
             // Nav (bottom bar / back chevron) wins; anything it does not claim on the Suit Leak
@@ -499,6 +510,59 @@ namespace DragonScreen
                 return;
             }
             UiPage cur = (UiPage)selectedPage;
+
+            // ---- S213: "4.100 MISSION SEQUENCE" — THE ONLY PLACE ON THE GLASS THAT COMMANDS THE
+            // ---- CONDUCTOR, AND UNTIL THIS EXISTED THERE WAS NO SUCH PLACE AT ALL.
+            // The AUTO SEQUENCE button and the crew-gate card both lived in `Pages`, which `FigmaMode`
+            // makes unreachable (the compiler says so — CS0162 at the dead block in `TouchDown`), so the
+            // autopilot could not be engaged and a gate could not be cleared. The owner found it by
+            // going to fly. Every press below reaches `CrewProcedureOps` for real, which is why the page
+            // paints these controls live (S75: a control that cannot act is not painted as one).
+            if (cur == UiPage.CrewGate)
+            {
+                GateAction ga = CrewGatePage.HitTest(px, py, w, h, VesselData.State);
+                rec.Surface = CrewSurface.CrewGate;
+                rec.EnumValue = (int)ga.Act;
+                rec.ControlId = CrewControlIds.Gate(ga.Act, ga.Index);
+                // `Acted` by OBSERVATION, not by a second copy of the rules: the conductor's own
+                // engaged/gate/tick state before and after the press. A GO on an unsatisfied checklist
+                // is REFUSED by `CrewGate.Step`, and this is what records that it was refused.
+                bool wasEngaged = CrewProcedureOps.Engaged;
+                GateId wasGate = CrewProcedureOps.CurrentGateId;
+                bool wasAuto = CrewProcedureOps.AutoAdvanceGates;
+                string wasSat = TickString();
+
+                switch (ga.Act)
+                {
+                    case GateAct.Initiate:
+                        if (!CrewProcedureOps.Engaged) CrewProcedureOps.Toggle();
+                        break;
+                    case GateAct.Halt:
+                        if (CrewProcedureOps.Engaged) CrewProcedureOps.Toggle();
+                        break;
+                    case GateAct.Step:   CrewProcedureOps.ToggleItem(ga.Index); break;
+                    case GateAct.Go:     CrewProcedureOps.PressGo();            break;
+                    case GateAct.NoGo:   CrewProcedureOps.PressNoGo();          break;
+                    // ⭐ THE OWNER'S CHECKBOX (2026-09-07). It flips the conductor's own flag rather
+                    // than a copy of it, so the box and the behaviour are one value.
+                    case GateAct.AutoGates:
+                        CrewProcedureOps.AutoAdvanceGates = !CrewProcedureOps.AutoAdvanceGates;
+                        break;
+                }
+
+                rec.Acted = ga.Act != GateAct.None
+                            && (CrewProcedureOps.Engaged != wasEngaged
+                             || CrewProcedureOps.CurrentGateId != wasGate
+                             || CrewProcedureOps.AutoAdvanceGates != wasAuto
+                             || TickString() != wasSat
+                             // GO and NO-GO latch inside the conductor and are consumed on its next
+                             // tick, so they change nothing observable HERE. They are presses that
+                             // acted; reporting them as inert would be the lie this field exists to
+                             // prevent.
+                             || ga.Act == GateAct.Go || ga.Act == GateAct.NoGo);
+                return;
+            }
+
             if (cur == UiPage.SuitCheck)
             {
                 // T14 added FINISH (end at step 2.5, raise the result popup) and TRY ADDITIONAL
@@ -1382,6 +1446,12 @@ namespace DragonScreen
                 // what the page drew before it could be selected.
                 PageControls ctl = controls;
                 ctl.AudioSeat = audioSeat;
+                // S213: the two values "4.100 Mission Sequence" needs that PageState does not already
+                // carry. ⛔ BOTH ARE READ FROM THE CONDUCTOR, NEVER STORED HERE — the checkbox and the
+                // behaviour behind it are one value, so the box cannot show a state the machine is not
+                // in. `GateNumber` is the gate's own G-number, which `CrewGates` already assigns.
+                ctl.GateNumber = CrewGates.NumberOf(CrewProcedureOps.CurrentGateId);
+                ctl.AutoGates = CrewProcedureOps.AutoAdvanceGates;
                 FigmaUI.Build(page, up, w, h, ps, mapView, suitCountdown, suitPopup, coverPhase, coverCam, turn,
                               ctl, suitSeed, suitStart >= 0f);
             }

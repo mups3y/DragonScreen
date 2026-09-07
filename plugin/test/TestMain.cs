@@ -362,6 +362,11 @@ public static class TestMain
         // that fires hardware, and the drogue/main altitudes are read from `Mission` rather than copied.
         bad += Suite(ReturnSequenceTest.Run);
 
+        // S213: "4.100 Mission Sequence" - the conductor's ONLY entry point on the glass, and the
+        // page whose absence let a whole batch ship an autopilot nobody could engage. Most of the
+        // suite is REACHABILITY, because that is the check whose absence was the defect.
+        bad += Suite(CrewGatePageTest.Run);
+
         bad += Suite(MissionWalkTest.Run);
         bad += Suite(WarpPlanTest.Run);         // conductor: the on-rails rate that can never overshoot the drop-out
         bad += Suite(CoastEtaTest.Run);         // conductor: range-closing coast ETA -> the warp target UT

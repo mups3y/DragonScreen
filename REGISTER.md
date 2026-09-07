@@ -4560,6 +4560,70 @@ hand rather than reading the constants, so a silent "tune" of one fails the suit
 **DONE when (unchanged):** PVG flies to insertion in-sim. **See the batch gate request at the end of this
 file for the numbered in-flight checklist.**
 
+#### ✅ BUILT 2026-09-07 — "4.100 MISSION SEQUENCE", THE CONDUCTOR'S FIRST ENTRY POINT ON THE GLASS
+
+**Owner's two decisions, verbatim (C1.12):** *"one page that re-titles itself, and hands-off gates for
+flight 1. First run I will check gates manually to make sure it works, also put an AutoAdvanceGates check
+box on the first page so the user can choose to manually check the gates or auto sequence the launch"*.
+
+**Files: one pure page, one suite, and the wirings.**
+`plugin/src/pure/CrewGatePage.cs` (new) · `plugin/test/CrewGatePageTest.cs` (new, **37 checks**) ·
+`pure/FigmaUI.cs` (`UiPage.CrewGate = 35`, PageCount 36, title, draw, hit) · `pure/BottomBar.cs` (the
+page spreads) · `pure/CrewGates.cs` (+`NumberOf`) · `pure/CrewControlIds.cs` (+the `gate.` CVR surface) ·
+`pure/PageAction.cs` (+`GateNumber`/`AutoGates`) · `src/ScreenPainter.cs` (the dispatch) ·
+`preview/PreviewMain.cs` (+3 renders) · four ratchet pins moved with reasons.
+
+⭐ **IT IS A PROCEDURE, NOT AN "AUTOPILOT" SCREEN, AND THAT IS THE WHOLE DESIGN.** Crew Dragon is
+autonomous — no real Dragon screen has an autopilot master switch, and adding one would be exactly the
+*"shoe horned"* thing the ruling forbids. What the crew have is numbered PROCEDURES and Go/No-Go polls,
+and this build already carries two real ones from tier-1 photographs (`VrioTestPage` = **4.700 Deorbit
+Preparation**, `SuitCheckPage` = **4.011 Suit Leak Check**). 4.011's photographed grammar is the grammar
+copied: procedure ID + system top-left, a section rail, "SECTION n: IN PROGRESS" over numbered steps, an
+**INITIATE** top-right, live rows going green **Nominal**, the decision at the foot of the steps, and a
+red **HALT** bottom-right.
+
+⛔ **EXACTLY WHAT IS INVENTED: ONE NUMBER AND ONE TITLE — `4.100` and `MISSION SEQUENCE`.** Pinned as
+literals in the suite so a later chat cannot quietly add a second.
+- SECTION numbers are the gates' **own G-numbers**, read off `GateId`'s name by `CrewGates.NumberOf` —
+  not a second table, so the two can never drift. ⭐ It returns **9** for `ApproachInitGoG9`, because the
+  real poll sequence skips G8 and an index would have silently renumbered it.
+- STEP numbers are `<section>.<n>`, which is 4.011's own scheme (its photographed steps read 2.3–2.5).
+- Every title and item label is the gate catalog's, untouched.
+
+⭐ **AND THE TWO CATALOGUES ALREADY MET.** Gate **G2 IS "SUIT LEAK CHECK"**, which IS procedure 4.011 —
+already a built page. The gates were always procedures; only the screen to run them on was missing.
+
+⛔ **S75 APPLIED IN THE OPPOSITE DIRECTION FROM `VrioTestPage`.** That page draws its three command
+plates INERT because they command the vehicle and cannot. Every control here **acts** — INITIATE, the
+step ticks, GO, NO-GO, HALT and the checkbox all reach `CrewProcedureOps` for real — so they are painted
+live AND carry hit rects, from the same named rects both `Build` and `HitTest` read (S108 / QC H-04).
+
+⭐ **THE CHECKBOX FLIPS THE CONDUCTOR'S OWN FLAG**, not a copy of it, so the box cannot show a state the
+machine is not in. It **ships OFF** — the crew work every gate by hand, which is W10's settled default
+and what the owner asked to verify on the first run.
+
+⛔ **AN AUTO ROW CANNOT BE TICKED BY A FINGER**, swept over every pixel of the page: an AUTO row is
+satisfied from vessel state, and a finger that could tick one would be faking a system confirmation —
+the same class of lie as a lamp lit ahead of the vehicle.
+
+⭐ **THE CVR RECORDS IT.** A `CrewGate` surface and a `gate.` id namespace were added, because a Go/No-Go
+poll is only reconstructable if the recording says WHICH line the crew acknowledged — so the step id
+carries its index. S164's own checks demanded the namer and the prefix before the build would go green.
+
+⛔ **A LAYOUT DEFECT THE PREVIEW CAUGHT.** GO/NO-GO were first pinned to the foot of the page, which left
+a screen-tall gap between step 7.3 and the decision — a poll a thousand pixels from the thing being
+decided. They now follow the last step, so a 2-step gate and an 8-step gate are the same page.
+
+**VERIFIED (C1.3).** `python plugin/build.py test` — **ALL SUITES PASSED**; `CrewGatePageTest` **37
+checks, 0 failed**. `python plugin/build.py preview` — **130 pages**, three of them this page's (idle,
+G7 crew-worked, G7 hands-off), and the G7 render was **inspected**. Four ratchet pins moved, each in a
+line that says why: the spread/letterbox count (16→17), the legibility-floor baseline (dumped by
+`PrintBaselines`, not typed off a screenshot), the bar-draw census (26→27) and the CVR id namespace
+(185→199).
+
+**DONE when (unchanged):** a crew can engage the conductor and work a gate from the shipped Figma UI —
+which is the glass, so this stays **NEEDS-WORK** until the flight (C1.12).
+
 #### Open questions for the owner (C1.14) — **HELD**
 
 **Q1 — the inclination SIGN.  Category: SOURCE / owner taste.** MechJeb passes `DesiredInclination` into
@@ -24923,7 +24987,7 @@ with Waves C/D."* **T18 and T21 are those callers**: `OpenNoseShroud` at the end
 
 ---
 
-### S213 [O] ⛔⛔ THE CONDUCTOR CANNOT BE ENGAGED FROM THE GLASS — AUTO SEQUENCE AND THE CREW GATES ARE BOTH BEHIND `FigmaMode` AND UNREACHABLE — **DOING** — [found by the owner in the capsule, 2026-09-07; TIER 1: the whole of T18–T21 has no entry point]
+### S213 [O] THE CONDUCTOR HAD NO ENTRY POINT ON THE GLASS — **BUILT: "4.100 MISSION SEQUENCE" — NEEDS-WORK, awaiting the glass** — [found by the owner in the capsule, 2026-09-07; TIER 1: the whole of T18–T21 has no entry point]
 
 **How it was found: the owner installed the build, went to fly it, and reported — verbatim —**
 > *"I saw no such button to start the launch sequence etc."*

@@ -2018,6 +2018,10 @@ public static class LegibilityFloorTest
         B(UiPage.Rendezvous,         8,  1),   // S153e ⭐ 7 of its 8 already sit in the Dense..floor band
         B(UiPage.Ascent,            17, 16),   // S153e
         B(UiPage.NavOrbitPlot,      11,  8),   // S153e
+        // ⭐ S213, dumped by `PrintBaselines` rather than typed off a screenshot, as this file
+        // instructs. 18/18: the procedure's own body sits well above the floor — the count is the
+        // caution card's five 26-design-px lines, the auto-gates card's three, and the bar.
+        B(UiPage.CrewGate,          18, 18),   // S213
     };
 
     static FloorBaseline B(UiPage p, int below, int belowDense)
@@ -2309,7 +2313,9 @@ public static class LegibilityFloorTest
     /// this fall silently, and a falling count here means the bar stopped being drawn somewhere,
     /// which is exactly as much of a defect as it spreading.
     /// </summary>
-    const int BarTextDraws = 26;
+    // ⭐ S213: 26 -> 27. "4.100 Mission Sequence" is a new page and it DRAWS THE BAR, which is
+    // what this number counts. It moved in a line that says why, which is what the check asks for.
+    const int BarTextDraws = 27;
 
     // ---- 9. THE OWNER'S TWO-FLOOR POLICY, AS ARITHMETIC (S153) ----------------------------------
     static void TheTwoFloorsAreBothRatios()

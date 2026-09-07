@@ -35,6 +35,28 @@ namespace DragonScreen
 
     public static class CrewGates
     {
+        /// <summary>
+        /// A gate's own G-NUMBER, which "4.100 Mission Sequence" shows as its SECTION.
+        ///
+        /// ⛔ IT IS READ OFF THE NAME, NOT INVENTED AND NOT A SECOND TABLE. Every member of `GateId`
+        /// already ends in its real number — `IngressCommG1` … `DeorbitGoG15` — and those numbers are
+        /// the transcribed NASA/SpaceX poll sequence, not ours. Parsing the name means the two can never
+        /// drift, and a gate added without a number in its name returns 0 rather than a wrong section.
+        /// ⚠ There is deliberately no G8: the real sequence skips it, and this returns what the name
+        /// says rather than an index.
+        /// </summary>
+        public static int NumberOf(GateId id)
+        {
+            if (id == GateId.None) return 0;
+            string n = id.ToString();
+            int i = n.Length;
+            while (i > 0 && n[i - 1] >= '0' && n[i - 1] <= '9') i--;
+            if (i >= n.Length || i == 0 || n[i - 1] != 'G') return 0;
+            int v = 0;
+            for (int k = i; k < n.Length; k++) v = v * 10 + (n[k] - '0');
+            return v;
+        }
+
         static ChecklistItem C(string s) { return ChecklistItem.Crew(s); }
         static ChecklistItem A(string s) { return ChecklistItem.Sys(s); }
         static Gate G(GateId id, string title, params ChecklistItem[] items)

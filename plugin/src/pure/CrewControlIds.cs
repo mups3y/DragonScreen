@@ -78,7 +78,12 @@ namespace DragonScreen
         /// <summary>S132: Frame 58's RESET / START stopwatch. Appended, never renumbered.</summary>
         Hud = 10,         // Frame58Controls.TimerAct
         /// <summary>S134b: the Video settings page's camera rows. Appended, never renumbered.</summary>
-        Video = 11        // SettingsVideoPage row index
+        Video = 11,       // SettingsVideoPage row index
+        /// <summary>S213: "4.100 Mission Sequence" — INITIATE, the crew step ticks, GO, NO-GO, HALT and
+        /// the auto-gates box. ⭐ THE MOST CONSEQUENTIAL SURFACE IN THIS ENUM: it is the only one whose
+        /// presses command the vehicle's flight software, so a recording that cannot say which of them
+        /// was pressed cannot reconstruct why a mission advanced. Appended, never renumbered.</summary>
+        CrewGate = 12     // CrewGatePage.GateAct
     }
 
     public static class CrewControlIds
@@ -95,6 +100,8 @@ namespace DragonScreen
         public const string AudioPrefix = "audio.";
         public const string HudPrefix   = "hud.";
         public const string VideoPrefix = "video.";
+        /// <summary>S213: the mission-sequence procedure's controls.</summary>
+        public const string GatePrefix = "gate.";
 
         /// <summary>
         /// The `control_id` a touch that hit nothing carries. NOT null — the event is written with a
@@ -159,6 +166,18 @@ namespace DragonScreen
         {
             if (row < 0) return null;
             return VideoPrefix + "cam" + row;
+        }
+
+        /// <summary>
+        /// "4.100 Mission Sequence": which control on the crew-gate procedure was pressed. A step tick
+        /// carries its INDEX, because "the crew ticked something" is not a reconstruction — a Go/No-Go
+        /// poll is only readable if the recording says which line they acknowledged.
+        /// </summary>
+        public static string Gate(GateAct a, int index)
+        {
+            if (a == GateAct.None) return null;
+            string n = Name((int)a, typeof(GateAct));
+            return a == GateAct.Step ? GatePrefix + n + index : GatePrefix + n;
         }
 
         /// <summary>Frame 58's stopwatch: RESET and START. ⚠ The value is the ONLY thing on that page

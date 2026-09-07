@@ -76,7 +76,15 @@ namespace DragonScreen
         // newly-characterised JSC screens (T9 built the other two). Same footing as Ascent: Menu grid
         // only for now, a real entry point is T14's job. Appended (never renumbered): the int persists
         // per screen.
-        NavOrbitPlot = 34
+        NavOrbitPlot = 34,
+        // ⭐ S213, 2026-09-07 — "4.100 Mission Sequence", the crew-gate procedure, and the one page in
+        // this enum that exists because something was MISSING rather than because a screen was found:
+        // the conductor's gates had no screen at all. AUTO SEQUENCE and the gate card both lived in the
+        // `Pages` UI, which `ScreenPainter.FigmaMode = true` makes unreachable, so nothing on the glass
+        // could engage the autopilot or clear a gate — the owner found it by trying to fly. Built in the
+        // real 4.0xx procedure grammar (`VrioTestPage` 4.700, `SuitCheckPage` 4.011) on his ruling of
+        // 2026-09-07, quoted in full in `pure/CrewGatePage.cs`. Appended, never renumbered.
+        CrewGate = 35
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -99,7 +107,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 380;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
 
-        public const int PageCount = 35;
+        public const int PageCount = 36;   // S213 appended CrewGate
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -140,7 +148,8 @@ namespace DragonScreen
             "VEHICLE — CREW", "VEHICLE — PROP", "VEHICLE — POWER",
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
             "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY",
-            "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH", "NAV / ORBIT PLOT"
+            "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH", "NAV / ORBIT PLOT",
+            "MISSION SEQUENCE"
         };
 
         public static string Name(UiPage p)
@@ -240,6 +249,10 @@ namespace DragonScreen
                 case UiPage.VehicleMech: VehicleMechPage.Build(dl, w, h, s); break;
                 case UiPage.AudioVideo:  SettingsVideoPage.Build(dl, w, h, s); break;
                 case UiPage.VrioTest:    VrioTestPage.Build(dl, w, h); break;
+                // S213: the crew gates, in the same procedure grammar as VrioTest above. Everything it
+                // draws comes off `PageState`, which `VesselData` already fills from `CrewProcedureOps` —
+                // the data was live all along; only a screen to show it on was missing.
+                case UiPage.CrewGate:    CrewGatePage.Build(dl, w, h, s, ctl.GateNumber, ctl.AutoGates); break;
                 case UiPage.VehicleCrew:       VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Crew, s, ctl.Alerts); break;
                 case UiPage.VehiclePropulsion: VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Propulsion, s, ctl.Alerts); break;
                 case UiPage.VehiclePower:      VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Power, s, ctl.Alerts); break;
@@ -294,6 +307,7 @@ namespace DragonScreen
                 case UiPage.DeorbitBurnPrep: case UiPage.EntryProcedure:
                 case UiPage.SystemsTree: case UiPage.SystemsPid: case UiPage.Ascent:
                 case UiPage.NavOrbitPlot:
+                case UiPage.CrewGate:
                     return false;
                 default:
                     return true;
@@ -370,6 +384,12 @@ namespace DragonScreen
                 // its own constants and get a 20%-tall band behind a 12%-tall button.
                 if (MarginAffordance.Hit(px, py, w, h)) return NavHit.Go(UiPage.Docking);
             }
+
+            // S213: the mission-sequence procedure's controls are NOT navigation — they drive the
+            // conductor — so `FigmaUI` deliberately returns `None` for them and `ScreenPainter` tests
+            // the page's own `HitTest` first. Said here so a reader of this switch does not conclude the
+            // page is inert; the bottom bar above still works on it, which is why this sits after it.
+            if (page == UiPage.CrewGate) return NavHit.None;
 
             // Menu is a grid of every other page; a hit on a card jumps straight there. A tap in the
             // gaps between cards (or off-grid) is inert, same as everywhere else.

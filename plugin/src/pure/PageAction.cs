@@ -113,6 +113,17 @@ namespace DragonScreen
     /// </summary>
     public struct PageControls
     {
+        // ---- S213: what the mission-sequence procedure needs and PageState does not already carry ----
+        /// <summary>The current gate's own G-number (1..15), which the procedure shows as its SECTION.
+        /// ⛔ NOT invented: `CrewGates` numbers the gates G1..G15 from transcribed NASA/SpaceX callouts,
+        /// and this is that number. 0 = no gate.</summary>
+        public int GateNumber;
+
+        /// <summary>Whether the hands-off gate mode is on — the owner's own checkbox
+        /// (2026-09-07: *"so the user can choose to manually check the gates or auto sequence the
+        /// launch"*). Read from `CrewProcedureOps.AutoAdvanceGates`, never stored twice.</summary>
+        public bool AutoGates;
+
         /// <summary>VehicleSubsystemPage: showing ALERTS (true) rather than FUNCTIONS. T5 drew the
         /// toggle and left it inert; the tap is T14's.</summary>
         public bool Alerts;
@@ -145,6 +156,12 @@ namespace DragonScreen
                 c.DockRotLarge = true;
                 c.DockTransLarge = true;
                 c.AudioSeat = SettingsAudioPage.CabinScope;   // S134c: the scope the page always drew
+                // S213: no gate and hands-off OFF. ⛔ `AutoGates` defaults FALSE here for the same
+                // reason W10 shipped `CrewProcedureOps.AutoAdvanceGates` false — the crew are in the
+                // loop unless somebody deliberately takes them out. The live value is read from the
+                // conductor every frame; this is only what a screen opens on.
+                c.GateNumber = 0;
+                c.AutoGates = false;
                 return c;
             }
         }
