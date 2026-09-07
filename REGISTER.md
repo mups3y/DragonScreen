@@ -26896,3 +26896,24 @@ forbids it; it is arithmetic in `SecondsToWindow()`, untouched here. No line was
   unanswered, and ⛔ **that question is the one blocking any honest tune at T22.** Options: (1) **open
   the gate for one flight covering all six** *(recommended — ⚠ but [[S222c]]'s 20,000 s early launch
   would waste it, so fix that first)*; (2) fix [[S222c]] and fly once afterwards; (3) hold.
+
+---
+
+### S224 [O] The tier-1 photograph corroborates `VT-02`'s left alignment — re-label the one comment that carries it — **DOING** — [owner `OVERRIDE` of an [[S162]] outcome, 2026-09-08, verbatim *"option 2"*; TIER 3: provenance, comment-only]
+- **Marker committed before any edit (C1.1).** Tree clean at `03403fa`.
+- **Authority — the owner's ruling, 2026-09-08, quoted (C1.12 evidentiary standard).** Asked whether a
+  tier-1 photograph corroborating `VT-02`'s layout should (1) be left alone, (2) re-label the affected
+  comment, or (3) reopen `VT-02`, the owner chose **"option 2"**. That is an `OVERRIDE` of a settled
+  [[S162]] outcome and **its scope is exactly one comment**.
+- ⛔ **NO PIXEL MOVES. NO RELAYOUT. `VT-02` IS NOT REOPENED.** Not a coordinate, a colour, a size or a
+  draw call. If this line's work touches one, it has been misread.
+- **Scope — ONE site:** `plugin/src/pure/VrioTestPage.cs:357`, the `⭐ TIER-2 FILL (S162)` comment reading
+  *"section label and title both take the frame's single left column."* That comment covers BOTH measured
+  elements. ⚠ **The request said "two of the six call sites"; the overseer read all six (`304, 311, 339,
+  357, 380, 388`) and both land on 357.** ⛔ Do not hunt a second site to satisfy the word "two".
+- **Build:** LEAVE the existing comment line **byte-identical** (C1.16 / G12 — superseded reasoning is
+  marked in place, never rewritten) and **ADD** an annotation beneath it recording the corroboration, its
+  measurement, its strength, the owner's ruling, and why a reopen was rejected.
+- **DONE when:** `build.py test` green · `harnesscheck` green · ⭐ **`previewdiff` reports the VRIO page
+  UNCHANGED** (the proof no pixel moved) · the register states plainly whether any rendered pixel changed
+  · strays logged not fixed · local commit, **no push**.
