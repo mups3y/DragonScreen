@@ -40,7 +40,15 @@ namespace DragonScreen
         NoVessel,             // nothing to consider at all
         NoSeparatedBooster,   // no candidate is a lone S1 stage (still stacked, or none present)
         Ambiguous,            // more than one separated booster — REFUSE to pick (§B16.4's rule)
-        ForeignVehicle        // a Kartoffelkuchen KK_SPX / KK_F9demo part — the WRONG Falcon 9
+        ForeignVehicle,       // a Kartoffelkuchen KK_SPX / KK_F9demo part — the WRONG Falcon 9
+
+        /// <summary>⭐ S219 JOB 1. The only `.S1.`-marked part on every candidate was the STAGE-SEPARATION
+        /// BOUNDARY (`TE.19.F9.S1.Interstage`) and never the octaweb — i.e. what we are looking at is the
+        /// SPENT UPPER STAGE, not the booster. Distinguished from `NoSeparatedBooster` on purpose: that
+        /// one means "nothing here looks like a booster", which is the normal state for most of a flight
+        /// and is silent. This one means "something here looked like a booster and was not", which is a
+        /// fact worth one line, because it is exactly the state that produced the 2026-09-07 refusal.</summary>
+        SpentUpperStage
     }
 
     /// <summary>One vessel as the host sees it, reduced to the facts the selection turns on. The glue
@@ -53,6 +61,21 @@ namespace DragonScreen
         public bool HasBoosterPart;         // any part matching `VehicleParts.IsBooster` (the ".S1." marker)
         public bool HasPod;                 // any part matching `VehicleParts.IsPod` — THE DRAGON TEST
         public bool HasForeignBoosterPart;  // any `OctawebBinding.IsForeignBoosterPart` — the other Falcon 9
+
+        /// <summary>⭐ S219 JOB 1 — THE OCTAWEB ITSELF, by `OctawebBinding.IsTundraOctaweb`'s OWN
+        /// whole-name test. ⛔ NOT a new or looser matcher: it is the same function the binder already
+        /// gates on, asked one step EARLIER so a vessel that could never bind never becomes the
+        /// candidate. See `IsSeparatedBooster` for why `HasBoosterPart` alone was not enough.</summary>
+        public bool HasOctawebPart;
+
+        /// <summary>⭐ S219 JOB 1 — IS THIS A SETTLED PART LIST AT ALL? Every other field here is
+        /// derived from walking `v.parts`, and two of them (`HasPod`, `HasForeignBoosterPart`) are used
+        /// as NEGATIVES. **A negative computed from a part list that is not settled is not evidence of
+        /// absence** — it is evidence that we looked too early or too late. The glue sets this from
+        /// `v.rootPart != null && v.parts.Count > 0`; a false here excludes the candidate exactly as
+        /// `!Loaded` does, and no refusal is annunciated for it (there is nothing to report about a
+        /// vessel that is not finished being a vessel).</summary>
+        public bool PartListSettled;
     }
 
     /// <summary>Why the host let go of the booster. `None` = keep flying it.</summary>
@@ -169,8 +192,16 @@ namespace DragonScreen
                 found++;
                 if (first < 0) first = i;
             }
-            if (found == 0) return BoosterBind.NoSeparatedBooster;
             if (found > 1) return BoosterBind.Ambiguous;
+            if (found == 0)
+            {
+                // ⭐ S219 JOB 1 — SAY WHICH KIND OF "NO" THIS IS. A candidate that passed every test
+                // except the octaweb one is the spent upper stage, and that is worth a line; "no
+                // separated booster" is the ordinary state and is not.
+                for (int i = 0; i < c.Length; i++)
+                    if (IsSpentUpperStage(c[i])) return BoosterBind.SpentUpperStage;
+                return BoosterBind.NoSeparatedBooster;
+            }
 
             index = first;
             return BoosterBind.Ok;
@@ -179,13 +210,61 @@ namespace DragonScreen
         /// <summary>The identity test, per candidate. A SEPARATED booster is loaded, carries at least one
         /// `.S1.` part, carries NO Dragon pod (that is what "separated" means for this stack), and — per
         /// `RequireNonActive` — is not the vessel the player is flying.</summary>
+        /// <remarks>
+        /// ⭐⭐ S219 JOB 1 — WHY `HasBoosterPart` ALONE WAS NOT THE BOOSTER, AND WHAT IT COST.
+        ///
+        /// `VehicleParts.IsBooster` is the `.S1.` SUBSTRING, and on the real craft **three** parts carry
+        /// it: `TE.19.F9.S1.Tank`, `TE.19.F9.S1.Engine` — and `TE.19.F9.S1.Interstage`, which is the
+        /// **stage-separation boundary itself** (`Actuation.DecouplerRoleOf` already classifies it
+        /// `DecouplerRole.StageSep`, and the craft file gives it the only `ModuleTundraDecoupler` between
+        /// the two stages: `docs/reference/Crew-2.craft`, `dstg = 3`). A boundary part ends up on ONE
+        /// side after separation, and the side it ends up on need not be the octaweb's.
+        ///
+        /// ⛔ THE OBSERVED FAILURE (owner's flight, 2026-09-07; the overseer read the craft file and
+        /// confirmed `TE.19.F9.S1.Engine` is on it, at exactly the name and length the classifier wants).
+        /// The binder's candidate held **the Interstage and NOT the Engine**, and — necessarily, or this
+        /// function would have refused it a line earlier — **no pod either**. On this craft's part tree
+        /// (`S2.Tank → Interstage → S1.Tank → S1.Engine`, with the Dragon decoupler at `dstg = 1`
+        /// between the trunk and the S2 tank) exactly one reachable configuration has all three of those
+        /// properties at once: **the spent second stage, after Dragon separation, with the interstage
+        /// still attached to it.** So the list was not incomplete and the name was not wrong — the
+        /// CLASSIFIER accepted a vessel that has never carried an octaweb.
+        ///
+        /// ⛔⛔ AND THE HARM IS NOT THE NOISE. `Select` returns `Ambiguous` on two candidates and
+        /// **refuses to pick**, by design (§B16.4). A spent upper stage that qualifies as "a separated
+        /// booster" is therefore a SECOND candidate standing beside the real one — and for as long as
+        /// both are loaded the host binds NEITHER. The 264-line log spam of 2026-09-05 was the visible
+        /// symptom; a booster that never binds because its own dead upper stage out-voted it is the
+        /// expensive one.
+        ///
+        /// ⭐ WHY THIS IS A NARROWING AND CAN COST NOTHING. Every candidate this test now rejects would
+        /// have been rejected one step later anyway, by `OctawebBinding.Bind` returning `NotFound` inside
+        /// `OctawebEngines.Resolve` — the same whole-name test, asked here instead of there. There is no
+        /// vessel that used to bind and now does not. ⛔ AND `IsTundraOctaweb` IS NOT RELAXED TO A
+        /// SUBSTRING: relaxing it would make it match `TE.19.F9.S1.Interstage` and hide precisely this.
+        /// </remarks>
         public static bool IsSeparatedBooster(BoosterCandidate v)
         {
             if (!v.Exists || !v.Loaded) return false;
+            if (!v.PartListSettled) return false;    // ⛔ S219 — a partial list cannot answer a NEGATIVE
             if (v.HasForeignBoosterPart) return false;
             if (RequireNonActive && v.IsActive) return false;
             if (v.HasPod) return false;              // ⛔ THE DRAGON TEST — a pod means crew, never ours
+            if (!v.HasOctawebPart) return false;     // ⭐ S219 — the octaweb, not merely an ".S1." part
             return v.HasBoosterPart;
+        }
+
+        /// <summary>⭐ S219 JOB 1. A candidate that would have been taken as the booster before this
+        /// register line and is not one: everything qualifies EXCEPT the octaweb. On this craft that is
+        /// the spent second stage carrying the interstage. Diagnostic only — `Select` never returns it as
+        /// a winner, it only uses it to say which kind of "no" a refusal was.</summary>
+        public static bool IsSpentUpperStage(BoosterCandidate v)
+        {
+            if (!v.Exists || !v.Loaded || !v.PartListSettled) return false;
+            if (v.HasForeignBoosterPart) return false;
+            if (RequireNonActive && v.IsActive) return false;
+            if (v.HasPod) return false;
+            return v.HasBoosterPart && !v.HasOctawebPart;
         }
 
         /// <summary>One screen/log-ready line for a refusal; null on `Ok` (a good bind is silent, the same
@@ -196,6 +275,9 @@ namespace DragonScreen
             {
                 case BoosterBind.NoVessel: return "BOOSTER HOST — NO VESSELS TO CONSIDER";
                 case BoosterBind.NoSeparatedBooster: return "BOOSTER HOST — NO SEPARATED BOOSTER (still stacked, or none)";
+                case BoosterBind.SpentUpperStage: return "BOOSTER HOST — that is the SPENT UPPER STAGE, not the "
+                                                       + "booster: its only \".S1.\" part is the stage-sep "
+                                                       + "interstage and it carries no octaweb (S219)";
                 case BoosterBind.Ambiguous: return "BOOSTER HOST — MORE THAN ONE SEPARATED BOOSTER, REFUSING TO PICK";
                 case BoosterBind.ForeignVehicle: return "BOOSTER HOST — FOREIGN BOOSTER PART (KK Falcon 9), BINDING REFUSED";
                 default: return null;

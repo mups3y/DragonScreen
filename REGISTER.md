@@ -25842,7 +25842,7 @@ previewdiff mirror list record that it is deliberately gone so the warning stops
 
 ---
 
-### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DOING** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
+### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DONE · JOB 2 TODO · JOB 3 TODO** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
 
 ⚠ **NUMBERING.** The owner's prompt titles this **S218**. That number was already taken by the
 kenney-assets line [[S218]], logged by [[S215]] earlier the same day, so this line is **S219** and the two
@@ -25879,4 +25879,112 @@ map is the specification. Follow it section by section.**
 3. **PROVE THE ENGAGE AND THE ACTIVATION** headless: a test that fails when a module is configured but
    not engaged; the full bind → resolve → activate → thrust chain; and establish whether
    `StageManager.ActivateNextStage()` at T-0 can hurt us.
+
+
+---
+
+## ⭐ JOB 1 — ANSWERED: **IT WAS THE SPENT UPPER STAGE, AND THE PART LIST WAS COMPLETE**
+
+⛔ **THE BRIEF'S TWO PROHIBITIONS WERE BOTH CORRECT AND BOTH HELD.** `IsTundraOctaweb` is
+**byte-for-byte unchanged** and is *not* a substring test; nothing was renamed. `plugin/mech/` is
+untouched.
+
+### The question, answered in the three parts the brief asked for
+
+**(1) WHEN does the bind run?** `BoosterHostAddon` is `[KSPAddon(KSPAddon.Startup.Flight, false)]`, so
+its `FixedUpdate` runs **every physics frame from the moment `GameScenes.FLIGHT` is set until
+`OnDestroy`** — through the whole of scene entry and the whole of scene teardown. `TryBind` throttles
+itself to 2 Hz and is otherwise unconditional. The only scene test in the file was
+`HighLogic.LoadedSceneIsFlight`, which is **TRUE for both transitions**. ⇒ *The bind ran in windows
+where "the scene" is a list being built or dismantled.* `FlightGlobals.ready` — the flag that says the
+scene is settled — **was not consulted anywhere in the tree** (`grep`: zero hits before this line).
+
+**(2) AGAINST WHICH VESSEL?** Every entry of `FlightGlobals.Vessels` that reports `loaded`, reduced by
+`BoosterHost.Describe` to five booleans and handed to `BoosterHostPlan.Select`. A candidate was taken
+as **the booster** if it was loaded, not the active vessel, carried **no pod**, and carried **any part
+whose name contains `.S1.`**.
+
+**(3) ⭐⭐ WHY THE LIST LOOKED "INCOMPLETE" — IT WASN'T. THE CLASSIFIER WAS WRONG.**
+`VehicleParts.IsBooster` is the `.S1.` **substring**, and on the real craft **three** parts carry it:
+
+| part | is it the booster? |
+|---|---|
+| `TE.19.F9.S1.Tank` | yes |
+| `TE.19.F9.S1.Engine` | yes — the octaweb |
+| **`TE.19.F9.S1.Interstage`** | ⛔ **no — it is the STAGE-SEPARATION BOUNDARY** |
+
+The tree, read out of `docs/reference/Crew-2.craft` (identical on all 16 craft in `docs/reference/`):
+`Dragon POD → TRUNK → C.Dragon.Decoupler (dstg 1) → S2.Tank → **Interstage (dstg 3, the only
+`ModuleTundraDecoupler` between the stages)** → S1.Tank → S1.Engine → Ghidorah Erector`.
+
+The observed refusal held **the Interstage, and not the Engine** — and, *necessarily*, **no pod**, or
+`IsSeparatedBooster` would have refused it one line earlier on the Dragon test and `OctawebEngines.
+Resolve` would never have been called at all. On this craft's tree there is exactly **one** reachable
+configuration with all three properties at once: ⭐ **the spent second stage after Dragon separation,
+with the interstage still attached to it.** So the part list was complete and correct, the part name was
+correct, and the vessel was simply **not the booster**. `docs/MECHJEB_MASTER_MAP.md` was not implicated;
+this is ours.
+
+⚠ **AND THE EVIDENCE ITSELF PROVES WHICH SIDE THE INTERSTAGE GOES TO.** The craft file does not record
+`explosiveNodeID` (that lives in the part cfg, which C7 puts out of reach). It did not have to: a vessel
+carrying the interstage *without* the octaweb is only possible if the interstage travels with the
+**upper** stage, and that is what the log recorded.
+
+### ⛔⛔ AND THE COST WAS NEVER THE LOG LINE
+
+`Select` **refuses to pick** between two candidates (§B16.4 — *"a booster controller that binds the
+wrong vehicle's engines is a lost booster with no error message"*). A spent upper stage that qualifies
+as "a separated booster" is a **SECOND candidate standing beside the real one**, so for as long as both
+are loaded the host binds **NEITHER** — `BoosterBind.Ambiguous`, and the whole of §B16 recovery is dead
+with no engine ever commanded. The 264-line spam of 2026-09-05 was the *visible* symptom of the same
+class of confusion; this is the expensive one. **It is asserted directly**: the three-vessel scene
+(Dragon + spent S2 + real booster) now returns `Ok` on the booster, and mutant **J1-a** shows it
+returning `Ambiguous` without the fix.
+
+### What was built — four changes, all narrowing, none of them a rename
+
+1. **`pure/BoosterHostPlan.cs` — `BoosterCandidate.HasOctawebPart`**, set from
+   **`OctawebBinding.IsTundraOctaweb`, the very function the binder already gates on**, asked one step
+   earlier. `IsSeparatedBooster` now requires it. ⭐ **This can cost nothing:** every candidate it
+   rejects would have been rejected a step later by `OctawebBinding.Bind → NotFound` inside
+   `OctawebEngines.Resolve`. There is no vessel that used to bind and now does not.
+2. **`BoosterCandidate.PartListSettled`** (glue: `v.rootPart != null && v.parts.Count > 0`). The
+   selection is built out of **negatives** — *carries no pod*, *carries no foreign part* — and **a
+   negative read off a part list that is still being assembled, or already being dismantled, is not a
+   fact about the vessel; it is a fact about when we looked.** An unsettled candidate is excluded
+   exactly as `!Loaded` is, silently. The test that matters: *a stack whose pod has already left the
+   part list is refused on the settle test* — otherwise the Dragon's own corpse classifies as a booster.
+3. **`BoosterHost.Tick` holds while `!FlightGlobals.ready`** — the whole-scene half of the same
+   argument. ⚠ **A HOLD, NOT A RELEASE:** releasing a good binding on a transient not-ready frame would
+   drop a booster mid-descent, so the axes are dropped (`fbwOwned = false` — the host writes *nothing*,
+   not a zero) and the next settled frame carries on. `OnDestroy` still owns the real end-of-scene
+   release.
+4. **THE REFUSALS NOW NAME THE VESSEL.** This is why the flight could not be diagnosed from `KSP.log`
+   at all: the **successful** bind line named the vessel, its part count, its mission and its mode — and
+   **every refusal line named nothing.** `Describe1`/`Census` put name, part count, situation,
+   loaded/packed/active, `PART LIST NOT SETTLED`, and the four classifier verdicts into the refusal
+   itself; `OctawebEngines`' `NOT FOUND` line now names the vessel too. New verdict
+   **`BoosterBind.SpentUpperStage`** so *"something here looked like a booster and was not"* is one
+   line, and is not confused with the ordinary silent *"nothing here looks like a booster"*.
+
+### Verification (C1.3)
+
+`python plugin/build.py test` — **ALL SUITES PASSED**; the booster HOST suite **262 checks, 0 failed**
+(was 244 — 18 new). `python plugin/build.py previewdiff` — **0 changed, 0 new, 0 removed of 130**.
+*(The `kenney_ui_scifi is now EMPTY` warning is register [[S218]], pre-existing and not this line's.)*
+
+**MUTATION PROOF — 5 of 5 killed, each attributed to the suite under test (`S167`):**
+
+| # | mutant | killed by |
+|---|---|---|
+| **J1-a** | drop `HasOctawebPart` from `IsSeparatedBooster` | booster HOST — *spent stage accepted; three-vessel scene goes `Ambiguous`* |
+| **J1-b** | drop the `PartListSettled` guard | booster HOST — *unsettled booster selected; pod-shed stack accepted* |
+| **J1-c** | relax `IsTundraOctaweb` to a substring (**the "obvious" fix the brief forbade**) | booster HOST **and** ActuationTest — *it matches the interstage* |
+| **J1-d** | `Select` reports a generic no instead of `SpentUpperStage` | booster HOST |
+| **J1-e** | the annunciation stops naming the interstage | booster HOST |
+
+⚠ **WHAT IS NOT PROVEN HEADLESS.** `src/BoosterHost.cs` cannot be compiled headlessly (its own suite
+header says so), so the `FlightGlobals.ready` hold, the `PartListSettled` derivation and the two census
+helpers are **reasoned from the KSP API and compiled, not executed**. The pure decisions they feed are
+proven above.
 

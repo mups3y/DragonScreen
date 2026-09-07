@@ -40,15 +40,26 @@ public static class BoosterHostTest
     const string MVAC = "TE.19.F9.S2.Engine";
     const string KK_OCTAWEB = "KK_SPX_F9_Octaweb";      // the OTHER Falcon 9 (Kartoffelkuchen)
 
+    // S219 JOB 1. The STAGE-SEPARATION BOUNDARY. Verbatim from `docs/reference/Crew-2.craft`
+    // (`part = TE.19.F9.S1.Interstage_4293202092`, the only `ModuleTundraDecoupler` between the stages,
+    // `dstg = 3`), and present exactly once on all sixteen craft in `docs/reference/`. It carries the
+    // ".S1." marker `VehicleParts.IsBooster` keys on and IS NOT the octaweb.
+    const string INTERSTAGE = "TE.19.F9.S1.Interstage";
+    const string S2TANK = "TE.19.F9.S2.Tank";
+
     // Build a candidate the way the glue's `Describe` does: classify the part names, nothing else.
     static BoosterCandidate V(bool active, bool loaded, params string[] parts)
     {
         BoosterCandidate c = new BoosterCandidate();
         c.Exists = true; c.IsActive = active; c.Loaded = loaded;
+        // S219: the glue sets this from `v.rootPart != null && v.parts.Count > 0`. A candidate built
+        // from a non-empty name list is a settled one; `Unsettled()` below is how a test says otherwise.
+        c.PartListSettled = parts.Length > 0;
         for (int i = 0; i < parts.Length; i++)
         {
             string nm = parts[i];
             if (OctawebBinding.IsForeignBoosterPart(nm)) c.HasForeignBoosterPart = true;
+            if (OctawebBinding.IsTundraOctaweb(nm)) c.HasOctawebPart = true;   // S219
             if (VehicleParts.IsPod(nm)) c.HasPod = true;
             else if (VehicleParts.IsBooster(nm)) c.HasBoosterPart = true;
         }
@@ -72,6 +83,7 @@ public static class BoosterHostTest
         Console.WriteLine("DragonScreen booster HOST tests (§B16: selection, stop, command gate, engine roles)");
 
         SelectionTests();
+        SpentUpperStageTests();      // S219 JOB 1
         DragonNeverBoundTests();
         StopTests();
         CommandGateTests();
@@ -143,6 +155,95 @@ public static class BoosterHostTest
         r = BoosterHostPlan.Select(new[] { Dragon(true), Booster(false), V(false, false, KK_OCTAWEB) }, out idx);
         Check("an UNLOADED foreign craft does not veto (its parts are not in memory)",
               r == BoosterBind.Ok && idx == 1, "r=" + r + " idx=" + idx);
+    }
+
+    // =====================================================================================
+    // 1b. ⭐⭐ S219 JOB 1 — THE SPENT UPPER STAGE IS NOT THE BOOSTER
+    // =====================================================================================
+    //
+    // THE DEFECT THESE PIN. On the owner's flight of 2026-09-07 the octaweb bind REFUSED, and the
+    // refusal was read as a naming bug. It was not: the overseer read the craft file and
+    // `TE.19.F9.S1.Engine` is on it, at exactly the name and length `IsTundraOctaweb` wants. The
+    // binder's part list held **the Interstage and not the Engine**, and — necessarily, or the pod test
+    // would have refused it first — no pod either.
+    //
+    // ⭐ THAT COMBINATION IS REACHABLE, AND ONLY ONE WAY. The craft's tree is
+    // `S2.Tank -> Interstage -> S1.Tank -> S1.Engine`, with the Dragon decoupler (`dstg = 1`) between
+    // the trunk and the S2 tank. After Dragon separation the spent second stage is a LOADED, NON-ACTIVE,
+    // POD-FREE vessel that still carries the interstage — and the interstage carries ".S1.".
+    // `VehicleParts.IsBooster` accepted it, `IsSeparatedBooster` took it as the booster, and
+    // `OctawebEngines.Resolve` then refused it with "the two classifiers disagree".
+    //
+    // ⛔⛔ AND THE COST IS NOT THE LOG LINE. `Select` refuses to pick between two candidates
+    // (§B16.4). A spent upper stage that qualifies is a SECOND candidate standing next to the real
+    // booster, so while both are loaded the host binds NEITHER.
+    //
+    // ⛔ THE FIX IS A NARROWING, NEVER A LOOSER MATCHER. `IsTundraOctaweb` is untouched and is asked
+    // one step earlier. Relaxing it to a substring — the "obvious" reading of the symptom — would make
+    // it MATCH the interstage and hide all of this; that is asserted below.
+    static void SpentUpperStageTests()
+    {
+        int idx;
+
+        // The scene as it really is after Dragon separation.
+        BoosterCandidate spentS2 = V(false, true, S2TANK, MVAC, INTERSTAGE);
+
+        Check("S219: the interstage carries the .S1. marker (this is WHY it was mistaken for one)",
+              VehicleParts.IsBooster(INTERSTAGE), "");
+        Check("S219: ...and it is NOT the octaweb",
+              !OctawebBinding.IsTundraOctaweb(INTERSTAGE), "");
+        Check("S219: the classifier already knows it is the stage-sep boundary",
+              VehicleParts.IsInterstage(INTERSTAGE)
+              && Actuation.DecouplerRoleOf(INTERSTAGE) == DecouplerRole.StageSep, "");
+
+        Check("S219: the spent upper stage is NOT a separated booster",
+              !BoosterHostPlan.IsSeparatedBooster(spentS2), "");
+        Check("S219: ...and it IS recognised as the spent upper stage",
+              BoosterHostPlan.IsSpentUpperStage(spentS2), "");
+
+        BoosterBind r = BoosterHostPlan.Select(new[] { Dragon(true), spentS2 }, out idx);
+        Check("S219: Select names it SpentUpperStage, not a generic no",
+              r == BoosterBind.SpentUpperStage && idx == -1, "r=" + r + " idx=" + idx);
+        Check("S219: and the annunciation says the interstage is the reason",
+              BoosterHostPlan.Annunciation(BoosterBind.SpentUpperStage) != null
+              && BoosterHostPlan.Annunciation(BoosterBind.SpentUpperStage).Contains("interstage"), "");
+
+        // ⭐⭐ THE ONE THAT WOULD HAVE COST THE BOOSTER. Real booster + spent S2 both loaded.
+        r = BoosterHostPlan.Select(new[] { Dragon(true), spentS2, Booster(false) }, out idx);
+        Check("S219: the real booster is still bound with the spent S2 in the scene (was Ambiguous)",
+              r == BoosterBind.Ok && idx == 2, "r=" + r + " idx=" + idx);
+
+        // ...and the check that proves the line above is not vacuous: on the pre-S219 rule (no octaweb
+        // requirement) that same candidate passes every remaining test, which is the ambiguity.
+        Check("S219: without the octaweb test that scene WOULD have been Ambiguous",
+              spentS2.HasBoosterPart && !spentS2.HasPod && !spentS2.IsActive && spentS2.Loaded
+              && spentS2.PartListSettled, "");
+
+        // ⛔ THE FIX MUST NOT BE A LOOSER MATCHER.
+        Check("S219: a SUBSTRING octaweb test would match the interstage - which is why it stays equality",
+              INTERSTAGE.IndexOf("TE.19.F9.S1", StringComparison.Ordinal) >= 0
+              && !OctawebBinding.IsTundraOctaweb(INTERSTAGE), "");
+
+        // The real booster still carries the interstage in the OTHER decoupling case, and binds fine.
+        Check("S219: a booster that kept the interstage is still the booster",
+              BoosterHostPlan.IsSeparatedBooster(V(false, true, INTERSTAGE, S1TANK, OCTAWEB)), "");
+
+        // ---- THE UNSETTLED PART LIST: a negative read too early or too late is not a negative -------
+        Check("S219: an unsettled part list is never a candidate, however good it looks",
+              !BoosterHostPlan.IsSeparatedBooster(Booster(false).Unsettled()), "");
+        Check("S219: ...and is not reported as the spent upper stage either",
+              !BoosterHostPlan.IsSpentUpperStage(spentS2.Unsettled()), "");
+        r = BoosterHostPlan.Select(new[] { Dragon(true), Booster(false).Unsettled() }, out idx);
+        Check("S219: an unsettled booster falls through to the ordinary silent no",
+              r == BoosterBind.NoSeparatedBooster && idx == -1, "r=" + r);
+        Check("S219: the SAME candidate, settled, IS taken (the guard is not vacuous)",
+              BoosterHostPlan.IsSeparatedBooster(Booster(false)), "");
+
+        // ⛔ THE DANGEROUS SHAPE THE UNSETTLED GUARD EXISTS FOR: the full stack mid-teardown, whose pod
+        // has already left the list. Every remaining flag says "booster", and it must still be refused.
+        BoosterCandidate stackLosingItsPod = V(false, true, OCTAWEB, S1TANK).Unsettled();
+        Check("S219: a stack whose pod has already left the part list is refused on the settle test",
+              !BoosterHostPlan.IsSeparatedBooster(stackLosingItsPod), "");
     }
 
     // =====================================================================================
@@ -758,6 +859,24 @@ internal static class BoosterHostTestExt
     {
         c.Loaded = false;
         c.HasBoosterPart = false; c.HasPod = false; c.HasForeignBoosterPart = false;  // no parts in memory
+        c.HasOctawebPart = false; c.PartListSettled = false;                          // S219, same reason
+        return c;
+    }
+
+    /// <summary>S219: LOADED, but the part list is not settled - a vessel caught mid-spawn or
+    /// mid-teardown. Every classifier field is left exactly as it was, on purpose: the point of the test
+    /// is that the FLAGS look fine and must not be believed.</summary>
+    public static BoosterCandidate Unsettled(this BoosterCandidate c)
+    {
+        c.PartListSettled = false;
+        return c;
+    }
+
+    /// <summary>S219: the SPENT UPPER STAGE as the scene actually presents it after Dragon separation -
+    /// loaded, not active, no pod, and its only ".S1." part is the stage-sep interstage.</summary>
+    public static BoosterCandidate WithoutOctaweb(this BoosterCandidate c)
+    {
+        c.HasOctawebPart = false;
         return c;
     }
 }

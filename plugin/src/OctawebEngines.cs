@@ -142,8 +142,20 @@ namespace DragonScreen
                     string offenders = BoosterNames(v);
                     if (offenders != null && LogGate.First("octaweb-notfound-names:" + offenders))
                         Debug.LogWarning("[DragonScreen] octaweb NOT FOUND, yet this vessel carries a booster "
-                                         + "part — the two classifiers disagree. Offending name(s): " + offenders
-                                         + "  (expected exactly " + Show(OctawebBinding.TundraOctawebPart) + ")");
+                                         // ⭐ S219 JOB 1 — NAME THE VESSEL. On 2026-09-07 this line printed
+                                         // the offending part names and nothing else, so the one question
+                                         // it existed to answer — *which vessel is this?* — could not be
+                                         // read out of it. The offender turned out to be the stage-sep
+                                         // INTERSTAGE on the spent upper stage, which this line was in the
+                                         // best position of anything in the tree to have said out loud.
+                                         + "part — the two classifiers disagree. Vessel \"" + v.vesselName
+                                         + "\" (" + v.parts.Count + " parts, " + v.situation
+                                         + "). Offending name(s): " + offenders
+                                         + "  (expected exactly " + Show(OctawebBinding.TundraOctawebPart) + ")"
+                                         + "  ⚠ Since S219 the booster host cannot reach here at all — it "
+                                         + "requires IsTundraOctaweb BEFORE it selects — so this line now "
+                                         + "means a caller that skipped that test, or the two name reads "
+                                         + "disagreeing inside one walk.");
                 }
 
                 // Once per distinct refusal (S40 / pure/LogGate.cs). `Resolve` is called from a bind retry

@@ -398,6 +398,31 @@ namespace DragonScreen
             try
             {
                 if (!HighLogic.LoadedSceneIsFlight) { Release("not in flight"); return; }
+
+                // ⭐⭐ S219 JOB 1 — THE SCENE MUST BE SETTLED BEFORE ANY OF THIS MEANS ANYTHING.
+                // `[KSPAddon(Startup.Flight)]` starts this MonoBehaviour the moment `GameScenes.FLIGHT`
+                // is set, and `OnDestroy` fires at the very end of the teardown — so `FixedUpdate` runs
+                // through BOTH transitions, and `HighLogic.LoadedSceneIsFlight` (the only scene test
+                // there was) is TRUE for all of it. In those windows `FlightGlobals.Vessels` is a list
+                // being built or torn down: vessels appear before their parts do, and lose their parts
+                // before they are removed.
+                //
+                // ⛔ THAT MATTERS HERE MORE THAN ALMOST ANYWHERE, because the selection is built out of
+                // NEGATIVES — "carries no pod", "carries no foreign part". A negative read off a part
+                // list that is still being assembled, or already being dismantled, is not a fact about
+                // the vessel; it is a fact about WHEN WE LOOKED. `PartListSettled` guards the per-vessel
+                // half of that (`Describe`); this guards the whole-scene half.
+                //
+                // ⚠ IT IS A HOLD, NOT A RELEASE. Releasing a good binding on a transient not-ready frame
+                // would drop a booster mid-descent. Nothing is commanded (the axes are dropped, which is
+                // what `fbwOwned = false` means — the host writes NOTHING, not a zero), nothing is bound,
+                // and the next settled frame carries on. The real end-of-scene release is `OnDestroy`'s.
+                if (!FlightGlobals.ready)
+                {
+                    fbwOwned = false;
+                    return;
+                }
+
                 if (bound == null) { TryBind(); return; }
 
                 BoosterFlightSnapshot snap = Snapshot(bound);
@@ -443,7 +468,8 @@ namespace DragonScreen
                 // flight and must not flood KSP.log (the S40 lesson).
                 if (verdict != lastBindVerdict && verdict != BoosterBind.NoSeparatedBooster
                     && verdict != BoosterBind.NoVessel)
-                    Debug.LogWarning("[DragonScreen] " + BoosterHostPlan.Annunciation(verdict));
+                    Debug.LogWarning("[DragonScreen] " + BoosterHostPlan.Annunciation(verdict)
+                                     + "  " + Census(all, active, cands));
                 lastBindVerdict = verdict;
                 return;
             }
@@ -457,9 +483,16 @@ namespace DragonScreen
             {
                 // Once per distinct refusal (S40 / `pure/LogGate.cs`): the bind is retried twice a second
                 // for the whole descent, and a standing warning would bury KSP.log.
+                // ⭐ S219 JOB 1 — AND IT NAMES THE VESSEL NOW. The 2026-09-07 refusal could not be
+                // diagnosed from KSP.log because no refusal line said WHICH vessel it had looked at, how
+                // many parts it had, or what it was doing — the successful-bind line named all three and
+                // the refusals named none. "Against which vessel does the bind run" has to be answerable
+                // from the log, not reconstructed from a craft file the next day.
                 if (LogGate.First("booster-host-octaweb:" + table.Table.Plan))
                     Debug.LogWarning("[DragonScreen] booster host: found the booster but the octaweb bind "
-                                     + "REFUSED — " + (table.Annunciation ?? "no reason given") + " (not binding)");
+                                     + "REFUSED — " + (table.Annunciation ?? "no reason given")
+                                     + " (not binding). " + Describe1(v, active)
+                                     + "  scene census: " + Census(all, active, cands));
                 return;
             }
 
@@ -555,6 +588,14 @@ namespace DragonScreen
             c.IsActive = ReferenceEquals(v, active);
             c.Loaded = v.loaded;
             if (!v.loaded || v.parts == null) return c;
+
+            // ⭐ S219 JOB 1 — IS THIS A SETTLED PART LIST? A vessel mid-spawn or mid-teardown can be
+            // `loaded` with a non-null but INCOMPLETE `parts`, and every negative below (no pod, no
+            // foreign part) would then be an artefact of the timing rather than a fact about the craft.
+            // `rootPart` is the one part a finished vessel always has; a zero-length list is the other
+            // half of the same question. `IsSeparatedBooster` refuses an unsettled candidate outright.
+            c.PartListSettled = v.rootPart != null && v.parts.Count > 0;
+
             for (int i = 0; i < v.parts.Count; i++)
             {
                 Part p = v.parts[i];
@@ -571,10 +612,61 @@ namespace DragonScreen
                 // forgotten. Kept verbatim because it is why the rule exists.
                 string nm = PartNames.Of(p);
                 if (OctawebBinding.IsForeignBoosterPart(nm)) c.HasForeignBoosterPart = true;
+                // ⭐ S219 JOB 1 — the octaweb is asked for BY NAME, here, one step before the binder.
+                // Same function `OctawebEngines.Resolve` gates on; not a second matcher and not a looser
+                // one. See `BoosterHostPlan.IsSeparatedBooster`'s remarks for why ".S1." was not enough.
+                if (OctawebBinding.IsTundraOctaweb(nm)) c.HasOctawebPart = true;
                 if (VehicleParts.IsPod(nm)) c.HasPod = true;
                 else if (VehicleParts.IsBooster(nm)) c.HasBoosterPart = true;
             }
             return c;
+        }
+
+        // =========================================================================================
+        // ⭐ S219 JOB 1 — SAYING WHEN, AND AGAINST WHICH VESSEL
+        // =========================================================================================
+        // The 2026-09-07 octaweb refusal was undiagnosable from KSP.log for one flat reason: the
+        // SUCCESSFUL bind line names the vessel, its part count, its mission and its mode, and every
+        // REFUSAL line named nothing at all. So the question the owner had to ask — *which vessel was
+        // that, and why was its part list incomplete* — had no answer in the instrument, and had to be
+        // reconstructed from `docs/reference/*.craft` after the fact. These two put the answer in the
+        // line itself. They allocate only on a refusal, which is gated to once per distinct reason.
+
+        /// <summary>One vessel, as the census sees it: name, part count, situation, loaded/packed, and
+        /// the four classifier verdicts that decide whether it is a candidate.</summary>
+        static string Describe1(Vessel v, Vessel active)
+        {
+            if (v == null) return "<null vessel>";
+            BoosterCandidate c = Describe(v, active);
+            int n = (v.parts == null) ? -1 : v.parts.Count;
+            return "\"" + v.vesselName + "\" [" + (n < 0 ? "no part list" : n + " parts")
+                 + ", " + v.situation
+                 + (v.loaded ? ", loaded" : ", UNLOADED")
+                 + (v.packed ? ", packed" : "")
+                 + (ReferenceEquals(v, active) ? ", ACTIVE" : "")
+                 + (c.PartListSettled ? "" : ", ⛔ PART LIST NOT SETTLED")
+                 + "; pod=" + (c.HasPod ? "Y" : "n")
+                 + " s1part=" + (c.HasBoosterPart ? "Y" : "n")
+                 + " octaweb=" + (c.HasOctawebPart ? "Y" : "n")
+                 + " foreign=" + (c.HasForeignBoosterPart ? "Y" : "n") + "]";
+        }
+
+        /// <summary>Every LOADED vessel in the scene, one `Describe1` each — the whole picture the
+        /// selection actually saw, so a wrong pick can be read back rather than guessed at.</summary>
+        static string Census(List<Vessel> all, Vessel active, BoosterCandidate[] cands)
+        {
+            if (all == null) return "<no vessel list>";
+            var sb = new System.Text.StringBuilder();
+            sb.Append(all.Count).Append(" vessel(s); loaded: ");
+            int loaded = 0;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (i < cands.Length && !cands[i].Loaded) continue;
+                if (loaded++ > 0) sb.Append(" | ");
+                sb.Append(Describe1(all[i], active));
+            }
+            if (loaded == 0) sb.Append("none");
+            return sb.ToString();
         }
 
         static BoosterFlightSnapshot Snapshot(Vessel v)
