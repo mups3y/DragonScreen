@@ -237,5 +237,9 @@ namespace DragonScreen.BlackBox
         // ---- without a writer is the S76 ghost column, and `BlackBoxCoverage` fires on it either way
         // ---- round (never_written one way, unexpected_writer the other).
         public static readonly int PartCount = BlackBoxSchema.Index("part_count");
+        // ---- S235 / S233: the hot part's identity, beside the fraction that has never named it.
+        // ---- Declared and written in the SAME commit, same as part_count above (the S223 trap).
+        public static readonly int HotPartId = BlackBoxSchema.Index("hot_part_id");
+        public static readonly int HotPartName = BlackBoxSchema.Index("hot_part_name");
     }
 }

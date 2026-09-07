@@ -281,8 +281,30 @@ public static class AscentReadbackTest
 
         // ⛔ AND THE UNCHECKED SET IS SMALL AND NAMED. If a later task quietly moved rows into it, the
         // headline's "checked" count would fall and nothing would notice; six is what S223 shipped.
-        Check("S223 only six rows are unchecked (4 mission facts, 1 menu-derived, 1 status flag)",
-              notChecked == 6, notChecked + " unchecked");
+        // ⚠ S235 — THIS PIN USED TO READ, VERBATIM:
+        //       Check("S223 only six rows are unchecked (4 mission facts, 1 menu-derived, 1 status flag)",
+        //             notChecked == 6, notChecked + " unchecked");
+        //   SUPERSEDED IN PLACE (C1.16 / G12). It is now SEVEN, and the seventh is NOT a quiet
+        //   demotion of the kind this pin exists to catch — it is `AutostageLimit`, ADDED by S235
+        //   JOB 4 as unchecked-BUT-COUNTED. ⭐ Its correct value is derived from the craft
+        //   (`StagingFloor.For`), so there is no constant to score it against; but its Source is
+        //   `OurWrite`, so `SourceIsSetting` is true and `CountMoved` DOES count it. The pin below
+        //   now asserts BOTH numbers, so a genuine demotion (a setting quietly becoming telemetry)
+        //   still fails even though the unchecked count went up.
+        Check("S223/S235 seven rows are unchecked (4 mission facts, 1 menu-derived, 1 status flag, 1 craft-derived)",
+              notChecked == 7, notChecked + " unchecked");
+        int notSettings = 0;
+        for (int i = 0; i < AscentReadback.Expected.Length; i++)
+            if (!AscentReadback.Expected[i].IsSetting) notSettings++;
+        // ⭐ SEVEN, not six — and the seventh is a J3 AUDIT FINDING I did not expect: `LimitQaEnabled`
+        // is declared `B()` (CHECKABLE) with `ExpectSource.MenuDerived`, and `MirrorTheMenus` rewrites
+        // it every tick from `a.AscentType == PSG`. It never MOVED, so it never triggered a false
+        // re-assert like `LimitingAoA` did — but it is menu-derived and self-healing, so counting it
+        // would have been the same defect waiting for a different flight.
+        // ⛔ AutostageLimit is NOT among them: its Source is `OurWrite`, so it IS counted.
+        Check("S235 ⛔ seven rows are non-settings, and AutostageLimit is not one of them",
+              notSettings == 7 && AscentReadback.Expect("AutostageLimit").IsSetting,
+              notSettings + " non-settings");
     }
 
     // ---------------------------------------------------------------- 5. float widening
@@ -319,7 +341,7 @@ public static class AscentReadbackTest
         b[IndexOf("PitchRate")] = AscentObserved.Num("PitchRate", 0.75);
         string d = AscentReadback.Delta(a, b);
         Check("S223 ⭐ a box that changed between the two readings is NAMED, with both values",
-              d.Contains("1 box(es) CHANGED") && d.Contains("PitchRate: 5  ->  0.75"), d);
+              d.Contains("1 SETTING(S) CHANGED") && d.Contains("PitchRate: 5  ->  0.75"), d);
 
         // A field that became unreadable between the two readings is a change worth seeing too.
         b = Perfect();

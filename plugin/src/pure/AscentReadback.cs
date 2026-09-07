@@ -81,6 +81,20 @@ namespace DragonScreen
         public ExpectSource Source;
         /// <summary>False for the three unchecked classes — the row is read and printed, not judged.</summary>
         public bool Checkable;
+        /// <summary>
+        /// ⭐⭐ S235 — **IS THIS A CONFIGURATION SETTING AT ALL?** A different question from
+        /// <see cref="Checkable"/>, and conflating them is what cost flight 003 its re-assert budget.
+        ///   • `Checkable`  — "is there a FIXED VALUE to judge this against?"  → used by `Verdicts`.
+        ///   • `IsSetting`  — "is this a thing we CONFIGURE, as opposed to telemetry?" → used by
+        ///     `CountMoved`, i.e. by the guard that decides whether the module was re-seeded.
+        /// The two are independent. `LimitingAoA` is neither. `AutostageLimit` is a setting with no
+        /// fixed expectation — a real setting whose correct value is derived from the craft — so it is
+        /// `IsSetting` **and not** `Checkable`, and before S235 the table had no way to say that.
+        /// ⛔ DERIVED FROM <see cref="Source"/>, NEVER STORED PER ROW. A stored flag can be forgotten on
+        /// a new row and would then silently drop it out of the guard — a weakening with no symptom,
+        /// which is the failure mode this whole file exists to prevent.
+        /// </summary>
+        public bool IsSetting { get { return AscentReadback.SourceIsSetting(Source); } }
         /// <summary>True when <see cref="Number"/> carries the expectation; false when <see cref="Text"/> does.</summary>
         public bool IsNumber;
         public double Number;
@@ -285,6 +299,21 @@ namespace DragonScreen
             N("AOALimitFadeoutPressure", ExpectSource.FieldDefault, 2500.0, "field initialiser `new EditableDoubleMult(2500)`"),
             U("LimitingAoA", ExpectSource.StatusFlag, "written by the autopilot every Drive — a reading, not a setting"),
 
+            // ---- ⭐⭐ S235 JOB 4 — THE SETTING R-03 DEPENDS ON, WHICH THE AUDIT COULD NOT SEE ----
+            // `grep -c AutostageLimit pure/AscentProfile.cs` returned **0**: [[S228]] built a staging
+            // floor to bound a runaway cascade, wrote it into `MechJebModuleStagingController
+            // .AutostageLimit`, and the instrument built to catch re-seeds was BLIND TO IT. A reload
+            // that reverted the floor to its `= 0` initialiser would have been invisible — and 0 is
+            // precisely the value that let flight 002's cascade run 6 -> 1 unbounded (F-102).
+            // ⛔ DECLARED WITH `U()` — READ AND PRINTED, NOT JUDGED — AND THAT IS NOT A WEAKENING.
+            // Its correct value is DERIVED FROM THE CRAFT (`pure/StagingFloor.For`: 6 on Crew-2,
+            // `ForbidAll` when no interstage is found), so there is no fixed number this table could
+            // honestly assert. ⭐ But its Source is `OurWrite`, so `SourceIsSetting` is TRUE and
+            // `CountMoved` DOES count it: the guard sees a re-seed even though the auditor cannot
+            // score it against a constant. That distinction is the whole point of S235 splitting
+            // `IsSetting` from `Checkable`.
+            U("AutostageLimit", ExpectSource.OurWrite, "MechConductor.ApplyStagingFloor writes StagingFloor.For(live parts) — craft-derived, so read and counted but not scored against a constant (S235/S228 R-03)"),
+
             // ---- the PSG stage model -------------------------------------------------------------------
             N("MinDeltaV",  ExpectSource.RoDefault,    40.0,  "ApplyRODefaults: MIN_DELTAV_DEFAULT = 40"),
             N("LastStage",  ExpectSource.FieldDefault, -1.0,  "field initialiser `= -1`; the PSG menu would clamp it to 0 when it draws, and we suppress the menu"),
@@ -337,6 +366,27 @@ namespace DragonScreen
         // =========================================================================================
 
         /// <summary>The expectation for a setting, or a row whose `Name` is null when there is none.</summary>
+        /// <summary>
+        /// ⭐⭐ S235 — the rule behind <see cref="AscentExpect.IsSetting"/>. **Three sources are not
+        /// settings**, and each of them moved (or can move) during a normal flight:
+        ///   • `StatusFlag`  — the autopilot writes it every `Drive`. `LimitingAoA` is the only one, and
+        ///     it took **3 of flight 003's 5 re-assert attempts**, all before MET 59.4 — 80 s before the
+        ///     event, leaving no budget when it was needed.
+        ///   • `MenuDerived` — `MirrorTheMenus` recomputes `OptimizeStageFlag` from the live stage table
+        ///     every tick, so it moves at **every staging event**. ⚠ Arguably worse than `LimitingAoA`:
+        ///     it changes precisely when the vehicle is doing something.
+        ///   • `MissionFact` — read from the mission profile at runtime, and `DesiredInclination` is
+        ///     legitimately written mid-count by S222b's plane launch.
+        /// ⛔ Everything else IS a setting, including one with no fixed value to judge
+        /// (`AutostageLimit`) — which is exactly why this is keyed on the SOURCE and not on `Checkable`.
+        /// </summary>
+        public static bool SourceIsSetting(ExpectSource s)
+        {
+            return s != ExpectSource.StatusFlag
+                && s != ExpectSource.MenuDerived
+                && s != ExpectSource.MissionFact;
+        }
+
         public static AscentExpect Expect(string name)
         {
             for (int i = 0; i < Expected.Length; i++)
@@ -566,15 +616,61 @@ namespace DragonScreen
         /// copies of "did this box move" is exactly how a count and its own explanation drift apart, and
         /// then the log says 17 while the guard says 0.
         /// </summary>
+        /// ⛔⛔ **S235 / NTSB-2026-003 JOB 3 — IT COUNTS ONLY THINGS THAT ARE ACTUALLY SETTINGS.**
+        ///
+        /// The version S228 shipped counted EVERY row in <see cref="Expected"/>. Three of the five
+        /// re-assert attempts on flight 003 were then spent on **`LimitingAoA`**, all before MET 59.4 —
+        /// **80 seconds before the event, leaving no budget when it mattered.**
+        ///
+        /// ⛔ `LimitingAoA` IS NOT A SETTING. The autopilot assigns it every `Drive` from live dynamic
+        /// pressure and angle of attack (`MechJebModuleAscentBaseAutopilot.cs:386` and `:400`), resets it
+        /// at `:142`, and MechJeb's own menu draws it as a status lamp (`…SettingsMenu.cs:58`). It also
+        /// carries **no `[Persistent]` attribute** (`MechJebModuleAscentSettings.cs:148`), which is the
+        /// structural marker that separates a setting from telemetry in that file.
+        ///
+        /// ⭐⭐ AND THE TABLE ALREADY KNEW. [[S223]] declared it `U("LimitingAoA", ExpectSource.StatusFlag,
+        /// "written by the autopilot every Drive — a reading, not a setting")`, i.e. `Checkable = false`,
+        /// and `Verdicts` has always refused to judge it. **The defect was entirely mine in S228:** I
+        /// reused `Delta` — written for a HUMAN reading a log, where a moving status flag is worth
+        /// seeing — as the trigger for an AUTOMATED re-assert, without consulting the disposition the
+        /// table had already recorded. The classification was right and the consumer ignored it.
+        ///
+        /// ⚠ AND IT IS NOT ONLY `LimitingAoA` — that is JOB 3's audit result, and it is worse than the
+        /// brief supposed. **Six** rows are `Checkable = false`, and every one of them would have done
+        /// the same damage: `OptimizeStageFlag` (`MenuDerived`) is recomputed from the live stage table
+        /// **every tick** by `MirrorTheMenus`, so it moves at every staging event — i.e. exactly when the
+        /// vehicle is doing something — and `DesiredOrbitAltitude` / `DesiredApoapsis` /
+        /// `DesiredInclination` / `LaunchingToPlane` (`MissionFact`) are read from the mission profile at
+        /// runtime and are legitimately written during a plane launch (S222b). ⛔ `LimitingAoA` was
+        /// simply the first to fire.
         public static int CountMoved(AscentObserved[] before, AscentObserved[] after)
         {
-            return Moved(before, after, null);
+            int settings, readings;
+            Moved(before, after, null, out settings, out readings);
+            return settings;
         }
 
-        /// <summary>The one comparison. `sb` null = count only; non-null = also render each moved box.</summary>
-        static int Moved(AscentObserved[] before, AscentObserved[] after, System.Text.StringBuilder sb)
+        /// <summary>
+        /// ⚠ The companion to <see cref="CountMoved"/>: how many NON-settings moved. Not a fault and never
+        /// a trigger — exposed so the log can say "and these moved too, and here is why they do not
+        /// count", rather than leaving a reader to wonder why the guard stayed quiet.
+        /// </summary>
+        public static int CountMovedReadings(AscentObserved[] before, AscentObserved[] after)
         {
-            int moved = 0;
+            int settings, readings;
+            Moved(before, after, null, out settings, out readings);
+            return readings;
+        }
+
+        /// <summary>
+        /// The one comparison, tallied two ways. `sb` null = count only; non-null = also render each
+        /// moved box. ⛔ ONE LOOP, so the number the guard acts on and the text a human reads can never
+        /// disagree — which is the whole reason `CountMoved` was not written as a second copy.
+        /// </summary>
+        static void Moved(AscentObserved[] before, AscentObserved[] after, System.Text.StringBuilder sb,
+                          out int settings, out int readings)
+        {
+            settings = 0; readings = 0;
             for (int i = 0; i < Expected.Length; i++)
             {
                 string n = Expected[i].Name;
@@ -585,22 +681,34 @@ namespace DragonScreen
                             ? SameNumber(a.Number, b.Number)
                             : string.Equals(sa, sbv, StringComparison.Ordinal);
                 if (same) continue;
-                moved++;
+
+                // ⭐ The disposition the table already recorded decides which tally this lands in.
+                // `Checkable == false` means "read and printed, but there is no fixed value to expect" —
+                // a mission fact, a menu-derived value, or a live status flag.
+                bool isSetting = Expected[i].IsSetting;
+                if (isSetting) settings++; else readings++;
                 if (sb != null)
-                    sb.Append("\n    ⚠ ").Append(n).Append(": ").Append(sa).Append("  ->  ").Append(sbv);
+                    sb.Append("\n    ").Append(isSetting ? "⚠ " : "·  (reading, not a setting — ")
+                      .Append(isSetting ? "" : SourceWord(Expected[i].Source) + ") ")
+                      .Append(n).Append(": ").Append(sa).Append("  ->  ").Append(sbv);
             }
-            return moved;
         }
 
         public static string Delta(AscentObserved[] before, AscentObserved[] after)
         {
             var sb = new System.Text.StringBuilder();
-            int moved = Moved(before, after, sb);
+            int moved, readings;
+            Moved(before, after, sb, out moved, out readings);
+            string tail = readings == 0 ? "" : "  (plus " + readings + " live reading(s) that moved and "
+                                             + "are NOT counted — they are not settings; S235)";
+            if (moved == 0 && readings > 0)
+                return "ASCENT READ-BACK DELTA — NOTHING MOVED among the SETTINGS. " + readings
+                     + " live reading(s) moved, which is what live readings do:" + sb;
             return moved == 0
                 ? "ASCENT READ-BACK DELTA — NOTHING MOVED between the two readings. Every box the "
                   + "conductor left is the box that flew: no later pass re-seeded the module."
-                : "ASCENT READ-BACK DELTA — ⛔ " + moved + " box(es) CHANGED between the two readings. "
-                  + "Something re-seeded the module after the conductor configured it:" + sb;
+                : "ASCENT READ-BACK DELTA — ⛔ " + moved + " SETTING(S) CHANGED between the two readings. "
+                  + "Something re-seeded the module after the conductor configured it" + tail + ":" + sb;
         }
 
         /// <summary>

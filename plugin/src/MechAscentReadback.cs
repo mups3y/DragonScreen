@@ -145,6 +145,12 @@ namespace DragonScreen
             Num (obs, "MaxAoA", delegate { return a.MaxAoA.Val; });
             Num (obs, "AOALimitFadeoutPressure", delegate { return a.AOALimitFadeoutPressure.Val; });
             Flag(obs, "LimitingAoA", delegate { return a.LimitingAoA; });
+            // ⭐⭐ S235 JOB 4. ⚠ NOT on `a` (AscentSettings) — `AutostageLimit` lives on the STAGING
+            // CONTROLLER, which is why it was missed: every other box in this table comes off one
+            // module and nobody looked at a second one. Guarded independently: a null Staging module
+            // must cost this ONE row its reading, not the other 66 theirs.
+            Num (obs, "AutostageLimit", delegate {
+                return core.Staging == null ? double.NaN : (double)core.Staging.AutostageLimit.Val; });
 
             // ---- the PSG stage model ------------------------------------------------------------------
             Num (obs, "MinDeltaV", delegate { return a.MinDeltaV.Val; });

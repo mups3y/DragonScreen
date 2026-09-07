@@ -3158,11 +3158,34 @@ public static class FigmaUINavTest
               "index " + BlackBoxSchema.Index("sev_events") + " (want " + PrefixCount + ") of "
               + BlackBoxSchema.Columns.Length);
         // ⭐ S227's own append, pinned the same way so the NEXT one has to come here and say so too.
-        Check("...and part_count is the append after it (S227)",
-              BlackBoxSchema.Index("part_count") == BlackBoxSchema.Columns.Length - 1
-              && BlackBoxSchema.Index("part_count") > BlackBoxSchema.Index("sev_events"),
-              "part_count at " + BlackBoxSchema.Index("part_count") + " of "
-              + BlackBoxSchema.Columns.Length);
+        // ⚠ S235 — THIS CHECK USED TO READ, VERBATIM:
+        //       BlackBoxSchema.Index("part_count") == BlackBoxSchema.Columns.Length - 1
+        //       && BlackBoxSchema.Index("part_count") > BlackBoxSchema.Index("sev_events")
+        //   SUPERSEDED IN PLACE (C1.16 / G12). It pinned `part_count` as LAST, which is the same shape
+        //   S228 had already had to fix on `sev_events` one append earlier — and it broke for the same
+        //   reason the moment S235 appended two more. ⛔ "Last" is not the invariant; **"still at its own
+        //   index"** is, and it is the one a reorder actually violates.
+        // ⭐⭐ SO THE APPEND LEDGER IS PINNED ABSOLUTELY, ONE LINE PER APPEND. A pure append leaves every
+        //   earlier entry untouched and adds a row; a REORDER moves one, and this fails. The prefix hash
+        //   above proves the first 205 are intact; this proves the appends after them are too.
+        int[] pinned = { 205, 206, 207, 208 };
+        string[] pinnedNames = { "sev_events", "part_count", "hot_part_id", "hot_part_name" };
+        int moved = 0; string firstMoved = null;
+        for (int i = 0; i < pinnedNames.Length; i++)
+            if (BlackBoxSchema.Index(pinnedNames[i]) != pinned[i])
+            {
+                moved++;
+                if (firstMoved == null)
+                    firstMoved = pinnedNames[i] + " at " + BlackBoxSchema.Index(pinnedNames[i])
+                               + " (pinned " + pinned[i] + ")";
+            }
+        Check("...and every appended column is still at its own pinned index (S137c/S227/S235)",
+              moved == 0, moved + " moved, first: " + firstMoved);
+        // ⛔ And the table ends where the ledger says it does — so a new append cannot be added to the
+        // schema without being added here too, which is what keeps this ledger honest.
+        Check("...and the ledger accounts for the whole table",
+              BlackBoxSchema.Columns.Length == pinned[pinned.Length - 1] + 1,
+              BlackBoxSchema.Columns.Length + " columns, ledger ends at " + pinned[pinned.Length - 1]);
         // ⭐ Which is why the version does NOT move. This file's own rule: "bumped when a column is
         // REORDERED or REMOVED; a pure append keeps the version (§4.2)". A recording made before this
         // line still chains with one made after it.

@@ -1156,11 +1156,16 @@ namespace DragonScreen.BlackBox
                 BlackBoxSchema.Set(c, BlackBoxCols.CtrlTqRoll, tqR);
                 BlackBoxSchema.Set(c, BlackBoxCols.RcsThrustN, rcsN);
 
-                double frac, tempC;
-                if (HottestSkin(v, ut, out frac, out tempC))
+                double frac, tempC; uint hotId; string hotName;
+                if (HottestSkin(v, ut, out frac, out tempC, out hotId, out hotName))
                 {
                     BlackBoxSchema.Set(c, BlackBoxCols.SkinTempFrac, frac);
                     BlackBoxSchema.Set(c, BlackBoxCols.HullTempC, tempC);
+                    // ⭐⭐ S235 / S233 / NTSB-7 — WHICH PART. Written in the SAME branch as the two values
+                    // above and from the same `Part`, so a row can never carry a fraction whose owner is
+                    // a different part (or a stale one from an earlier tick).
+                    BlackBoxSchema.Set(c, BlackBoxCols.HotPartId, hotId);
+                    if (hotName != null) BlackBoxSchema.Set(c, BlackBoxCols.HotPartName, hotName);
                 }
 
                 // ⭐ Recorded SEPARATELY from the authoritative phase (§2.6) so a conductor/classifier
@@ -2053,9 +2058,35 @@ namespace DragonScreen.BlackBox
         /// COMPOSED from Recorder B, which added it after a max-Q "Overheat!" was INVISIBLE in the CSV
         /// and visible only in a screenshot — a §0-class failure closed by one column.
         /// </summary>
-        bool HottestSkin(Vessel v, double ut, out double frac, out double tempC)
+        /// <summary>
+        /// ⭐⭐ S235 / [[S233]] / NTSB-7 — **IT NAMES THE PART NOW.**
+        ///
+        /// ⛔ THE DEFECT, AND IT IS VISIBLE IN THIS METHOD'S OWN BODY: it walks the part list, holds the
+        /// hottest `Part` in `hottest`, **builds its name**, writes that name to `KSP.log` — and then
+        /// returns two bare doubles. The identity was in hand at every step and reached the RECORDING at
+        /// none of them. `BlackBoxSchema.cs`'s own column comment says *"hottest part
+        /// skinTemperature/skinMaxTemp"* and *"that part's skin temperature"*, with nothing anywhere
+        /// saying WHICH part.
+        ///
+        /// ⚠ AND THE ONE PLACE IT WAS NAMED IS THE PLACE THAT DOES NOT SURVIVE. The `Debug.LogWarning`
+        /// below fires only at `frac >= 0.85`, at most once per 5 s, into `KSP.log` — **which is
+        /// overwritten on the next run.** That is precisely why NTSB-2026-002 could not say what was at
+        /// 99.6 % of its skin limit.
+        ///
+        /// ⛔ THIS FITS THE IDENTITY AND BUILDS TO NO CONCLUSION. `skin_temp_frac` peaked at 0.9961 on
+        /// flight 002 and 0.9970 on 003, half a second before each unexplained separation, still
+        /// climbing — **that is a signal, not a finding.** It never reaches 1.0 because the separation
+        /// ends the record. Naming the part is what lets the NEXT flight settle whether the two are
+        /// related at all; nothing here asserts that they are.
+        ///
+        /// `hotName` uses `PartNames.Of` — the OCT2 contract, the same string `craftdump.csv` records —
+        /// so the column joins to that dump with no translation. `hotId` is `persistentId`, the stable
+        /// join key ([[S227]]'s rule: never join on an index).
+        /// </summary>
+        bool HottestSkin(Vessel v, double ut, out double frac, out double tempC,
+                         out uint hotId, out string hotName)
         {
-            frac = 0.0; tempC = 0.0;
+            frac = 0.0; tempC = 0.0; hotId = 0; hotName = null;
             if (v == null || !v.loaded || v.parts == null) return false;   // BB2: unloaded = no part walk
             Part hottest = null;
             try
@@ -2072,6 +2103,11 @@ namespace DragonScreen.BlackBox
             catch { return false; }
             if (hottest == null || frac <= 0.0) return false;
             tempC = hottest.skinTemperature - 273.15;
+            // ⭐ S235 — the identity, carried out instead of discarded. Both are read off the SAME
+            // `hottest` the two doubles came from, so the name can never describe a different part than
+            // the fraction beside it.
+            hotId = hottest.persistentId;
+            hotName = PartNames.Of(hottest);
             if (frac >= 0.85 && ut - lastThermalLogUt > 5.0)
             {
                 lastThermalLogUt = ut;

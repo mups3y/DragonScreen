@@ -27614,7 +27614,7 @@ nothing layered on top — which was the entire point of deploying rather than b
 
 ---
 
-### S235 [O] NTSB-2026-003 F-308 — the recorder observed the agent and threw the observation away — **DOING** — [owner ruling 2026-09-08 (*"option 1"*); TIER 0: an unresolved root cause, and the evidence that would have closed it was in the handler's own parameter list]
+### S235 [O] NTSB-2026-003 F-308 — the recorder observed the agent and threw the observation away — **DONE 2026-09-08 — the stage int, the part identity on release, and the hot part's name are all RECORDED now; the wipe detector counts settings only and can at last see `AutostageLimit`. 107 checks, 22 of 22 mutants killed, and the emit scanner is proven to REJECT the verbatim S227 body. ⛔ NO FLIGHT PARAMETER CHANGED and NO RENDERED PIXEL CHANGED. ⚠ The brief's third F-308 handler was already emitting — two, not three** — [owner ruling 2026-09-08 (*"option 1"*); TIER 0: an unresolved root cause, and the evidence that would have closed it was in the handler's own parameter list]
 - **Marker committed before any code (C1.1).** Tree clean at `ee8a122`.
 - ⛔ **F-308 IS MY OWN DEFECT, FROM [[S227]].** Three handlers were written to observe and discard. The
   file's own comment says it as though it were a virtue: *"Nothing below writes an event."* It was not a
@@ -27652,3 +27652,203 @@ nothing layered on top — which was the entire point of deploying rather than b
   says so plainly · ⭐⭐ **a test that proves each new event ACTUALLY EMITS**, and that the test can fail
   without it · mutation-tested · coverage clean · ⛔ what is NOT proven headless stated explicitly ·
   ⛔ **plainly: was any flight parameter changed? The answer must be NO** · local commit, **no push**.
+
+#### ⭐⭐ JOB 1 (F-308) — WHAT WAS OBSERVED IS NOW WRITTEN DOWN
+
+Three new kinds in `pure/blackbox/BlackBoxEvents.cs`, emitted from the handlers that already had the
+data: **`stage.activate_called`** (⭐ carrying **the `stage` int**), **`part.decoupled`** and
+**`part.undocked`** (`part_idx`, `part_name`, `persistent_id`, `stage`, parent — `craftdump.csv`'s own
+key names, so an event joins with no lookup table). Vocabulary **42 → 45 kinds, 45 emitted**.
+
+⛔ **`stage.activate_called` goes out through `EmitMission`, NOT the part budget.** A stage command is a
+fact about the vehicle, not a part; charging it to the part-loss budget would let a cascade truncate the
+very evidence the budget protects.
+⭐ **The classification is untouched.** `lastStageCommandUt` and `decoupledAt[...]` are still written,
+`part.lost` reads the same discriminator, and a rung that cannot tell `commanded` from `uncommanded`
+still refuses to say `commanded`. The emissions are **additional**.
+
+⚠ **ONE CORRECTION TO THE BRIEF, ESTABLISHED BEFORE ANY CODE.** The brief lists three handlers that emit
+nothing, citing `:216 — emits nothing` for `OnPartJointBreak`. **That is not accurate.** `:216` is the
+signature; the body already called `Emit(BlackBoxEvents.PartJointBreak, …)` carrying **`break_force`**,
+`joint_parent` and `joint_parent_id`. ⛔ **The F-308 population is TWO handlers, not three**, and the
+joint-break handler was left alone rather than "fixed", because it is not broken. A test now pins that
+`break_force` is still emitted, so the claim is checkable rather than asserted.
+
+#### ⭐ JOB 2 ([[S233]] / NTSB-7) — THE HOT PART HAS A NAME
+
+`hot_part_id` + `hot_part_name`, appended (SchemaVersion stays **1**), declared and written in this one
+commit. ⛔ **`HottestSkin` had the `Part` in hand the whole time** — it walks the list, holds `hottest`,
+**builds its name for a `Debug.LogWarning`** — and returned two bare doubles. ⚠ **And the one place it
+was named is the place that does not survive:** that warning fires only above 0.85, at most once per 5 s,
+into `KSP.log`, **which is overwritten on the next run.** That is exactly why NTSB could not name the
+part at 99.6 %.
+
+⛔ **FITTED AS EVIDENCE, NOT AS A CONCLUSION.** 0.9961 (002) and 0.9970 (003), 0.5 s and 0.7 s before each
+unexplained separation, still climbing — **that is a signal, not a finding**, and nothing here asserts
+the two are related. Both values come off the **same** `hottest`, so a row can never name one part and
+measure another.
+
+#### ⛔ JOB 3 — THE FALSE POSITIVE, AND IT WAS NOT ALONE
+
+⭐⭐ **The defect was mine, in [[S228]], and the table already knew the answer.** [[S223]] had declared
+`U("LimitingAoA", ExpectSource.StatusFlag, "written by the autopilot every Drive — a reading, not a
+setting")`. I then reused `Delta` — written for a **human reading a log**, where a moving status flag is
+worth seeing — as the trigger for an **automated re-assert**, without consulting the disposition the
+table had already recorded. Verified independently in the vendored tree: assigned every `Drive`
+(`MechJebModuleAscentBaseAutopilot.cs:386`, `:400`), reset at `:142`, drawn as a status lamp by MechJeb's
+own menu, and carrying **no `[Persistent]` attribute** (`MechJebModuleAscentSettings.cs:148`) — the
+structural marker that separates a setting from telemetry in that file.
+
+⭐⭐ **THE AUDIT ANSWER, MECHANICAL, AND WORSE THAN THE BRIEF SUPPOSED: `LimitingAoA` IS NOT ALONE.
+SEVEN of the 78 rows are not settings, and every one would have done the same damage:**
+
+| row | source | why it moves in normal flight |
+|---|---|---|
+| `LimitingAoA` | `StatusFlag` | the autopilot writes it every `Drive` — **took 3 of 5 attempts** |
+| **`OptimizeStageFlag`** | `MenuDerived` | ⚠ `MirrorTheMenus` recomputes it **every tick**; moves at **every staging event** — i.e. exactly when the vehicle is doing something |
+| **`LimitQaEnabled`** | `MenuDerived` | ⭐ **found by this audit, not by the brief** — declared `B()` i.e. **checkable**, yet menu-derived and rewritten every tick; self-healing, so counting it was never needed |
+| `DesiredOrbitAltitude` · `DesiredApoapsis` · `DesiredInclination` · `LaunchingToPlane` | `MissionFact` | read from the profile at runtime; `DesiredInclination` is legitimately written mid-count by S222b's plane launch |
+
+**The fix is a distinction the table did not have.** `AscentExpect.IsSetting` now answers *"is this a
+thing we CONFIGURE?"* separately from `Checkable`'s *"is there a fixed value to judge it against?"*
+⛔ **Derived from `Source`, never stored per row** — a stored flag can be forgotten on a new row and would
+silently drop it out of the guard, which is a weakening with no symptom. `Delta` now reports **both**
+tallies, so the log and the guard can never disagree about why it did or did not fire.
+
+#### ⭐ JOB 4 — `AutostageLimit` IS VISIBLE AT LAST
+
+Added to all three tables (`AscentProfile` claim row with its source, `AscentReadback.Expected`, and the
+glue read). ⛔ **It is not on `AscentSettings` at all** — it lives on `MechJebModuleStagingController`,
+which is *why* every earlier pass missed it: this audit had only ever read one module.
+
+⭐⭐ **Declared `U()` — read, NOT scored — and still COUNTED, which is the whole point of splitting
+`IsSetting` from `Checkable`.** Its correct value is derived per craft (`StagingFloor.For`: 6 on Crew-2),
+so no constant could honestly be asserted; but its source is `OurWrite`, so a reload reverting the floor
+**6 → 0** — F-102's exact value, the one that let the cascade run unbounded — now counts as a re-seed and
+triggers the re-assert.
+
+⚠ **AND IT MOVED A C1.8-GUARDED PIN, WHICH IS FLAGGED RATHER THAN BURIED.** `AscentProfileTest` pinned
+*"exactly EIGHT boxes are written … adding a ninth fails here even if it is plausible"*. It is now
+**nine**. ⛔ **This is not a build chat granting itself a deviation:** `MechConductor.ApplyStagingFloor`
+has written `AutostageLimit` since commit `5b222da` ([[S228]] R-03, under the owner's 2026-09-08
+*"option 2"* ruling), and **that build is installed and awaiting flight** ([[S234]]). The audit said 8
+while the code wrote 9. Raising the pin makes an existing authorised write **visible**; a tenth still
+fails. Rows 77 → 78 for the same reason.
+
+#### ⭐⭐ VERIFIED — AND THE BAR THAT MOVED
+
+| instrument | result |
+|---|---|
+| `python plugin/build.py test` | **ALL SUITES PASSED** |
+| `PartLossTest` | **107 checks, 0 failed** (was 68) |
+| `python plugin/build.py harnesscheck` | **ok**, 172 clean report lines |
+| event vocabulary | **45 kinds, 45 emitted**, 0 dead (was 42) |
+| black-box columns | **209 indexed, 0 known writerless** (was 207) |
+| schema prefix ratchet | **205 names, FNV-1a 164112981 — UNCHANGED** |
+| `previewdiff` | **0 changed of 130**, run **twice** (per [[S230]]), 5 changed render inputs listed |
+| ⭐ **mutation test** | **22 mutants, 22 KILLED, 0 SURVIVED** — every one by **assertion** |
+
+⭐⭐ **THE DONE-CRITERION THAT MATTERED: A TEST THAT PROVES THE EVENT EMITS.** Not that a handler is
+registered — that is exactly what S227 had, and what the overseer's assessment checked. The new
+`S235_EveryHandlerEmits` reads `PartLossWatch.cs` and asserts **every non-exempt handler emits** and
+**every parameter it is handed is used**; `S235_TheEmitScannerCanFail` feeds it the **verbatim S227 body**
+(`try { lastStageCommandUt = Now(); } catch { }`) and requires it to be **rejected**, plus a fixed-up
+version that must be **accepted**, plus one that emits while dropping the `stage` int. And
+`S235_TheLineRendersThePayload` exercises the real `BlackBoxEvents.Line`, asserting the rendered JSONL
+contains **`"stage":6`**.
+
+⚠ **ONE SCANNER FALSE POSITIVE, CORRECTED IN THE CHECK AND NOT IN THE CODE.** The first parameter rule
+demanded each parameter appear *inside* the emit call, and reported `OnPartJointBreak(j)` as a defect —
+but `j` is destructured into `j.Child`/`j.Parent` and **those** are emitted, so every fact it carried
+does reach the record. ⛔ Tightening the CODE to satisfy a wrong check would have been the wrong repair.
+The rule is now "referenced at all", which still rejects S227's body (it never mentions `stage`).
+
+#### ⛔ WAS ANY FLIGHT PARAMETER CHANGED? **NO** — and it was checked, not asserted
+
+`git diff -U0 -- plugin/src/ | grep '^+'` filtered for assignments to a MechJeb field returns
+**nothing**: not one new write to `a.*`, `core.*` or `st.*`. `PitchRate` appears in the diff **only** in
+test text (an existing fixture and two assertion strings), never as a write — 🟢 the owner's *"option 1"*
+deferral **holds**, RO's 5.0 stays unwritten. `AscentProfile.Audit` is read-only (lookup, count, render);
+nothing writes from it. ⛔ **DID ANY RENDERED PIXEL CHANGE? NO** — 0 of 130, twice.
+
+#### ⛔ WHAT IS **NOT** PROVEN HEADLESS, AND WHAT THE NEXT FLIGHT MUST SHOW
+
+⛔ **No `GameEvents` handler is ever invoked in this suite.** Every emission proof is (a) the pure
+`BlackBoxEvents.Line` machinery exercised for real, and (b) a source scan proving the call is present and
+carries its parameter. ⛔ **That is not the same as the event firing in flight**, and this task does not
+claim it is.
+
+**The next flight must show:**
+1. ⭐ **`stage.activate_called` appears at all** — and at MET 139.16-equivalent, whether it appears. **Its
+   ABSENCE at a separation is the finding**: it eliminates every staging agent at once.
+2. `part.decoupled` fires for the decouplers of a normal separation, with a usable `persistent_id`.
+3. Whether a "parts became a new vessel" separation raises `onPartDeCouple` **at all** — ⚠ if it does
+   not, this task has still not closed F-308's gap and [[S238]] is the line that would.
+4. `hot_part_name` names a real part at the peak, and whether that part is the same on both flights.
+5. The re-assert budget is **no longer consumed by `LimitingAoA`** — ⭐ this is directly checkable in the
+   next log and is the cheapest confirmation in the list.
+6. `AutostageLimit` appears in the read-back table and holds **6**, not 0.
+
+#### ⛔ STRAYS LOGGED, NOT ACTED ON (C1.1)
+
+[[S236]] (NTSB-9: does the conductor implement S1/S2 separation at all?), [[S237]] (two handlers on the
+emit-exempt list that are the same F-308 shape) and [[S238]] (`onPartDeCoupleNewVesselComplete` — the
+event that would have fired at MET 139.28) are opened below.
+
+**Commits:** `8fc295b` (the DOING marker, before any code) · this one. **No `git push`.**
+
+---
+
+### S236 [S] NTSB-9 — does the CONDUCTOR implement S1/S2 separation at all? MechJeb has never staged in this project — **TODO** — [logged by [[S235]] per C1.1, 2026-09-08; TIER 1: a mission-critical actuation nobody has confirmed exists]
+- ⭐ **The overseer settled the floor question and it exposed this.** `BUILD_PLAN.md:542` — *"`MechJeb
+  ModuleStagingController.Autostage` = FALSE. **MechJeb never actuates a separation or an ignition**"* —
+  and `:570` — *"the actuation is the conductor's"* (§B8 / §B12.7). So [[S228]]'s staging floor at **6 is
+  CORRECT, not off-by-one**: autostage is meant to actuate nothing, and flooring it costs a nominal
+  flight nothing.
+- ⛔ **THE OPEN QUESTION IS THE OTHER HALF.** If MechJeb never stages and the actuation is the
+  conductor's, **does the conductor actually do it?** `pure/Actuation.cs:13` names
+  `TE.19.F9.S1.Interstage = stage sep` and `AscentSequence` has a `Separation` step with an
+  `AscentAct.SeparateBooster`, so the intent is present. ⚠ **What nobody has confirmed is that it fires
+  in flight.**
+- ⭐ **The evidence that makes this urgent:** NTSB found **zero `Mechjeb Autostage` occurrences across all
+  three flight logs (23.2 + 24.3 + 22.7 MB)**. MechJeb has never staged in this project. So on every
+  flight so far, either the conductor staged, or nothing did.
+- ⛔ **LOG IT, DO NOT BUILD IT** — the brief says so explicitly and C1.1 forbids it.
+- **DONE when:** the recording shows which agent performed S1/S2 separation on a flight that reached it —
+  ⭐ **and [[S235]]'s new `stage.activate_called` plus `part.decoupled` are exactly the two channels that
+  answer it**, so this line may be answerable from the next flight with no new code at all.
+
+### S237 [S] Two `GameEvents` handlers are on the emit-exempt list and are the same F-308 shape — **TODO** — [logged by [[S235]] per C1.1, 2026-09-08; TIER 3: the defect class this task generalised, in its two remaining instances]
+- **The finding:** [[S235]] added a build-failing scan requiring every `GameEvents` handler to emit.
+  `OnVesselWillDestroy` and `OnVesselUnloaded` are exempted by name in `PartLossTest.EmitExempt` — they
+  set teardown state consumed by `PartLoss.Classify` and write nothing. ⛔ **That is precisely the F-308
+  shape**: an observation kept only as internal state.
+- ⚠ **The exemption is honest, not a pardon** — the list carries its reason and an entry costs a register
+  line, which is this one. But it should be a DECISION, not an inheritance.
+- **The question to settle:** is "this vessel is being torn down" worth an event? ⭐ Arguments both ways
+  and neither is obviously right: `rec.stream_end` already records a stream ending and a duplicate
+  channel is the defect C7.1 is about (the argument that retired `rec.close` in S90) — but a vessel
+  destroyed while ANOTHER stream keeps recording leaves no line at all, and [[S227]] could not determine
+  whether scene teardown even raises per-part deaths.
+- **DONE when:** either both handlers emit, or the exemption is re-recorded as a deliberate ruling with
+  its reasoning — and either way `EmitExempt` shrinks or is justified in the file.
+
+### S238 [S] `onPartDeCoupleNewVesselComplete` — the event that would have fired at MET 139.28 — **TODO** — [logged by [[S235]] per C1.1, 2026-09-08; TIER 2: the exact shape of the unexplained separation, and we do not subscribe to it]
+- ⭐ **NTSB-2026-003's root cause is unresolved, and the accident's own description names this event.**
+  *"the 16 launch-vehicle parts did not die; they became a new vessel."* KSP has an event for exactly
+  that: **`GameEvents.onPartDeCoupleNewVesselComplete`**, `EventData<Vessel,Vessel>` — confirmed present
+  in this KSP by the reflection enumeration [[S227]] ran over `Assembly-CSharp.dll` (399 public static
+  fields), and **deliberately not taken then**, because S227's scope was part LOSS.
+- ⛔ **NOT BUILT HERE, AND THE REASON IS C1.1, NOT DOUBT.** [[S235]]'s JOB 1 is *"emit what you already
+  observe"* — this is a NEW subscription, which is a different task. ⚠ Adding it mid-task is exactly the
+  scope creep that makes a change unattributable.
+- ⭐ **Why it is worth its own line.** [[S235]] makes the next flight able to say whether a stage command
+  was issued (`stage.activate_called`) and whether a part was released (`part.decoupled`). This would say
+  **when the vessel split and into what** — the third side of the same triangle, and the only one that
+  fires on the shape the accident actually took. ⚠ If flight 004 reproduces the separation and neither
+  new channel speaks, **this is the line that closes it.**
+- ⚠ **Read [[S227]]'s five hazards first** — symmetric subscribe/unsubscribe, per-vessel routing, guarded
+  handlers, arrival order, the flood budget. `PartLossWatch` already solves all five; this is one handler
+  added to a proven frame, and [[S235]]'s emit scanner will require it to emit.
+- **DONE when:** the event is subscribed, emits both vessel identities and the parts that left, is
+  mutation-tested, and the register says what it would have shown at MET 139.28.

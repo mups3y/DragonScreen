@@ -101,6 +101,11 @@ public static class PartLossTest
         WiredToTheScene();
         PayloadJoinsToCraftDump();
         ColumnAndKinds();
+        S235_EveryHandlerEmits();
+        S235_TheEmitScannerCanFail();
+        S235_TheLineRendersThePayload();
+        S235_TheHotPartIsNamed();
+        S235_SettingsVersusReadings();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed"
                           + (failures == 0 ? "   (staging never promotes to commanded; the scanner is proven to fail)" : ""));
@@ -383,7 +388,12 @@ public static class PartLossTest
             // borrow this bracketing idiom will make the same mistake.
             string body = next.Success ? rest.Substring(0, next.Index + 1) : rest;
             // A one-line forwarder is guarded by what it forwards TO; accept either.
-            bool guarded = body.Contains("try") || Regex.IsMatch(body, @"\{\s*\w+\(\w*\);\s*\}");
+            // ⚠ S235: the argument pattern used to be `\w*` — a SINGLE bare identifier — which silently
+            // stopped matching the moment `OnPartDeCouple` gained a second argument
+            // (`NoteReleased(p, BlackBoxEvents.PartDecoupled)`) and reported two guarded handlers as
+            // unguarded. ⭐ The check was RIGHT to fail: the shape it was pinned to had genuinely
+            // changed. Widened to any argument list, still refusing anything with a statement in it.
+            bool guarded = body.Contains("try") || Regex.IsMatch(body, @"\{\s*\w+\([^;{}]*\);\s*\}");
             if (!guarded) { unguarded++; if (firstBad == null) firstBad = handlers[i]; }
         }
         Check("S227 ⛔ no GameEvents handler can throw into KSP's dispatch",
@@ -464,9 +474,15 @@ public static class PartLossTest
         // ⛔ Declaration and writer in the SAME commit — a declared column with no writer is the S76
         // ghost column, and `BlackBoxCoverage` fires on it either way round.
         Check("S227 part_count is in the schema", BlackBoxSchema.Index("part_count") >= 0, "");
-        Check("...and it is the LAST column, so SchemaVersion does not move",
-              BlackBoxSchema.Index("part_count") == BlackBoxSchema.Columns.Length - 1,
-              "index " + BlackBoxSchema.Index("part_count"));
+        // ⚠ S235 — THIS CHECK USED TO READ, VERBATIM:
+        //       BlackBoxSchema.Index("part_count") == BlackBoxSchema.Columns.Length - 1
+        //   SUPERSEDED IN PLACE (C1.16 / G12): "last" was true when S227 wrote it and stopped being true
+        //   the moment S235 appended `hot_part_id`/`hot_part_name`. ⛔ What keeps `SchemaVersion` at 1 is
+        //   that nothing MOVED — not that this column happens to be last — and the absolute pin says so
+        //   directly. `FigmaUINavTest` holds the full append ledger.
+        Check("...and it has not MOVED, which is what keeps SchemaVersion at 1",
+              BlackBoxSchema.Index("part_count") == 206,
+              "index " + BlackBoxSchema.Index("part_count") + " (pinned 206)");
         Check("...and SchemaVersion is still 1", BlackBoxSchema.SchemaVersion == 1,
               "got " + BlackBoxSchema.SchemaVersion);
         Check("S227 BlackBoxCols exposes it", BlackBoxCols.PartCount == BlackBoxSchema.Index("part_count"),
@@ -507,5 +523,265 @@ public static class PartLossTest
         // cut. It goes out through EmitMission, outside the Admit() gate.
         Check("S227 ⛔ the truncation marker is emitted OUTSIDE the budget it reports on",
               Regex.IsMatch(watch, @"TakeMarker\(\)[\s\S]{0,200}?EmitMission\("), "");
+    }
+    // ============================================================================================
+    //  ⭐⭐ S235 / NTSB-2026-003 F-308 — **AN OBSERVATION KEPT ONLY AS STATE IS NOT RECORDED.**
+    //
+    //  This is the section S227 needed and did not have. The overseer assessed S227 as clean because
+    //  8 `.Add` matched 8 `.Remove` — **emission was never asserted** — and three handlers that
+    //  observed and discarded passed every check in this file. At MET 139.28 the sixteen
+    //  launch-vehicle parts became a new vessel instead of dying, `part.lost` was silent by
+    //  construction, and the stage number that would have named the agent had been reduced to a
+    //  timestamp.
+    //
+    //  ⛔ SO THE BAR IS NOT "a handler is registered" AND NOT "a kind is declared". It is: **every
+    //  handler emits, and every parameter it is handed reaches the record.** That generalises F-308
+    //  instead of patching its three instances.
+    // ============================================================================================
+
+    /// <summary>
+    /// Handlers that legitimately emit nothing, each with its reason. ⛔ AN ENTRY HERE IS A DEFECT ON
+    /// RECORD, NOT A PARDON — the same rule `build.py`'s "known dead and owned" list carries. These two
+    /// set teardown state consumed by `PartLoss.Classify`; ⚠ they ARE the F-308 shape and S236 owns the
+    /// question of whether a vessel teardown deserves its own event. Adding a name here costs a
+    /// register line.
+    /// </summary>
+    static readonly string[] EmitExempt = { "OnVesselWillDestroy", "OnVesselUnloaded" };
+
+    /// <summary>Body of `static void Name(...)`, following ONE level of forwarding.</summary>
+    static string HandlerBody(string live, string name)
+    {
+        Match def = Regex.Match(live, @"static void " + Regex.Escape(name) + @"\s*\(([^)]*)\)\s*\{");
+        if (!def.Success) return "";
+        string rest = live.Substring(def.Index);
+        Match next = Regex.Match(rest.Substring(1), @"\n        (static|public|///)");
+        string body = next.Success ? rest.Substring(0, next.Index + 1) : rest;
+        Match fwd = Regex.Match(body, @"\{\s*(\w+)\([^;{}]*\);\s*\}");
+        if (fwd.Success && fwd.Groups[1].Value != name)
+            body += "\n" + HandlerBody(live, fwd.Groups[1].Value);
+        return body;
+    }
+
+    static string[] Params(string live, string name)
+    {
+        Match def = Regex.Match(live, @"static void " + Regex.Escape(name) + @"\s*\(([^)]*)\)");
+        if (!def.Success || def.Groups[1].Value.Trim().Length == 0) return new string[0];
+        string[] parts = def.Groups[1].Value.Split(',');
+        var names = new List<string>();
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string[] w = parts[i].Trim().Split(' ');
+            if (w.Length >= 2) names.Add(w[w.Length - 1].Trim());
+        }
+        return names.ToArray();
+    }
+
+    static bool Emits(string body) { return Regex.IsMatch(body, @"\bEmit(Mission|ForVessel)?\s*\("); }
+
+    static void S235_EveryHandlerEmits()
+    {
+        string live = Live(File.ReadAllText(Repo("plugin", "src", "PartLossWatch.cs")));
+        var handlers = new List<string>();
+        foreach (Match m in Regex.Matches(live, @"GameEvents\.\w+\.Add\s*\(\s*(\w+)\s*\)"))
+            if (!handlers.Contains(m.Groups[1].Value)) handlers.Add(m.Groups[1].Value);
+        Check("S235 the handler scan found them all", handlers.Count == 8, "got " + handlers.Count);
+
+        int silent = 0; string firstSilent = null;
+        for (int i = 0; i < handlers.Count; i++)
+        {
+            if (Array.IndexOf(EmitExempt, handlers[i]) >= 0) continue;
+            if (!Emits(HandlerBody(live, handlers[i])))
+            { silent++; if (firstSilent == null) firstSilent = handlers[i]; }
+        }
+        Check("S235 the every non-exempt GameEvents handler EMITS - F-308 cannot come back silently",
+              silent == 0, silent + " observe-and-discard, first: " + firstSilent);
+
+        // AND EVERY PARAMETER REACHES THE RECORD. `OnStageActivate` was HANDED the stage number and
+        // kept a timestamp; a handler that emits but drops what it was given is F-308 with one step.
+        int dropped = 0; string firstDropped = null;
+        for (int i = 0; i < handlers.Count; i++)
+        {
+            if (Array.IndexOf(EmitExempt, handlers[i]) >= 0) continue;
+            string body = HandlerBody(live, handlers[i]);
+            string[] ps = Params(live, handlers[i]);
+            for (int j = 0; j < ps.Length; j++)
+                // ⚠ THE RULE IS "REFERENCED AT ALL", NOT "APPEARS INSIDE THE EMIT CALL", and the
+                // difference is `OnPartJointBreak(PartJoint j, float breakForce)`: it destructures `j`
+                // into `j.Child` / `j.Parent` and emits THOSE, so `j` itself never appears in a payload
+                // while every fact it carried does. The stricter form reported that as a defect on its
+                // first run — a scanner false positive, and changing the CODE to satisfy it would have
+                // been the wrong repair.
+                // ⛔ IT IS STILL THE CHECK THAT CATCHES F-308: S227's body was `lastStageCommandUt =
+                // Now();`, which never mentions `stage` anywhere. A parameter never referenced is a
+                // parameter that was thrown away, and that is the whole finding.
+                if (!Regex.IsMatch(body, @"\b" + Regex.Escape(ps[j]) + @"\b"))
+                { dropped++; if (firstDropped == null) firstDropped = handlers[i] + "(" + ps[j] + ")"; }
+        }
+        Check("S235 every parameter a handler is HANDED is USED, and the handler emits",
+              dropped == 0, dropped + " dropped, first: " + firstDropped);
+
+        Check("S235 onStageActivate emits the STAGE NUMBER, not just a timestamp",
+              Regex.IsMatch(HandlerBody(live, "OnStageActivate"),
+                            "EmitMission\\(BlackBoxEvents\\.StageActivateCalled[\\s\\S]{0,220}?Kv\\.Int\\(\"stage\", stage\\)"),
+              "");
+        Check("S235 ...and it still keeps the timestamp the classifier needs",
+              HandlerBody(live, "OnStageActivate").Contains("lastStageCommandUt = Now()"), "");
+        Check("S235 decouple and undock emit the part, under distinct kinds",
+              HandlerBody(live, "OnPartDeCouple").Contains("BlackBoxEvents.PartDecoupled")
+              && HandlerBody(live, "OnPartUndock").Contains("BlackBoxEvents.PartUndocked"), "");
+        Check("S235 ...and still record the release time the classifier reads",
+              HandlerBody(live, "OnPartDeCouple").Contains("decoupledAt[p.persistentId] = Now()"), "");
+        // The brief cited this one as emitting nothing. It already did, and it is left alone.
+        Check("S235 onPartJointBreak still emits breakForce (it always did - not a defect)",
+              Regex.IsMatch(HandlerBody(live, "OnPartJointBreak"), "Kv\\.Num\\(\"break_force\", breakForce\\)"),
+              "");
+    }
+
+    /// <summary>
+    /// ⭐⭐ THE SCANNER MUST BE ABLE TO FAIL, or it is S130's green-that-cannot-go-red once more. Fed
+    /// the exact shape S227 shipped, it must reject it.
+    /// </summary>
+    static void S235_TheEmitScannerCanFail()
+    {
+        const string s227 =
+            "        static void OnStageActivate(int stage)\n" +
+            "        {\n" +
+            "            try { lastStageCommandUt = Now(); }\n" +
+            "            catch { }\n" +
+            "        }\n" +
+            "        static void Other() { }\n";
+        string body = HandlerBody(s227, "OnStageActivate");
+        Check("S235 the scanner extracts a handler body at all", body.Contains("lastStageCommandUt"), body);
+        Check("S235 ...and REJECTS the exact observe-and-discard shape S227 shipped", !Emits(body), body);
+
+        const string fixedUp =
+            "        static void OnStageActivate(int stage)\n" +
+            "        {\n" +
+            "            try { lastStageCommandUt = Now(); EmitMission(K, u, new[] { Kv.Int(\"stage\", stage) }); }\n" +
+            "            catch { }\n" +
+            "        }\n" +
+            "        static void Other() { }\n";
+        Check("S235 ...and ACCEPTS one that emits, so the rejection is not vacuous",
+              Emits(HandlerBody(fixedUp, "OnStageActivate")), "");
+
+        const string dropsParam =
+            "        static void OnStageActivate(int stage)\n" +
+            "        {\n" +
+            "            try { EmitMission(K, u, new[] { Kv.Int(\"nothing\", 0) }); }\n" +
+            "            catch { }\n" +
+            "        }\n" +
+            "        static void Other() { }\n";
+        string b2 = HandlerBody(dropsParam, "OnStageActivate");
+        Check("S235 the PARAMETER scan rejects an emit that drops the stage int",
+              Emits(b2) && !Regex.IsMatch(b2, @"Emit[\s\S]{0,600}?\bstage\b"), b2);
+    }
+
+    /// <summary>
+    /// The emission machinery itself, exercised for real - pure, so it CAN be. `Line` is what every
+    /// handler ultimately reaches, so a payload that renders wrong here renders wrong in flight.
+    /// </summary>
+    static void S235_TheLineRendersThePayload()
+    {
+        string line = BlackBoxEvents.Line("M1", null, 1234.5, double.NaN, 7,
+                                          BlackBoxEvents.StageActivateCalled,
+                                          new[] { Kv.Int("stage", 6) });
+        Check("S235 a stage.activate_called line names its kind",
+              line.Contains("\"stage.activate_called\""), line);
+        Check("S235 ...and CARRIES THE STAGE NUMBER - the one int the investigation turned on",
+              line.Contains("\"stage\":6"), line);
+        Check("S235 ...and its own instant", line.Contains("1234.5"), line);
+
+        string dec = BlackBoxEvents.Line("M1", "V", 10.0, 5.0, 1, BlackBoxEvents.PartDecoupled,
+            new[] { Kv.Str("part_name", "TE.19.F9.S1.Interstage"), Kv.Num("persistent_id", 42),
+                    Kv.Int("part_idx", 3), Kv.Int("stage", 6) });
+        Check("S235 a part.decoupled line joins to craftdump by its own key names",
+              dec.Contains("\"part_name\"") && dec.Contains("\"persistent_id\"")
+              && dec.Contains("\"part_idx\"") && dec.Contains("\"stage\""), dec);
+        Check("S235 ...and the two release kinds are distinct",
+              BlackBoxEvents.PartDecoupled != BlackBoxEvents.PartUndocked, "");
+    }
+
+    /// <summary>S235 JOB 2 - the hot part is named, declared and written in the same commit.</summary>
+    static void S235_TheHotPartIsNamed()
+    {
+        Check("S235 J2 hot_part_id is in the schema", BlackBoxSchema.Index("hot_part_id") >= 0, "");
+        Check("S235 J2 hot_part_name is in the schema", BlackBoxSchema.Index("hot_part_name") >= 0, "");
+        Check("S235 J2 both sit AFTER skin_temp_frac, so SchemaVersion stays 1",
+              BlackBoxSchema.Index("hot_part_id") > BlackBoxSchema.Index("skin_temp_frac")
+              && BlackBoxSchema.SchemaVersion == 1, "");
+        Check("S235 J2 BlackBoxCols exposes both",
+              BlackBoxCols.HotPartId == BlackBoxSchema.Index("hot_part_id")
+              && BlackBoxCols.HotPartName == BlackBoxSchema.Index("hot_part_name"), "");
+
+        string rec = Live(File.ReadAllText(Repo("plugin", "src", "BlackBoxRecorder.cs")));
+        Check("S235 J2 and BOTH have writers, in the same commit as their declaration",
+              rec.Contains("BlackBoxCols.HotPartId") && rec.Contains("BlackBoxCols.HotPartName"), "");
+        // The identity must come from the SAME `Part` the fraction came from, or a row could name one
+        // part and measure another.
+        Check("S235 J2 the identity is carried out of HottestSkin, not re-derived",
+              Regex.IsMatch(rec, @"HottestSkin\(v, ut, out frac, out tempC, out hotId, out hotName\)")
+              && Regex.IsMatch(rec, @"hotId = hottest\.persistentId")
+              && Regex.IsMatch(rec, @"hotName = PartNames\.Of\(hottest\)"), "");
+        Check("S235 J2 written inside the SAME branch as the fraction it describes",
+              Regex.IsMatch(rec, @"BlackBoxCols\.SkinTempFrac[\s\S]{0,700}?BlackBoxCols\.HotPartId"), "");
+    }
+
+    /// <summary>S235 JOB 3 + JOB 4 - the guard counts settings only, and can see AutostageLimit.</summary>
+    static void S235_SettingsVersusReadings()
+    {
+        Check("S235 J3 LimitingAoA is NOT a setting - it is written every Drive",
+              !AscentReadback.Expect("LimitingAoA").IsSetting, "");
+        Check("S235 J3 ...and OptimizeStageFlag is not either (menu-derived, moves at every staging)",
+              !AscentReadback.Expect("OptimizeStageFlag").IsSetting, "");
+        Check("S235 J3 ...nor LimitQaEnabled (menu-derived, rewritten every tick)",
+              !AscentReadback.Expect("LimitQaEnabled").IsSetting, "");
+        Check("S235 J3 ...nor the four mission facts",
+              !AscentReadback.Expect("DesiredInclination").IsSetting
+              && !AscentReadback.Expect("DesiredApoapsis").IsSetting
+              && !AscentReadback.Expect("DesiredOrbitAltitude").IsSetting
+              && !AscentReadback.Expect("LaunchingToPlane").IsSetting, "");
+        Check("S235 J3 real settings ARE still counted - the guard can still fire",
+              AscentReadback.Expect("Autostage").IsSetting
+              && AscentReadback.Expect("AscentType").IsSetting
+              && AscentReadback.Expect("PitchRate").IsSetting, "");
+
+        // THE BEHAVIOURAL PROOF: a moving status flag must NOT trigger, a moving setting MUST.
+        AscentObserved[] a = { AscentObserved.Word("LimitingAoA", "false"),
+                               AscentObserved.Word("Autostage", "false") };
+        AscentObserved[] flagMoved = { AscentObserved.Word("LimitingAoA", "true"),
+                                       AscentObserved.Word("Autostage", "false") };
+        AscentObserved[] setMoved = { AscentObserved.Word("LimitingAoA", "false"),
+                                      AscentObserved.Word("Autostage", "true") };
+        Check("S235 J3 a moving LimitingAoA counts ZERO - it cannot burn the re-assert budget",
+              AscentReadback.CountMoved(a, flagMoved) == 0,
+              "got " + AscentReadback.CountMoved(a, flagMoved));
+        Check("S235 J3 ...but it IS still reported as a reading, not hidden",
+              AscentReadback.CountMovedReadings(a, flagMoved) == 1,
+              "got " + AscentReadback.CountMovedReadings(a, flagMoved));
+        Check("S235 J3 NEGATIVE CONTROL - a moving Autostage still counts ONE",
+              AscentReadback.CountMoved(a, setMoved) == 1,
+              "got " + AscentReadback.CountMoved(a, setMoved));
+        Check("S235 J3 the log says why a reading did not count",
+              AscentReadback.Delta(a, flagMoved).Contains("not a setting"),
+              AscentReadback.Delta(a, flagMoved));
+
+        // ---- JOB 4: the detector can see R-03's own setting ----
+        Check("S235 J4 AutostageLimit is in the expectation table at last",
+              AscentReadback.Expect("AutostageLimit").Name == "AutostageLimit", "");
+        Check("S235 J4 ...and it IS counted, so a reverted staging floor is detected",
+              AscentReadback.Expect("AutostageLimit").IsSetting, "");
+        Check("S235 J4 ...but is NOT scored against a constant - its value is craft-derived",
+              !AscentReadback.Expect("AutostageLimit").Checkable, "");
+        AscentObserved[] floorOk = { AscentObserved.Num("AutostageLimit", 6) };
+        AscentObserved[] floorGone = { AscentObserved.Num("AutostageLimit", 0) };
+        Check("S235 J4 a floor reverted 6 -> 0 (F-102's exact value) is COUNTED",
+              AscentReadback.CountMoved(floorOk, floorGone) == 1,
+              "got " + AscentReadback.CountMoved(floorOk, floorGone));
+        Check("S235 J4 the glue reads it off the STAGING controller, not AscentSettings",
+              Live(File.ReadAllText(Repo("plugin", "src", "MechAscentReadback.cs")))
+                  .Contains("core.Staging.AutostageLimit.Val"), "");
+        Check("S235 J4 and the claim table declares its source",
+              Live(File.ReadAllText(Repo("plugin", "src", "pure", "AscentProfile.cs")))
+                  .Contains("\"AutostageLimit\""), "");
     }
 }

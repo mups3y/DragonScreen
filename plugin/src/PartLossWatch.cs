@@ -151,31 +151,73 @@ namespace DragonScreen.BlackBox
         }
 
         // ============================== the commanded side ==============================
-        // Nothing below writes an event. These handlers exist ONLY to record that the vehicle was TOLD
-        // to do something, so that a death a moment later can be told apart from one nobody ordered.
+        // ⛔⛔ S235 / NTSB-2026-003 F-308 — THIS BLOCK'S HEADER USED TO READ, VERBATIM:
+        //     // Nothing below writes an event. These handlers exist ONLY to record that the vehicle was
+        //     // TOLD to do something, so that a death a moment later can be told apart from one nobody
+        //     // ordered.
+        // SUPERSEDED IN PLACE (C1.16 / G12), and kept because the sentence IS the defect. S227 stated
+        // "nothing below writes an event" as though it were a virtue of the design. It was not: it meant
+        // every one of these observations existed only to serve a LATER `part.lost`, and `part.lost`
+        // fires only from `onPartWillDie`.
+        //
+        // ⛔ ON FLIGHT 003, AT MET 139.28, THE SIXTEEN LAUNCH-VEHICLE PARTS DID NOT DIE — THEY BECAME A
+        // NEW VESSEL. No part died, so no `part.lost` was written, so this whole block's work was
+        // collected and thrown away at the exact moment it mattered. The root cause of NTSB-2026-003 is
+        // still unresolved, every software agent was eliminated with citations, and the owner eliminated
+        // the last branch himself (*"i did not press space"*) — and the recorder could not say whether
+        // `StageManager.ActivateNextStage()` had run, **because it had been handed the stage number and
+        // kept only a timestamp.**
+        //
+        // ⭐ SO THEY STILL DO THEIR CLASSIFICATION JOB — that is unchanged and `part.lost` still reads
+        // exactly the same discriminator — and they now ALSO WRITE WHAT THEY WERE HANDED. The two are
+        // independent: the classification serves a death that may never come, the record serves the
+        // reader either way.
 
+        /// <summary>
+        /// ⭐⭐ THE ONE `int` THE INVESTIGATION TURNED ON. Emitting it distinguishes "something called
+        /// `ActivateNextStage()`" from "the parts left without a stage command", which is the whole
+        /// question of NTSB-2026-003.
+        /// ⛔ It is emitted through `EmitMission`, NOT through `Emit`: a stage command is a fact about the
+        /// VEHICLE, not about a part, and it must never be charged to the part-loss budget — the budget
+        /// exists so a cascade keeps the head of its own sequence, and spending it on stage commands
+        /// would truncate the very evidence it protects.
+        /// </summary>
         static void OnStageActivate(int stage)
         {
-            try { lastStageCommandUt = Now(); }
-            catch { }
+            try
+            {
+                lastStageCommandUt = Now();   // ⭐ UNCHANGED — the classifier still needs this.
+                if (!BlackBoxRecorder.EventLogOpen) return;
+                BlackBoxRecorder.EmitMission(BlackBoxEvents.StageActivateCalled, lastStageCommandUt,
+                    new[] { Kv.Int("stage", stage) });
+            }
+            catch (Exception e) { Warn("onStageActivate", e); }
         }
 
-        static void OnPartDeCouple(Part p) { NoteReleased(p); }
-        static void OnPartUndock(Part p)   { NoteReleased(p); }
+        static void OnPartDeCouple(Part p) { NoteReleased(p, BlackBoxEvents.PartDecoupled); }
+        static void OnPartUndock(Part p)   { NoteReleased(p, BlackBoxEvents.PartUndocked); }
 
         /// <summary>
         /// ⭐ THE ONE PIECE OF EVIDENCE STRONG ENOUGH FOR `commanded`: KSP saying THIS PART was released
         /// on purpose. Keyed on `persistentId` and not on the object, because the object is about to be
         /// destroyed and a dictionary holding it would keep a dead `Part` alive.
         /// </summary>
-        static void NoteReleased(Part p)
+        static void NoteReleased(Part p, string kind)
         {
             try
             {
                 if (p == null) return;
-                decoupledAt[p.persistentId] = Now();
+                decoupledAt[p.persistentId] = Now();   // ⭐ UNCHANGED — the classifier still needs this.
+                // ⭐⭐ S235 / F-308. And now it is RECORDED as well as remembered. Before this line, a
+                // release that killed nothing left no trace whatever: the timestamp was kept so a later
+                // `part.lost` could be classified `commanded`, and if no part ever died — which is
+                // exactly what happened on flight 003 — the observation was discarded unseen.
+                // ⛔ Through `Emit`, so it carries the full part identity under `craftdump.csv`'s own key
+                // names and is charged to the part budget like every other part-scoped event.
+                if (!BlackBoxRecorder.EventLogOpen) return;
+                Emit(kind, p, null);
             }
-            catch { }
+            catch (Exception e) { Warn("onPartDeCouple/onPartUndock", e); }
         }
 
         static void OnVesselWillDestroy(Vessel v) { NoteTeardown(v); }

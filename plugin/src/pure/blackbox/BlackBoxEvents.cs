@@ -271,5 +271,46 @@ namespace DragonScreen.BlackBox
         /// the truncation is itself a measurement of how violent the cascade was.
         /// </summary>
         public const string PartLossTruncated = "part.loss_truncated";
+
+        // ---- ⭐⭐ S235 / NTSB-2026-003 F-308: EMIT WHAT WE ALREADY OBSERVE ----------------------------
+        // ⛔ THE DEFECT THESE THREE FIX WAS MINE, IN S227, AND ITS SHAPE IS WORTH KEEPING.
+        // `PartLossWatch` grew three handlers whose only job was to remember a timestamp so that a LATER
+        // `part.lost` could be classified. The file said so as though it were a virtue: *"Nothing below
+        // writes an event."* ⛔ But `part.lost` fires only from `onPartWillDie` — and on flight 003, at
+        // MET 139.28, the sixteen launch-vehicle parts **did not die. They became a new vessel.** So the
+        // one channel that could have spoken was silent BY CONSTRUCTION, and the observations that would
+        // have named the agent had already been made and discarded.
+        //
+        // ⭐ THE INVESTIGATION TURNED ON ONE `int`. `onStageActivate` hands us the stage number; the
+        // handler kept a timestamp and dropped it. Every software agent able to fire that decoupler was
+        // eliminated with citations, the owner eliminated the last branch himself (*"i did not press
+        // space"*), and the root cause is STILL unresolved — because nothing recorded whether
+        // `StageManager.ActivateNextStage()` ran at all.
+        //
+        // ⚠ THE RULE THIS LEAVES BEHIND, WHICH IS BIGGER THAN THESE THREE KINDS: **an observation kept
+        // only as internal state is not recorded.** A handler that reduces its parameters to a `double`
+        // is a channel that exists for the code and not for the reader, and the reader is the whole point
+        // of a black box. If a handler is handed it, the recording should be able to say it.
+        /// <summary>
+        /// ⭐⭐ **`StageManager.ActivateNextStage()` RAN, AND THIS IS THE STAGE IT FIRED.** The single
+        /// most load-bearing line in this vocabulary for NTSB-2026-003: its PRESENCE says a stage command
+        /// was issued and by whom it could have been; its ABSENCE at a separation says the parts left
+        /// **without any stage command at all**, which eliminates every staging agent at once.
+        /// ⛔ Distinct from `stage.staged`, which is polled from `Vessel.currentStage` on the row tick and
+        /// therefore reports that staging HAS HAPPENED. This is the COMMAND, timestamped where it was
+        /// issued, and the two disagreeing is itself a finding.
+        /// </summary>
+        public const string StageActivateCalled = "stage.activate_called";
+        /// <summary>
+        /// ⭐ KSP raised `onPartDeCouple` FOR THIS PART — the game saying it was released on purpose.
+        /// [[S227]] already used this as the only evidence strong enough to classify a later loss as
+        /// `commanded`; S235 makes it a RECORD as well as a judgement, so an analyst can see the release
+        /// even when nothing subsequently dies.
+        /// </summary>
+        public const string PartDecoupled = "part.decoupled";
+        /// <summary>The docking-side equivalent — `onPartUndock`. A separate kind rather than a payload
+        /// flag on <see cref="PartDecoupled"/>, because a docking release and a staging release are
+        /// different acts by different agents and a reader should not have to filter to tell them apart.</summary>
+        public const string PartUndocked = "part.undocked";
     }
 }

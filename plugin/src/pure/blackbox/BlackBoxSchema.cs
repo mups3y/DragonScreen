@@ -619,6 +619,29 @@ namespace DragonScreen.BlackBox
             // 2 Hz is the state block, and a part count is a state: it changes on staging and on
             // destruction, not continuously.
             C("part_count",   "int",  Tier.R2, "ksp-direct", "Vessel.parts.Count for THIS stream's vessel — the cascade profile, independent of whether any part.* event arrived (S227)"),
+
+            // ⭐⭐ S235 / [[S233]] / NTSB-7 — **WHICH PART IS THE HOT ONE.**
+            // `skin_temp_frac` and `hull_temp_c` above have recorded "the hottest part's" temperature
+            // since BB1 and have never said WHICH. ⛔ `BlackBoxRecorder.HottestSkin` had the `Part` in
+            // hand the whole time — it even built the name for a `Debug.LogWarning` — and returned two
+            // bare doubles. The one place it was named was `KSP.log`, which is overwritten on the next
+            // run, and that is exactly why NTSB-2026-002 could not name the part at 99.6 % of its limit.
+            //
+            // ⛔ FITTED AS EVIDENCE, NOT AS A CONCLUSION. `skin_temp_frac` peaked at 0.9961 (flight 002)
+            // and 0.9970 (003), half a second before each unexplained separation and still climbing; it
+            // never reads 1.0 because the separation ends the record. **That is a signal, not a
+            // finding.** These columns exist so the NEXT flight can say what was at 99.7 % — nothing
+            // here asserts the two are related.
+            //
+            // ⚠ WHY BOTH, AND WHY A STRING IS WORTH ITS BYTES. `hot_part_id` is `persistentId` — the
+            // stable join key ([[S227]]: never join on an index) — and would be enough IF the pad
+            // `craftdump.csv` were always present and always covered the part. It is not: a part on a
+            // vessel formed in flight is in no pad dump, and [[S231]] is the standing proof that an
+            // out-of-band record can be there and be empty. So the name is carried in the recording
+            // itself, at R2 (2 Hz) like the fraction it describes, next to the existing per-row string
+            // `phase_classified`. ⛔ APPENDED AT THE END so `SchemaVersion` stays 1 (§4.2).
+            C("hot_part_id",   "id",   Tier.R2, "ksp-direct", "persistentId of the part behind skin_temp_frac — the join key to craftdump.csv (S235/S233)"),
+            C("hot_part_name", "name", Tier.R2, "ksp-direct", "PartNames.Of that same part — the OCT2 contract string, so the recording names it without an out-of-band file (S235/S233)"),
         };
 
         /// <summary>The ordered column NAMES — derived, so it can never disagree with the table.</summary>

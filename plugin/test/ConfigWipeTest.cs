@@ -123,7 +123,7 @@ public static class ConfigWipeTest
         // is how a log that says 17 ends up beside a guard that says 0.
         string delta = AscentReadback.Delta(wrote, wiped);
         Check("S228 J1 ⛔ the count and the rendered Delta agree, because they share one loop",
-              delta.Contains("1 box(es) CHANGED") && delta.Contains(n1), delta);
+              delta.Contains("1 SETTING(S) CHANGED") && delta.Contains(n1), delta);
         Check("...and an empty delta says nothing moved",
               AscentReadback.Delta(wrote, same).Contains("NOTHING MOVED"), "");
         // A box neither reading could read is not a change — it is an absent measurement.

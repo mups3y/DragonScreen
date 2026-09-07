@@ -88,11 +88,24 @@ public static class AscentProfileTest
 
     // ⭐ THE EXACT SET OF BOXES `MechConductor.Configure` MAY WRITE. Pinned by name AND by count, so
     // that adding a write — the failure mode this whole task exists to end — cannot pass silently.
-    static readonly string[] TheEightWrites =
+    // ⚠ S235 — THIS LIST WAS `TheEightWrites` AND HELD EIGHT NAMES. SUPERSEDED IN PLACE
+    // (C1.16 / G12): the eight are unchanged and a NINTH is named, `AutostageLimit`.
+    // ⛔ THIS IS NOT A BUILD CHAT GRANTING ITSELF A NEW DEVIATION, and the distinction is the
+    // whole reason this comment is long. The write ALREADY EXISTS: `MechConductor
+    // .ApplyStagingFloor` has written `MechJebModuleStagingController.AutostageLimit` since
+    // commit `5b222da` ([[S228]] R-03, authorised by the owner's 2026-09-08 *"option 2"*
+    // ruling on NTSB-2026-002), and that build is INSTALLED and awaiting flight ([[S234]]).
+    // ⭐⭐ What was wrong was the AUDIT: it said EIGHT while the code wrote NINE, and
+    // `grep -c AutostageLimit pure/AscentProfile.cs` returned 0. [[S235]] JOB 4 exists because
+    // the instrument built to catch re-seeds was blind to the one setting that bounds a
+    // runaway staging cascade. Raising this pin makes an existing authorised write VISIBLE;
+    // it does not add one. ⛔ A TENTH still fails here, exactly as a ninth did.
+    static readonly string[] TheNineWrites =
     {
         "AscentType", "Autostage", "WarpCountDown", "SkipCircularization",
         "AutoDeploySolarPanels", "AutoDeployAntennas",
         "Core.Node.Autowarp", "Core.Warp.activateSASOnWarp",
+        "AutostageLimit",   // ⭐ S228 R-03 / S235 JOB 4 — the same §B8 deviation as `Autostage`
     };
 
     public static int Run()
@@ -135,30 +148,35 @@ public static class AscentProfileTest
         // right about the risk and became, on 2026-09-08, a ratchet holding the defect in place: the
         // owner's ruling is that 47 writes is NOT running RO's defaults. The vacuity risk is now
         // answered by NAMING the writes instead of counting them upward — an all-defaults table fails
-        // `TheEightWrites` below just as loudly, and an over-writing one fails it too.
-        Check("S222b: the audit did not lose rows while shedding writes (still 77 boxes)",
-              AscentProfile.Audit.Length == 77, "rows=" + AscentProfile.Audit.Length);
+        // `TheNineWrites` below just as loudly, and an over-writing one fails it too.
+        // ⚠ S235: 77 -> 78. The added row is `AutostageLimit` (JOB 4) — a box that was always
+        // being written and was simply not in the table. The pin still catches a LOST row.
+        Check("S222b/S235: the audit did not lose rows while shedding writes (78 boxes)",
+              AscentProfile.Audit.Length == 78, "rows=" + AscentProfile.Audit.Length);
 
         // ⭐ THE HEADLINE, PINNED AS A NUMBER. 47 -> 8.
-        Check("S222b: exactly EIGHT boxes are written (it was 47 before the 2026-09-08 directive)",
-              AscentProfile.CountOf(AscentDisposition.Write) == 8,
+        // ⚠ S235 — THIS PIN READ `== 8`. SUPERSEDED IN PLACE (C1.16 / G12). See `TheNineWrites`
+        // above for why 9 is not a new deviation: the ninth has been written by deployed code
+        // since `5b222da` and the audit did not know. ⛔ The headline 47 -> 8 shed is intact.
+        Check("S222b/S235: exactly NINE boxes are written (47 before the 2026-09-08 directive; the 9th was already being written)",
+              AscentProfile.CountOf(AscentDisposition.Write) == 9,
               "written=" + AscentProfile.CountOf(AscentDisposition.Write));
         Check("S222b: ...and it is not still 47",
               AscentProfile.CountOf(AscentDisposition.Write) != 47, "");
 
         // ...and they are THESE eight, by name. Adding a ninth fails here even if it is plausible.
-        for (int i = 0; i < TheEightWrites.Length; i++)
-            Check("S222b: '" + TheEightWrites[i] + "' is one of the eight surviving writes",
-                  AscentProfile.Row(TheEightWrites[i]).How == AscentDisposition.Write,
-                  "how=" + AscentProfile.Row(TheEightWrites[i]).How);
+        for (int i = 0; i < TheNineWrites.Length; i++)
+            Check("S222b: '" + TheNineWrites[i] + "' is one of the eight surviving writes",
+                  AscentProfile.Row(TheNineWrites[i]).How == AscentDisposition.Write,
+                  "how=" + AscentProfile.Row(TheNineWrites[i]).How);
 
         int unexpected = 0; string first = "";
         for (int i = 0; i < AscentProfile.Audit.Length; i++)
         {
             if (AscentProfile.Audit[i].How != AscentDisposition.Write) continue;
             bool named = false;
-            for (int j = 0; j < TheEightWrites.Length; j++)
-                if (AscentProfile.Audit[i].Name == TheEightWrites[j]) named = true;
+            for (int j = 0; j < TheNineWrites.Length; j++)
+                if (AscentProfile.Audit[i].Name == TheNineWrites[j]) named = true;
             if (!named) { unexpected++; if (first == "") first = AscentProfile.Audit[i].Name; }
         }
         Check("S222b: ⛔ and NOTHING ELSE is written — a new write is a new deviation (C1.8/C1.12)",
