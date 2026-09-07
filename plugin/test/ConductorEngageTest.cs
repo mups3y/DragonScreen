@@ -155,13 +155,22 @@ public static class ConductorEngageTest
               Count(ascent, "MirrorTheMenus(v)") == 2,
               "found " + Count(ascent, "MirrorTheMenus(v)") + " call(s); want one pre-engage + one per tick");
         Check("S222b: ...and it copies the menu's EXPRESSION for LimitQaEnabled, not a chosen value",
-              Body(src, "MirrorTheMenus")
+              Body(Live(src), "MirrorTheMenus")
                   .Contains("a.LimitQaEnabled = a.AscentType == MuMech.AscentType.PSG"), "");
+        // ⛔ THESE THREE MATCH ON LIVE CODE ONLY, AND A MUTANT PROVED WHY. `MirrorTheMenus`' own
+        // comments NAME `AscentProfile.OptimizeStageFlagFor` while explaining what it does, so an
+        // un-stripped search passed even with the call replaced by a hardcoded `true` — the exact
+        // failure S220 found ("a check that passes on code that has been switched off proves
+        // nothing"). The surrounding checks deliberately keep the raw `src`: several of them assert
+        // that a SUPERSEDED-IN-PLACE comment is still present, which stripping would delete.
+        string mirrorBody = Body(Live(src), "MirrorTheMenus");
         Check("S222b: ...and derives OptimizeStageFlag from the live stage table, via the pure loop",
-              Body(src, "MirrorTheMenus").Contains("AscentProfile.OptimizeStageFlagFor")
-              && Body(src, "MirrorTheMenus").Contains("AscentProfile.OptimizeStageFlagApplies"), "");
+              mirrorBody.Contains("AscentProfile.OptimizeStageFlagFor")
+              && mirrorBody.Contains("AscentProfile.OptimizeStageFlagApplies"), "");
+        Check("S222b: ⛔ ...and it is DERIVED, never asserted as a literal",
+              !mirrorBody.Contains("bool want = true") && !mirrorBody.Contains("bool want = false"), "");
         Check("S222b: ⛔ ...and writes NOTHING when the stage table is empty, exactly as the menu does",
-              Body(src, "MirrorTheMenus").Contains("VacStats.Count == 0"), "");
+              mirrorBody.Contains("VacStats.Count == 0"), "");
 
         // ⛔ AUTHORITY BEFORE ENGAGEMENT. `MechJebCore.FixedUpdate` only drives the MASTER core, so a
         // module enabled on a core without drive authority has `OnModuleEnabled` run — taking the

@@ -26534,7 +26534,7 @@ page cite. **Declared outputs only** (C1.11): `docs/reference/FALCON_USERS_GUIDE
 
 ---
 
-### S222b [O] STOP TUNING — native MechJeb, RO defaults, one sanctioned deviation — **DOING** — [owner directive 2026-09-08; TIER 1: the conductor wrote 47 of 77 boxes and called it "running RO's defaults"]
+### S222b [O] STOP TUNING — native MechJeb, RO defaults, one sanctioned deviation — **DONE 2026-09-08 — 47 ascent writes down to 8; the "110 km attach altitude bug" turned out to be CAUSED by S219's own `OptimizeStageFlag = false`; 27 of 27 mutants killed** — NEEDS-WORK only in the sense every Part-B line is: the in-flight half is behind a fresh `install` + glass gate — [owner directive 2026-09-08; TIER 1: the conductor wrote 47 of 77 boxes and called it "running RO's defaults"]
 🟢 **OWNER, 2026-09-08, verbatim:**
 > *"what I do not understand is if we are truely setting mechjebs default launch to rendezvous settings
 > for rss/ro mods, then why did it pitch over early at all? We are obviously using what is thought to be
@@ -26558,3 +26558,195 @@ page cite. **Declared outputs only** (C1.11): `docs/reference/FALCON_USERS_GUIDE
 - **DONE when:** the audit's written count is far below 47, every survivor carries a mission-fact /
   UI-workflow / autostage-deviation justification, `build.py test` green, mutation-proven, `previewdiff`
   empty, and the owner is asked for `install` + glass with a pad-to-orbit checklist.
+
+#### ⭐ DONE 2026-09-08 — 47 writes → 8, and the "attach altitude bug" turned out to be ours
+
+**The audit line, before and after** (`AscentProfile.Render()`, logged once per configure into `KSP.log`):
+
+| | boxes | **written** | at runtime | **UI-derived** | RO default | CLASSIC-only | ⛔ owner |
+|---|---|---|---|---|---|---|---|
+| **before (S219)** | 77 | **47** | 6 | — | 14 | 8 | 2 |
+| **after (S222b)** | 77 | **8** | 4 | **2** | 53 | 8 | 2 |
+
+⛔ **No row was lost** — 77 before, 77 after, and `AscentProfileTest` pins the count. What changed is the
+DECISION on 39 of them, plus two that turned out never to have been settings at all.
+
+**THE EIGHT SURVIVING WRITES, each with its one-line justification.** The test the owner set —
+*"would a user open the MechJeb UI and TYPE this to fly this mission?"* — and only three admissible
+reasons: MISSION FACT · UI WORKFLOW · the sanctioned deviation.
+
+| box | value | control | reason |
+|---|---|---|---|
+| `AscentType` | PSG | the ascent-path dropdown, "PSG (RSS/RO)" | **UI workflow** — the owner's KEEP list names it |
+| `Autostage` | **false** (RO seeds true) | the "Autostage" toggle | ⭐ **the deviation** — *"the only change should be the auto stage being our way"* |
+| `WarpCountDown` | 32 s (box default 11) | "Launch countdown:" | **UI workflow + the deviation** — our T-0 is `IgnitionGate`, which will not light without a guidance solution, so PSG must converge first. Shapes no part of the trajectory |
+| `SkipCircularization` | true (default false) | "Skip Circularization" | **the deviation's family** — stops `DriveCircularizationBurn` PLACING A NODE that collides with T19's executor. RO does not seed it; the owner's own cfg has it on |
+| `AutoDeploySolarPanels` | false (default true) | "Auto-deploy solar panels" | **§B12.7 direct part control** — left true, `DrivePrelaunch` HOLDS the prelaunch mode until every panel retracts |
+| `AutoDeployAntennas` | false (default true) | "Auto-deploy antennas" | **§B12.7** — RealAntennas is installed, so this one really extends hardware |
+| `Core.Node.Autowarp` | true | the "Auto-warp" toggle | ⭐ the owner's *"auto warp for all modes"* |
+| `Core.Warp.activateSASOnWarp` | false | — | **§B12.7** — an ACTION GROUP on our vehicle; SAS would also fight the attitude controller |
+
+⚠ **THREE OF THESE ARE FLAGGED FOR THE OWNER, NOT ASSUMED SAFE** — `SkipCircularization`,
+`AutoDeploySolarPanels`, `AutoDeployAntennas`. The directive says *"the only change should be the auto
+stage being our way"*, and these are a DIFFERENT actuation from staging. They are kept because the brief's
+own KEEP line reads *"`Autostage = false` **+ our direct part activation**"* and cites §B12.7 — but if the
+owner meant literally staging alone, these three are the ones to strike. **Q3 below.**
+
+**PLUS four MISSION FACTS written at runtime** — `DesiredOrbitAltitude` and `DesiredApoapsis` (**215 km ×
+215 km**), `LaunchingToPlane` (§7.5's button), and `DesiredInclination` — *on the free-flyer path only*.
+
+**AND TWO THAT ARE NOT SETTINGS AT ALL — a new disposition, `UiDerived`.** `LimitQaEnabled` and
+`OptimizeStageFlag` are written by MechJeb's own WINDOW DRAW code, not by any user. T15b suppressed those
+windows, so without standing in for them the two boxes sit at an at-rest value **no user of MechJeb is ever
+in**. `MirrorTheMenus` reproduces the menus' expressions — not values we picked — before the engage and
+every tick after.
+
+---
+
+### ⭐⭐ THE ITEM THE BRIEF SAID TO ESTABLISH, NOT ASSUME — AND IT REVERSED AN S219 FINDING
+
+**Question:** when a user sets a 215 km target orbit for a launch-to-rendezvous, does the UI expect them to
+set the attach altitude too, or leave it?
+
+**⭐ ANSWER: LEAVE IT. RO's 110 km is restored, and we had been overriding it for a reason that was our own
+defect.** Four steps, all from the vendored source:
+
+1. **`OptimizeStageFlag` is not a setting.** `MechJebModuleAscentSettings.cs:263` is a bare `public bool` —
+   **not `[Persistent]`** — and `ApplyRODefaults()` never touches it. S219's row called `false` "its
+   default"; there is no default, because nobody stores it.
+2. **The PSG-settings WINDOW recomputes it every frame it draws** (`:63` clears it, `:83` sets it for each
+   listed stage not in `FixedStages`) — **and `ApplyRODefaults()` OPENS that window for RO users**
+   (`ascentMenu._lastPSGSettingsEnabled = true`, *"open the PSG ascent settings windows for new users"*).
+   ⇒ **a real RO user's flag is continuously TRUE** on any vehicle with a non-fixed stage above `MinDeltaV`.
+3. **With it true, the attach altitude is behind a toggle that defaults OFF.** The ascent window draws it as
+   a `ToggledTextBox` (`MechJebModuleAscentMenu.cs:123-124`) gated on `AttachAltFlag`, whose RO seed is
+   **false**. Nothing in the launch-to-rendezvous workflow asks a user to touch it.
+4. ⭐⭐ **And MechJebLib then sets the attach radius itself, to exactly the right value.**
+   `MechJebLib/PSG/AscentBuilder.Build():146-149` — *"for nearly circular orbits, force periapsis
+   attachment"* — `if (!_attachAltFlag && eccT < 1e-4) { _attachAltFlag = true; _attR = _peR; }`. Our target
+   is 215 × 215, so `ecc` is 0 and **attach = periapsis = 215 km, computed by the solver.**
+
+⛔ **SO THE "110 km vs 210 km BUG" WAS INTRODUCED BY THE FIX FOR IT.** `SetTarget:109` forces
+`attachAltFlag` on **only when `OptimizeStageFlag` is false**, and the only thing making it false on this
+craft was S219's own `Configure` line. That write CREATED the elliptical-insertion hazard; the 210 km
+attach write was the compensation. Both are gone; the flag is derived; RO's 110 km stands, unread.
+⚠ **`docs/MECHJEB_MASTER_MAP.md` §7.2 is NOT wrong and is NOT retired** — it describes a real hazard, the
+one a tuned cfg with `OptimizeStageFlag` unset would hit. It simply does not apply to a vehicle whose stage
+list the menu is deriving from, which is every RO user's. The whole argument is recorded, superseded in
+place per C1.16/G12, on `AscentProfile.AttachAltFollowsMissionApsis` (now `false`).
+
+⭐ **This is also, most likely, part of the answer to the owner's opening question — *"why did it pitch
+over early at all?"*** A terminal constraint of *attach at 110 km* against a 215 km orbit is a
+**materially different trajectory** for PVG to solve, and the pitch program is what it shapes first.
+⚠ Stated as a candidate, not a diagnosis: nothing has flown since, and the only proof is a flight.
+
+---
+
+### THE THREE PHASES — the map's own sequences, unchanged where S219 already built them
+
+- **ASCENT (§7.5).** `MechJebModuleAscentMenu.cs:245-258` reproduced step for step:
+  `LaunchingToPlane = true` → `Astro.MinimumTimeToPlane(...)` (the vendored call, cross-checked against the
+  pure mirror) → `ap.StartCountdown(VesselState.Time + timeToPlane)` → `DesiredInclination` **last**;
+  `LaunchLANDifference` left at RO's 0 and READ live from the field, as the menu reads it. **Then ENGAGED**
+  (`ap.Users.Add(Owner)`). ⛔ Nothing here was re-derived; S219 built it and S222b only removed the
+  `Configure`-time inclination write that fought it.
+- **RENDEZVOUS (§8).** Options per §8's decision tree, then `ap.Users.Add(Owner)`. Unchanged.
+  ⛔ **The node-composing path is untouched and still selectable** (`RendezvousDrive.Conductor`) —
+  superseded-for-now, not retired; the owner is returning to it.
+- **DOCKING (§9).** The RCS state machine's inputs set, then `ap.Users.Add(Owner)`. Unchanged.
+- ⭐ **AUTOWARP — ONE OWNER PER PHASE, established from source, not assumed.** It is **one field**:
+  **ascent** → the ascent autopilot's countdown (`MechJebModuleAscentBaseAutopilot.cs:132`,
+  `if (Core.Node.Autowarp)`); **rendezvous** → the node executor (`:242`, `:293`), which the rendezvous
+  autopilot NARROWS rather than replaces (`Autowarp && Target.Distance > 1000`), so `RunRendezvousAutopilot`
+  re-asserts it outside 1 km; **docking** → **nobody, by design** — pure RCS from the KOS inward.
+
+---
+
+### VERIFIED
+
+- `python plugin/build.py test` — **ALL SUITES PASSED**. `AscentProfileTest` **197 checks** (was 45),
+  `ConductorEngageTest` **139**, `AscentSequenceTest` **110**. 0 failed.
+- ⭐ **MUTATION-PROVEN: 27 of 27 mutants killed.** Each kill checked against a clean baseline of **73 suite
+  reports** — a mutant that fails to compile, or that kills a suite above the check, is scored **SURVIVED**,
+  not killed (S167). Three did exactly that on the first pass and were each run down rather than accepted:
+  - ⛔ **one was a REAL escape and found a real hole.** `bool want = true;` (hardcoding the derivation)
+    **survived**, because the check searched raw source and `MirrorTheMenus`' own comment NAMES
+    `AscentProfile.OptimizeStageFlagFor` while explaining it. That is S220's finding again — *"a check that
+    passes on code that has been switched off proves nothing"*. Fixed by matching on comment-stripped code
+    (`Live()`), plus a new check that `want` is never a literal.
+  - two were harness artefacts (a crash-detector heuristic misfiring; a mutant that produced a double comma
+    and so did not compile). Both corrected, both then killed.
+  - Coverage: a removed write STAYS removed (7 mutants: PitchRate 0.75, `OptimizeStageFlag = false`, the
+    attach altitude, `Core.Thrust`, PitchStartHeight, LimitQa, ForceRoll) · a KEEP cannot silently vanish
+    (3) · **215 km reaches the module** (2, incl. reverting to 210) · the inclination guard (1) · each
+    autopilot ENGAGED and configured-before-engaged (4) · the menu derivation (6) · the audit table itself
+    (4, incl. silently closing an owner question and growing the exemption list).
+- `python plugin/build.py previewdiff HEAD~2` — **0 changed, 0 new, 0 removed of 130.** ⭐ **Empty, as
+  required: none of this draws.** (The `assets/kenney_ui_scifi` warning is the standing [[S207]]/[[S218]]
+  line, not this task.)
+- ⛔ **`plugin/mech/` untouched** (§B12.1) — every value is written into the vendored module through its own
+  public field, exactly as its GUI writes it. ⛔ `docs/BUILD_PLAN.md` and `docs/QC_FINDINGS.md` untouched.
+
+### ⚠ WHAT THIS DOES NOT PROVE, AND IT IS THE WHOLE POINT
+That the vehicle flies better. It may well fly **worse**. What it will be is **RO's own behaviour on this
+craft, recorded** — the reference §B11 has never had. Owner: *"AND THEN WE TUNE FROM TRUSTED CAPTURED
+VALUES!!!"* Tuning is T22's, from the black box, after a flight.
+
+### ⛔ LINES SKIPPED AND WHY (so blockers cannot accumulate unseen)
+[[S213]], [[S214]], [[S215]], [[S219]] are all `NEEDS-WORK` **awaiting the same `install` + glass gate**,
+and S222b joins them. [[S198]] is `TODO` but owner-gated on a glass pass. No line was reached past.
+
+### ⛔ ALSO OPEN — NOT FOLDED IN (C1.1)
+- **[[S222c]] — THE TERMINAL COUNT FIRES ~20,000 s EARLY.** Logged as its own line below. Arithmetic, not
+  tuning, and it is what makes the vehicle launch immediately instead of at the plane crossing.
+- **The 2 ⛔ AWAITING THE OWNER boxes are still open and still surfaced** in every configure log:
+  `PitchRate` (Q1) and `Core.Thrust.LimitDynamicPressure` (Q2). ⛔ **Neither was closed by this task** — the
+  2026-09-08 directive settles the INTERIM answer (fly RO's default, unwritten) and defers the question
+  itself to T22. `AscentProfileTest` fails the build if either is quietly reclassified.
+- ⛔ **There is NO staging defect.** Owner, verbatim: *"meco was us hitting the ground mate"*. No line opened.
+
+## Open questions for the owner
+
+- **Q1 — `install` + glass, for one flight covering [[S213]] + [[S214]] + [[S215]] + [[S219]] + S222b.**
+  Nothing in any of the five is observable until the vehicle flies, and they all want the SAME flight.
+  Options: (1) **open the gate for one flight covering all five** *(recommended — they are one change to one
+  mechanism, and the flight is the reference §B11 has never had)*; (2) fix [[S222c]]'s launch-window
+  arithmetic first and fly once afterwards; (3) hold. ⛔ Owner gate (C1.12) — this chat opened nothing.
+  **Pad-to-orbit checklist, numbered, in the prompt below.**
+- **Q2 — did "the only change should be the auto stage being our way" mean staging ALONE?** Three writes
+  survive on the reading that it also covers *"our direct part activation"* (§B12.7):
+  `SkipCircularization`, `AutoDeploySolarPanels`, `AutoDeployAntennas`. Each stops MechJeb ACTUATING
+  something the crew procedure owns — none shapes a trajectory. Options: (1) **keep all three**
+  *(recommended; `AutoDeploySolarPanels = true` in particular makes `DrivePrelaunch` hold the prelaunch mode
+  until every panel is retracted, which is an uncommanded pad hold)*; (2) keep `SkipCircularization` only —
+  it is the one that would collide with our own node executor; (3) strike all three and let MechJeb deploy
+  and circularize. ⛔ (2) and (3) are the owner's call, not a build chat's.
+- **Q3 — 215 km is now the ISS insertion for EVERY `Iss(...)` mission, not just the next flight.**
+  `AscentTargets.IssInsertionAltitudeM` is one constant shared by every ISS row in `Missions.Catalog`.
+  §B11 and the shipped cfg both still document **210** as the real Crew-2 number, and both are left saying
+  so. Options: (1) **215 km for all ISS missions** *(recommended — it is what the owner named, and one
+  destination is simpler than two)*; (2) 215 for Crew-2 only, 210 for the rest, which needs per-mission
+  apsides in the catalogue; (3) revert to 210. ⛔ The destination is the owner's to name (C1.12).
+
+---
+
+### S222c [S] The terminal count fires ~20,000 s EARLY — the vehicle launches immediately instead of at the plane crossing — **TODO** — [logged by [[S222b]] per C1.1, 2026-09-08; TIER 1: the launch window is solved correctly and then not waited for]
+⛔ **ARITHMETIC, NOT TUNING — and deliberately NOT folded into [[S222b]]** (C1.1: one task at a time).
+**The observation, from the owner's 2026-09-08 brief:** the window is committed with **T-0 in 20,025 s**,
+and the **terminal count fires 34 s later**. So `TickTerminalCount` clears MechJeb's `TimedLaunch` — and
+`AscentSequence` falls through to ignition — roughly **twenty thousand seconds before** the plane crossing
+the window was solved for. The vehicle launches at once, into the wrong RAAN, which is exactly the failure
+[[S215]] and [[S219]] exist to prevent.
+- **Where to look, in order.** `MechConductor.TickTerminalCount` (its guard is
+  `SecondsToWindow() > AscentProfile.TerminalCountS`, which is correct on its face) · `SecondsToWindow()`
+  = `launchWindowUT - Now()` · what `Now()` returns against the UT `window.LaunchUT` was built from
+  (`now + vTime` inside `SolveWindow`) · and `AscentSequence.Step`'s own
+  `s.SecondsToWindowS > IgnitionLeadSeconds` branch, whose comment already notes that *"a NEGATIVE
+  `SecondsToWindowS` is a passed window, not a fault"* — a sign or epoch error would present exactly as
+  "the window is already behind us, light now".
+- ⚠ **The ordering invariant is NOT the suspect.** `AscentProfileTest.CountdownTests` proves
+  `WarpCountDown (32) > TerminalCount (10) > IgnitionLead (3) > 0` and all three are seconds. The defect is
+  in what `SecondsToWindow()` is measuring against, not in the constants.
+- **DONE when:** a headless test reproduces the 20,025 s case and FAILS before the fix; the terminal count
+  demonstrably fires at T-10 s and not before; mutation-proven; and [[S222b]]'s flight can actually reach
+  the plane crossing.
