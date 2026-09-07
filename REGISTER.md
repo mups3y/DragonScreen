@@ -27514,3 +27514,100 @@ folded in. ⛔ **No file in the KSP install was touched** —
   ⚠ A per-row string column is a real size cost on a 19-hour recording — measure before assuming.
 - **DONE when:** a recording can name the part behind its own peak `skin_temp_frac`, declaration and
   writer in one commit (the [[S223]]/[[S227]] trap), and the column is mutation-tested.
+
+---
+
+### S234 [O] DEPLOY — `5b222da` (S228 / NTSB-2026-002) installed to KSP, artefact verified — **DONE 2026-09-08 — `DragonScreen.dll` sha256 `4633742b…`, and the build is BYTE-DETERMINISTIC so that hash identifies the COMMIT, not just this copy. `DragonScreen.Mech.dll` UNCHANGED. All four live cfgs UNCHANGED. ⛔ NO SOURCE FILE WAS CHANGED BY THIS TASK** — [owner opened the `install` gate 2026-09-08 for this task only; ⚠ the brief titled it **S229**, which was already taken by a stray [[S227]] logged the same day — see the numbering note below]
+- 🟢 **GATE.** The owner opened `install` on 2026-09-08, having been shown that [[S228]]'s R-01/R-02/R-03
+  are built and that the only remaining proof is a flight. ⛔ **That permission was for this task and does
+  not carry** (C1.12). ⛔ This chat did not fly anything and did not touch the game.
+- ⚠ **NUMBERING.** The brief titled this task `S229`; `S229` was already in use for the `EventReport`
+  channels line [[S227]] opened earlier the same day. ⛔ **Nothing was renumbered this time** — [[S229]]
+  is already cross-referenced from [[S227]]'s body, and a second renumber in two tasks is churn with a
+  real chance of leaving a dangling link. This line takes the next free number instead. (The previous
+  collision, where the brief *instructed* "append as S228", was resolved the other way: that line was
+  moved to [[S230]]. Both are recorded so neither looks like a slip. See `Q: BOB-7`.)
+
+#### ⭐ PRE-FLIGHT — ALL THREE GATES PASSED BEFORE ANYTHING WAS COPIED
+
+1. **`git rev-parse HEAD` = `5b222da93bcbf8d99606ba8432b27fe8cf117373`**, working tree **clean**
+   (`git status --porcelain` empty, untracked included). ⛔ A dirty tree would have meant the shipped DLL
+   was not any commit, which is the ambiguity NTSB-2026-001 burned a question on.
+2. **KSP, CKAN and Steam all confirmed not running** (process check by name and by executable path).
+3. **Pre-state recorded**, so "what was replaced" is answerable without inference.
+
+#### ⭐ THE ARTEFACT — BEFORE vs AFTER
+
+| file | before | after | |
+|---|---|---|---|
+| `DragonScreen.dll` | `cbce501bda6fc0c1…` · 742,912 B · 2026-09-08 03:36:10 | **`4633742b39cc8f0a6f5ea1cb6ac97738cac28fc6ed90b2f71252478fa1cd48e4`** · 755,712 B · 2026-09-08 06:34:18 | ⭐ **CHANGED** |
+| `DragonScreen.Mech.dll` | `7bac86bd9d4ada95…` · 4,419,584 B · 2026-09-05 08:04:27 | `7bac86bd9d4ada95e96d9770b036cf52f797459a08559bc224ee40b5d8ad95d3` · 4,419,584 B · **2026-09-05 08:04:27** | ⭐ **UNCHANGED** |
+
+⭐ **The Mech DLL being unchanged is the expected result and it was checked, not assumed:** [[S228]]
+touched no vendored source (§B12.1), so a changed Mech DLL would have meant something nobody intended.
+⚠ Note its **mtime did not move either** — the build recompiled all 245 vendored files and produced a
+byte-identical assembly, so `install` correctly declined to copy it.
+
+⭐⭐ **AND THE BUILD IS BYTE-DETERMINISTIC, WHICH IS WORTH MORE THAN THE HASH ITSELF.** A full rebuild
+from the same clean tree produced `4633742b…` **again, byte for byte**, and it matches the installed
+file. ⛔ **So this sha256 is a reproducible fingerprint of commit `5b222da`, not merely of one copy of
+it** — a future NTSB report can scope its findings "as flown" by rebuilding the commit and comparing,
+with no inference and no trust in this line. That is exactly the question NTSB-2026-001 could not close.
+
+#### ⭐ THE STRING PROBE — THE SHIPPED BINARY, NOT THE BUILD LOG
+
+⛔ *"It printed ok"* is not verification. .NET stores literals as **UTF-16LE**, so an ASCII `grep` finds
+nothing and would have "proved" an empty DLL just as happily. Probed against the installed file:
+
+| probe | count | what a zero would have meant |
+|---|---|---|
+| **`STAGING FLOOR`** | **1** | ⛔ new in S228 (R-03) — **zero = an old DLL, and the flight would be worthless** |
+| **`ASCENT SETTINGS AUDIT`** | **1** | S223's instrument still present |
+| `ASCENT CONFIGURATION WAS RE-SEEDED` | 1 | R-01's re-assert log line |
+| `SCRUB` | 4 | R-02, the count can refuse |
+| `AutostageLimit` | 1 | R-03, the MechJeb box the floor writes |
+| `part.lost` | 2 | [[S227]]'s part-loss channel |
+| `NTSB-2026-002` | 2 | the accident this build answers |
+| *control:* `STAGING FLOOR` as **ASCII** bytes | **0** | ⭐ the encoding is why the probe is done this way |
+
+#### ⛔ WHAT ELSE THE INSTALL TOUCHED: NOTHING
+
+Every other file — 150+ art PNGs, the sounds, and all four cfgs — reported **`unchanged`**. Verified
+independently by hash, because the owner's *"option 2"* ruling depends on it:
+
+| cfg | |
+|---|---|
+| `PluginData\mechjeb_settings_type_New Crew-2.cfg` | **UNCHANGED** `d3899767fb93e0ff` · 9,426 B — ⭐ **the test case, still live** |
+| `PluginData\mechjeb_settings_global.cfg` | UNCHANGED `1525a0973caab66d` |
+| `PluginData\mechjeb_settings_type_Crew-Dragon.cfg` | UNCHANGED `81c2e1b41e981457` |
+| `DragonScreen.cfg` | UNCHANGED `d7099a4d7a59017e` |
+
+`install` ran `build_tests()` first and it passed — **`ALL SUITES PASSED`**, including `ConfigWipeTest`
+(54 checks) and `PartLossTest` (68 checks) — then copied, then exited **0**. ⛔ That guard exists because
+on 2026-08-05 a build with failing tests reached the game; nothing here worked around it.
+
+#### ⚠ KSP NEEDS A **FULL RESTART** TO PICK UP A DLL CHANGE
+
+`install` says so itself and it is repeated here because it is the one way this deployment silently
+achieves nothing: a running or suspended KSP keeps the old assembly loaded.
+
+#### ⛔⛔ TWO THINGS THE OWNER MUST BE TOLD BEFORE FLYING THIS
+
+1. ⭐ **IF THE COUNT SCRUBS AND THE VEHICLE REFUSES TO LAUNCH, THAT IS R-02 WORKING — NOT A NEW FAULT.**
+   The conductor will stop in `Idle` (`AscentStep.Scrubbed`), **nothing lit, no clamp released**, and the
+   log will name the boxes that still moved after R-01 tried to put them back. **That is the correct
+   outcome of a wipe we cannot beat**, and it is the difference between a scrubbed count and
+   2026-09-08's five-stages-in-one-frame. The scrub is absorbing: it will not clear itself.
+2. ⛔ **"WHAT DID WE FLY" IS STILL ANSWERABLE ONLY FROM `KSP.log`.** NTSB's R-05 ([[S231]]) found the
+   S223 manifest block **fitted but empty** — all 77 entries read `MechJeb.<name> = ?`. It is logged, not
+   fixed. ⚠ **`KSP.log` is overwritten on the next run**, so it must be copied aside after the flight or
+   the record is gone.
+
+#### ⛔ NO SOURCE FILE WAS CHANGED BY THIS TASK
+
+Stated plainly, as the brief requires: `git status` was clean before the install and is clean after it;
+`HEAD` is still `5b222da`; this task wrote **no code**, fixed nothing it noticed, and the only file it
+adds to the repo is this register entry. The artefact in `GameData` corresponds to a known commit with
+nothing layered on top — which was the entire point of deploying rather than building.
+
+**Commit:** this one. **No `git push` — the owner pushes from GitHub Desktop.**
