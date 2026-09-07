@@ -599,6 +599,26 @@ namespace DragonScreen.BlackBox
             // the same tier — a column declared and never written is the S76 ghost-column defect, which
             // is worse than no column at all.
             CondCap("sev_events",  "enum", Tier.R2, "derived", "Worst(Alarms.CabinEvents, Alarms.PowerEvents) — the discrete emergencies (fire, cabin leak, power-string trips) that sev_ls and sev_thermal cannot carry; see S137b/S137c", WhenScreens),
+
+            // ⭐⭐ S227, 2026-09-08 — THE SHAPE OF A CASCADE, EVEN WHERE AN INDIVIDUAL EVENT IS MISSED.
+            // The `part.*` events name WHICH part went and when; this column is the cross-check that
+            // does not depend on any of them arriving. A cascade has a PROFILE — 43 parts, then 43,
+            // then 41, then 12 — and that profile survives a dropped handler, a truncated event
+            // sequence (`part.loss_truncated`) and a part that died in a way KSP never announced.
+            // ⛔ WITHOUT IT THE EVENT CHANNEL IS ITS OWN ONLY WITNESS, which is the failure mode S76 is
+            // about: if the events are wrong or absent, nothing in the recording contradicts them.
+            //
+            // ⛔ APPENDED AT THE END for the reason the block above states in full: `SchemaVersion` is
+            // bumped by a REORDER or a REMOVAL, and a pure append keeps it at 1 (§4.2), so every
+            // recording already made still chains. Its natural home is beside `stage` and it is not
+            // going there.
+            //
+            // Scope.Vessel and R2: it is `Vessel.parts.Count` for THIS stream's own vessel — never
+            // `FlightGlobals.ActiveVessel`'s, which on a tracked booster's row would file the capsule's
+            // part count under the booster (the same error the `stage` column's own comment describes).
+            // 2 Hz is the state block, and a part count is a state: it changes on staging and on
+            // destruction, not continuously.
+            C("part_count",   "int",  Tier.R2, "ksp-direct", "Vessel.parts.Count for THIS stream's vessel — the cascade profile, independent of whether any part.* event arrived (S227)"),
         };
 
         /// <summary>The ordered column NAMES — derived, so it can never disagree with the table.</summary>

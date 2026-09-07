@@ -27045,7 +27045,7 @@ from GitHub Desktop.**
 
 ---
 
-### S227 [O] Part loss is not recorded at all — a separator that vanishes uncommanded leaves no trace — **DOING** — [owner question 2026-09-08; TIER 1: the first failure in a cascade is the finding, and nothing in this recorder can name it]
+### S227 [O] Part loss is not recorded at all — a separator that vanishes uncommanded leaves no trace — **DONE 2026-09-08 — the channel exists: 8 GameEvents taken and 6 rejected with reasons, a PURE classifier whose staging rung deliberately refuses to say `commanded`, `part_count` declared and written in one commit, and a subscription proven symmetric by a scanner proven able to fail. 68 checks, 23 of 23 mutants killed. ⛔ NO RENDERED PIXEL CHANGED. ⚠ NOTHING HERE IS PROVEN IN FLIGHT — see 'what a flight has to show'** — [owner question 2026-09-08; TIER 1: the first failure in a cascade is the finding, and nothing in this recorder can name it]
 - **Marker committed before any code (C1.1).** Tree clean at `2ccfccc`.
 - **The owner's question, verbatim (C1.12), which is the whole authority for this line:** *"are we
   tracking the individual parts state with our recordings? as in we need to know exactly if or when a
@@ -27079,3 +27079,203 @@ from GitHub Desktop.**
   no `unexpected_writer` · ⛔ **what CANNOT be proven headless is stated explicitly**, with what a flight
   would have to show · local commit, **no push**.
 - ⚠ **Not folded in (C1.1):** [[S225]] and [[S226]], already TODO.
+
+#### ⭐ THE API WAS ENUMERATED, NOT ASSUMED (hazard A) — 399 FIELDS READ, 8 TAKEN, 6 REJECTED
+
+`GameEvents` was read out of `KSP_x64_Data/Managed/Assembly-CSharp.dll` (KSP 1.12.5) by reflection
+before a line of handler was written: **399 public static fields**. ⚠ **Reading the assembly the build
+already compiles against is not a C7 breach** — C7 names `GameData\` (the deploy target); the reference
+assemblies are what `build.py` links every run. And the enumeration is not the proof: **the compiler
+is.** Every member below is exercised by `plugin/src/PartLossWatch.cs`, which compiles clean, so its
+existence and its exact signature are established by the sanctioned instrument, not by a listing.
+
+**TAKEN (8):**
+| event | signature | why |
+|---|---|---|
+| `onPartWillDie` | `EventData<Part>` | ⭐ the main channel — **before** destruction, so `vessel`, `parent`, `inverseStage`, `partInfo` are still readable |
+| `onPartFailure` | `EventData<Part>` | KSP's own failure assertion — stronger than our inference |
+| `onPartJointBreak` | `EventData<PartJoint,float>` | ⭐ requirement 3, the "unzip": carries the break force, and a joint break need not kill either part |
+| `onStageActivate` | `EventData<int>` | the commanded-vs-uncommanded discriminator's coarse half |
+| `onPartDeCouple` | `EventData<Part>` | ⭐⭐ the discriminator's **only** strong half: the game naming THIS part as released on purpose |
+| `onPartUndock` | `EventData<Part>` | the docking-side equivalent |
+| `onVesselWillDestroy` | `EventData<Vessel>` | teardown — without it, one scene change emits a vessel's worth of false `uncommanded` verdicts |
+| `onVesselUnloaded` | `EventData<Vessel>` | the same, on the unload path |
+
+**REJECTED (6), each with its reason — ⛔ no handler was written for an unconfirmed event:**
+- ⭐ **`onPartExplode` — REJECTED, and it is the most important rejection.** Its payload is
+  `GameEvents.ExplosionReaction`, whose **only two fields are `distance` and `magnitude`**. ⛔ **IT DOES
+  NOT NAME A PART.** A handler on it could report that an explosion happened and never say what
+  exploded — worthless for *"which failed first"*, which is the entire question. The overseer listed it
+  as a candidate; the assembly says it cannot do the job.
+- **`onPartDie`** (`EventData<Part>`) — rejected **in favour of `onPartWillDie`**, which is the same
+  payload one step earlier, while the part's identity is still readable.
+- **`onCollision` / `onCrash` / `onJointBreak` / `onOverheat`** (all `EventData<EventReport>`) — not
+  taken **this pass**. `EventReport` does carry `origin` (a `Part`), so they are usable; they are
+  ADJACENT channels (a collision is not a part loss) and folding them in would have widened the task
+  past what the owner asked. ⚠ Logged as [[S229]] rather than silently dropped.
+
+**Also found and used:** `onVesselPartCountChanged` exists — ⚠ **not** subscribed; the `part_count`
+column is sampled per row instead, which cannot miss an edge the handler was not registered for.
+
+#### ⭐ BUILT — THREE NEW FILES, SIX EDITED, 1,090 NEW LINES
+
+- **`plugin/src/pure/blackbox/PartLoss.cs`** (new, 245) — **PURE.** `PartLossClass` /
+  `PartLossFacts` / `PartLossVerdict` / `Classify` / `Elapsed`, plus `PartLossBudget`. The judgement is
+  pure **because a judgement that can only be exercised by crashing a rocket is one nobody ever checks.**
+- **`plugin/src/PartLossWatch.cs`** (new, 334) — the glue: the only `GameEvents` subscription in the
+  build, its symmetric teardown, the payload, the routing and the budget.
+- **`plugin/test/PartLossTest.cs`** (new, 511) — **68 checks.**
+- `pure/blackbox/BlackBoxEvents.cs` — four kinds: `part.lost`, `part.failure`, `part.joint_break`,
+  `part.loss_truncated`. · `BlackBoxSchema.cs` + `BlackBoxCols.cs` + `src/BlackBoxRecorder.cs` —
+  `part_count` **declared and written in this one commit**. · `BlackBoxRecorder.cs` — `EmitForVessel`,
+  `EventLogOpen`, and the addon wiring. · `test/TestMain.cs`, `test/FigmaUINavTest.cs`.
+
+#### ⭐⭐ HAZARD (B) — COMMANDED vs UNCOMMANDED, AND THE DELIBERATE WEAKNESS THAT MAKES IT HONEST
+
+`Commanded` is asserted on **one** piece of evidence: KSP raised a decouple/undock **for this exact
+part**. ⛔ **A recent STAGE command yields `Unclassified`, never `Commanded`** — and that is the whole
+design. The tempting rule ("we just staged, so this death was routine") **is wrong in exactly the case
+this channel exists for**: staging is the most violent moment in the flight and the likeliest instant
+for something to let go, so that rule would file the real failure as routine and delete it from the
+analysis. §1.4's *honest "cannot classify" beats a confident wrong label*, applied to a verdict.
+
+The class travels **in the event** (`loss_class`, `why`) beside **the raw numbers it was decided from**
+(`since_stage_s`, `since_decouple_s`) — hazard (B) says state the discriminator, do not leave it to be
+inferred. A classifier whose inputs are invisible can only be argued with, never checked.
+
+⭐ **And the ordering is itself tested:** teardown outranks everything; a decouple outranks a stale
+failure flag; **a KSP failure DURING the staging window is still a failure**, which is the owner's
+scenario almost exactly.
+
+#### ⛔ HAZARDS (C), (D), (E)
+
+- **(C) symmetric.** 8 `.Add`, 8 `.Remove`, same order, idempotent, and `Unsubscribe` runs **before**
+  `Close` in `OnDestroy`. `PartLossTest.SubscriptionSymmetry` reads the file and fails the build on a
+  leak — ⭐ and `TheScannerCanFail` proves the scanner **rejects** a leak, including one whose `.Remove`
+  is only **commented out** (S220 shipped two survivors for exactly that).
+- **(D) routed, never dropped.** `EmitForVessel` finds the stream for the part's own vessel and **falls
+  back to the mission log** rather than discarding the line — because at part death `p.vessel` is often
+  already null and a vessel coming apart may have no stream at all (`New_Crew-2_Probe_Debris` is that
+  case). Every handler body is wrapped; a throw inside KSP's dispatch can take the flight scene.
+- **(E) order preserved, truncation announced.** Written **synchronously in arrival order** — ⛔ no
+  queue, because a queue drained in `FixedUpdate` loses the tail of a cascade that ends the scene in the
+  same frame. `PartLossBudget` keeps the **HEAD** (a ring buffer would keep the tail and throw away the
+  answer) and raises `part.loss_truncated` with `truncated_after` **exactly once**, through
+  `EmitMission` so the announcement of the cut can never itself be cut.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `python plugin/build.py test` | **ALL SUITES PASSED** |
+| `PartLossTest` | **68 checks, 0 failed** |
+| `python plugin/build.py harnesscheck` | **ok**, 170 clean report lines |
+| event vocabulary (S90) | **42 kinds, 42 emitted**, 0 dead (was 38/38) |
+| black-box columns (S137c) | **207 indexed, 0 known writerless** (was 206) |
+| schema prefix ratchet | **205 names, FNV-1a 164112981 — UNCHANGED** |
+| ⭐ **mutation test** | **23 mutants, 23 KILLED, 0 SURVIVED** (22 by assertion, 1 by compile) |
+
+⭐⭐ **THE SCHEMA PIN DID NOT MOVE, AND THAT IS THE EVIDENCE.** `FigmaUINavTest`'s prefix ratchet failed
+on first run — correctly. Its check computed the prefix as `Columns.Length - 1`, which equals "before
+`sev_events`" **only while `sev_events` is last**; a second pure append made it hash 206 names against a
+205-name pin and report a REORDER for an APPEND — the opposite of what its own doc-comment promises.
+⛔ **It was NOT re-pinned.** The prefix was re-anchored to `Index("sev_events")`, both old numbers were
+left untouched, and **the same 205 names still hash to the same 164112981** — which proves S227
+reordered nothing. A re-pin would have proved only that somebody typed the new number in. The old lines
+are kept verbatim above their replacements (C1.16 / G12). `SchemaVersion` stays **1**; old recordings
+still chain.
+
+#### ⛔ DID ANY RENDERED PIXEL CHANGE? **NO** — with one honest caveat about the instrument
+
+`previewdiff` → **`130 unchanged`, `0 existing page(s) changed, 0 new, 0 removed`**, with
+**4 changed render inputs** listed, so the comparison actually ran (S168: an absent input is never a
+pass). This touches no page: the changed inputs are the four pure black-box files, which no page draws.
+
+⚠ **AND THE ONE THING I WILL NOT ROUND OFF.** The **first** `previewdiff` of this task — run
+immediately after `harnesscheck`, after 23 mutation rebuilds — reported **`53 existing page(s) changed,
+77 unchanged`**. Every one of the **six** runs after it reported `0 changed`, and two deliberate
+`harnesscheck`-then-`previewdiff` attempts **failed to reproduce it**. ⛔ **I cannot explain that
+reading and I am not going to pretend the later six outvote it** — this project has been lied to by its
+own instruments three times. Logged as [[S228]]. The pixel claim above rests on six agreeing runs **and**
+on the fact that no render input was touched at all; it does not rest on the instrument alone.
+
+#### ⛔ WHAT CANNOT BE PROVEN HEADLESS — AND WHAT A FLIGHT HAS TO SHOW
+
+⛔ **Not one real part death happens in this suite, and most of the channel is flight-only.** What is
+proven headless: the judgement is right on every combination of facts, the budget keeps the head and
+announces the cut once, the subscription is symmetric/guarded/wired, the payload joins to
+`craftdump.csv` by that file's **own header string**, and the column is declared, written from the right
+vessel, and guarded. **⛔ Do not read any of that as "part-loss recording works."**
+
+**A flight has to show, and none of it is claimed today:**
+1. `onPartWillDie` actually fires for a lost part, and `p.vessel` / `p.parent` are readable when it does.
+2. A **normal staging separation** classifies `commanded` — i.e. `onPartDeCouple` really does precede the
+   death of the parts it releases, inside the 2 s window. ⚠ **If it does not, every routine separation
+   files as `unclassified` and the channel is noisy rather than wrong.**
+3. **Whether scene teardown raises per-part deaths at all** — genuinely unknown. If it does, a normal
+   end-of-flight consumes budget entries; if it does not, `tearingDown` never fires and that rung is dead
+   code. ⛔ **I could not determine this from the assembly and did not guess.**
+4. `onPartJointBreak` fires on a real structural failure, with a usable `breakForce`.
+5. `part_count` steps down by the right amount at each staging, and its profile matches the events.
+6. The windows (2 s decouple / 5 s stage) are the right lengths against a real RSS-RO staging sequence.
+7. ⭐ The whole point: **on a break-up, the first `part.lost` line names the part that actually went
+   first.** Until a flight produces one, this is an instrument with no reading.
+
+#### ⛔ STRAYS LOGGED, NOT ACTED ON (C1.1)
+
+[[S228]] (the unreproduced `previewdiff` reading) and [[S229]] (the four `EventReport` channels not
+taken this pass) are opened below. ⚠ [[S225]] and [[S226]] were **not** folded in — the brief says so and
+C1.1 forbids it. The `kenney_ui_scifi is now EMPTY` warning is the standing [[S207]]/[[S218]] line.
+
+**Commits:** `24d82ce` (the DOING marker, before any code) · this one. **No `git push` — the owner pushes
+from GitHub Desktop.**
+
+---
+
+### S228 [S] `previewdiff` reported 53 changed pages once, then 0 on six consecutive re-runs, and it was never reproduced — **TODO** — [logged by [[S227]] per C1.1, 2026-09-08; TIER 1: an instrument that disagrees with itself is the one defect class this project has already been burned by three times]
+- **What was observed, exactly.** During [[S227]] — a change touching **no render input** — the FIRST
+  `python plugin/build.py previewdiff` reported **`53 existing page(s) changed, 0 new, 0 removed (of 130
+  compared)`**, `77 unchanged`, naming `ui_vriotest.png`, `ui_vehiclemech.png`,
+  `ui_vehiclepropulsion.png` and others. The **immediately following** run, with **no file touched
+  between them**, reported **`130 unchanged`, 0 changed**. Five further runs agreed with the second.
+- **What was ruled out.** The changed-render-input list was **identical** across both (`4 changed render
+  input(s)`: the four pure black-box files), so it is not an input-detection difference. The working
+  tree was byte-identical — `git status` unchanged across the pair.
+- **The hypothesis that was tested and DID NOT reproduce.** The anomalous run was the first after
+  `build.py harnesscheck`, which deliberately injects a fault into the harness; the guess was that it
+  leaves state behind that poisons a following render. ⛔ **Two deliberate
+  `harnesscheck`-then-`previewdiff` attempts both reported 0 changed.** The hypothesis is unconfirmed.
+- **The other untested context:** the anomalous run also followed **23 mutation rebuilds** in immediate
+  succession (each a full `build.py test`), so a stale or half-written build artifact is a live
+  candidate that this line did not get to test.
+- ⭐ **WHY THIS IS TIER 1 AND NOT HOUSEKEEPING.** `previewdiff` is the instrument three separate
+  register lines rely on to prove *"no pixel moved"* — it exists **because** S130 shipped a silent false
+  green, and S168 hardened it so a pass would mean something. ⛔ **A false POSITIVE is the mirror of that
+  defect and is just as corrosive:** the next task to see "53 changed" on a comment-only change will
+  either waste a session hunting a phantom, or — far worse — learn to re-run until it goes green, which
+  destroys the instrument entirely.
+- **DONE when:** either the anomaly is reproduced and its cause named, or `previewdiff` is shown to be
+  deterministic across a rebuild/harnesscheck/mutation sequence — and, whichever way it goes, the run
+  order that produced it is either fixed or documented as unsafe.
+
+### S229 [S] Four `EventReport` channels name a part and are not recorded — collision, crash, joint-break and overheat — **TODO** — [logged by [[S227]] per C1.1, 2026-09-08; TIER 3: adjacent to the part-loss channel, deliberately out of its scope]
+- **Found while enumerating `GameEvents` for [[S227]]** (399 public static fields read from
+  `Assembly-CSharp.dll`, KSP 1.12.5). These four are `EventData<EventReport>`, and `EventReport` carries
+  **`origin` (a `Part`)**, `eventType` (a `FlightEvents` enum), `stage`, `msg`, `sender`, `other` and
+  `param` — so unlike the rejected `onPartExplode`, **they do name a part**:
+  `onCollision` · `onCrash` (and `onCrashSplashdown`) · `onJointBreak` · `onOverheat` (and
+  `onSplashDamage`).
+- ⛔ **NOT taken by S227, deliberately.** A collision, a crash and an overheat are **not part losses** —
+  they are the events that often PRECEDE one. S227's scope was the loss channel the owner asked for, and
+  folding four adjacent channels in would have widened the task past the question. C1.1.
+- ⭐ **Why it is still worth a line.** The owner's question is *"the very first failure point"*, and an
+  overheat or a collision is frequently **earlier than the first part death** — so this is the channel
+  most likely to hold the actual first line of a cascade, one rung before the one S227 built.
+  `FlightEvents` already enumerates `OVERHEAT`, `COLLISION`, `OVERPRESSURE`, `OVERG`, `REENTRY_BURNUP`
+  and `STAGESEPARATION`, which is a ready-made vocabulary.
+- ⚠ **Read [[S227]]'s hazards before building it** — the same five apply, and `PartLossWatch` already
+  solves four of them (symmetric subscribe, per-vessel routing, guarded handlers, the flood budget).
+  ⛔ The rate question is NOT solved: `onCollision` can fire continuously on a landed vessel, which is
+  the [[S225]] flood defect waiting to happen. Budget it before subscribing it.
+- **DONE when:** the channels that name a part are recorded with the same payload contract as
+  `part.lost`, rate-guarded, mutation-tested, and the register says which of the six were taken and why.

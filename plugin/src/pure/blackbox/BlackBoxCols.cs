@@ -233,5 +233,9 @@ namespace DragonScreen.BlackBox
         public static readonly int TgtRadiusM = BlackBoxSchema.Index("tgt_radius_m");
         public static readonly int PitchErrDeg = BlackBoxSchema.Index("pitch_err_deg");
         public static readonly int YawErrDeg = BlackBoxSchema.Index("yaw_err_deg");
+        // ---- S227: the cascade profile. Declared and written in the SAME commit — a declaration
+        // ---- without a writer is the S76 ghost column, and `BlackBoxCoverage` fires on it either way
+        // ---- round (never_written one way, unexpected_writer the other).
+        public static readonly int PartCount = BlackBoxSchema.Index("part_count");
     }
 }

@@ -116,11 +116,18 @@ namespace DragonScreen.BlackBox
     [KSPAddon(KSPAddon.Startup.Flight, false)]
     public class BlackBoxAddon : MonoBehaviour
     {
-        void Start() { BlackBoxRecorder.SceneStart(); }
+        // ⭐ S227. The part-loss watch is subscribed and unsubscribed WITH THE SCENE, in this one place,
+        // because this MonoBehaviour is the only thing in the recorder whose lifetime is the scene's.
+        // ⛔ THE `.Remove` IN `OnDestroy` IS NOT OPTIONAL: a `GameEvents` handler that outlives its
+        // scene fires on dead objects and produces an exception storm — the `GetPotentialTorque` day.
+        void Start() { BlackBoxRecorder.SceneStart(); PartLossWatch.Subscribe(); }
         void FixedUpdate() { BlackBoxRecorder.Tick(); }
         // Scene teardown is the ONE moment a torn row is most likely (S76 defect 3: the old streams cut
         // mid-line on a revert), so this is not a courtesy — it is the flush that makes the file whole.
-        void OnDestroy() { BlackBoxRecorder.Close("scene_change"); }
+        // ⛔ UNSUBSCRIBE FIRST, THEN CLOSE. The reverse order would let a part death arriving during
+        // teardown reach a recorder that is already closing, and `Close` is the one path that must not
+        // be re-entered while it is flushing.
+        void OnDestroy() { PartLossWatch.Unsubscribe(); BlackBoxRecorder.Close("scene_change"); }
     }
 
     public static class BlackBoxRecorder
@@ -487,6 +494,43 @@ namespace DragonScreen.BlackBox
             log.Write(BlackBoxEvents.Line(missionId, null,
                                           double.IsNaN(ut) ? 0.0 : ut, double.NaN, seq, kind, payload));
         }
+
+        /// <summary>
+        /// ⭐ S227. Route ONE event to the stream recording `v` — hazard (D): **GameEvents are GLOBAL and
+        /// this recorder is per-stream.** A part that dies belongs to one vessel and its event belongs on
+        /// that vessel's timeline; putting it on the camera holder's would file a booster's break-up
+        /// under the capsule and give it the capsule's MET (§4.5 — MET restarts per vessel).
+        ///
+        /// ⛔ AND IT NEVER DROPS THE EVENT, which is the half that matters. At part death `p.vessel` is
+        /// very often already null, and a vessel coming apart may have no stream at all (the third
+        /// stream of run `034133`, `New_Crew-2_Probe_Debris`, is exactly that case). Falling back to
+        /// `EmitMission` writes the line with a null `vessel` — a fact recorded without an owner beats a
+        /// fact discarded, and the payload still carries `persistent_id` and `part_name`, which is what
+        /// an analyst joins on anyway.
+        /// </summary>
+        internal static void EmitForVessel(Vessel v, string kind, double ut, Kv[] payload)
+        {
+            if (disabled || !Enabled) return;
+            if (log == null || !log.Open) return;
+            BlackBoxStream s = null;
+            // Unity's null-comparison: a DESTROYED vessel compares equal to null, which is precisely
+            // the state this is called in. `Find` is a list walk over at most `MaxStreams`, so there is
+            // no cost worth guarding against here.
+            try { if (v != null) s = Find(v.persistentId); }
+            catch { s = null; }
+            if (s != null && s.Open) s.EmitAt(kind, payload, ut);
+            else EmitMission(kind, ut, payload);
+        }
+
+        /// <summary>
+        /// ⭐ S227. Is there anywhere for a part event to GO? ⚠ Deliberately NOT the existing
+        /// <see cref="Recording"/>, which asks whether any CSV stream is open. A part event goes to the
+        /// MISSION EVENT LOG, and the two are not the same thing: `EmitForVessel` falls back to
+        /// `EmitMission` when a part has no stream, so the log can be the only thing that has to be
+        /// open for the line to land. Letting the watch ask the wrong question would have made it skip
+        /// exactly the events it exists for — an unstreamed vessel coming apart.
+        /// </summary>
+        internal static bool EventLogOpen { get { return !disabled && Enabled && log != null && log.Open; } }
 
         internal static RatePolicy Policy()
         {
@@ -1092,6 +1136,13 @@ namespace DragonScreen.BlackBox
                 BlackBoxSchema.Set(c, BlackBoxCols.Stage,
                                    focused ? StageManager.CurrentStage : v.currentStage);
                 BlackBoxSchema.Set(c, BlackBoxCols.RcsOn, v.ActionGroups[KSPActionGroup.RCS]);
+                // ⭐ S227. THIS stream's vessel, never `FlightGlobals.ActiveVessel` — the same trap the
+                // `stage` comment above describes, and a booster row carrying the capsule's part count
+                // would be a plausible integer about somebody else (§4.8, NEVER FABRICATE).
+                // `v.parts` can be null on a vessel mid-teardown, which is exactly when this column
+                // matters most, so it is guarded rather than assumed: a blank says "not measurable",
+                // and §4.6's rule is that a blank is not a zero.
+                if (v.parts != null) BlackBoxSchema.Set(c, BlackBoxCols.PartCount, v.parts.Count);
 
                 BlackBoxRecorder.ResolveResIds();
                 BlackBoxSchema.Set(c, BlackBoxCols.EcFrac, BlackBoxRecorder.ResFrac(v, BlackBoxRecorder.EcId));

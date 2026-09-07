@@ -221,5 +221,55 @@ namespace DragonScreen.BlackBox
         /// rising edge — as `stage.engine_ignite`/`stage.engine_shutdown` already are for the vessel-wide
         /// count — so a reader measures how long the divergence stood without diffing two payload shapes.</summary>
         public const string BoostIgnitionResolved = "boost.ignition_resolved";
+
+        // ---- ⭐⭐ S227, 2026-09-08: PART LOSS. The channel the owner asked for and we did not have ----
+        // Owner, verbatim: *"we need to know exactly if or when a part failed and which failed first …
+        // if a separator suddenly disappears and was not commanded to do anything it is probably
+        // because it exploded or failed. This would lead to a cascade of failures that could be
+        // confusing without analysing the very first failure point that lead to a instant RUD."*
+        //
+        // ⛔ EVERY STAGE EVENT ABOVE IS A **COMMANDED** ACTION. `stage.staged`, `stage.engine_ignite`
+        // and `stage.engine_shutdown` record what the vehicle was TOLD to do. Nothing in this
+        // vocabulary before S227 recorded something the vehicle did NOT choose, so an uncommanded loss
+        // produced no line at all — not an event, not a column, not a count that dropped.
+        //
+        // ⭐ THE PAYLOAD JOINS TO `craftdump.csv` WITH NO LOOKUP TABLE. Every one of these carries
+        // `part_idx`, `part_name`, `persistent_id` and `stage` under those EXACT key names, because
+        // that dump (7,083 rows, written on the pad by `src/CraftDump.cs`) already uses them and it is
+        // the contract the pure tests are written against (OCT2). A different spelling here would mean
+        // an analyst joining two files by hand at the moment they can least afford to.
+        //
+        // ⚠ `part.explode` IS DELIBERATELY ABSENT, and this is the one rejection worth stating in the
+        // vocabulary itself rather than only in the register: KSP's `onPartExplode` carries
+        // `GameEvents.ExplosionReaction`, whose ONLY fields are `distance` and `magnitude`. **It does
+        // not name a part.** A kind fed from it could say an explosion happened and never say what
+        // exploded, which is precisely the "confusing cascade" the owner is trying to see through.
+        /// <summary>
+        /// ⭐ A part left the vessel. Raised from `onPartWillDie` — BEFORE destruction, so the part's
+        /// parent, vessel, stage and persistent id are all still readable — with the classification
+        /// from `pure/blackbox/PartLoss.cs` stated IN the payload (`loss_class` + `why`) beside the raw
+        /// numbers it was decided from (`since_stage_s`, `since_decouple_s`). ⛔ The class may be
+        /// `unclassified`, and that is a verdict, not a gap: see PartLoss.cs's header for why a recent
+        /// stage command deliberately does NOT promote a death to `commanded`.
+        /// </summary>
+        public const string PartLost = "part.lost";
+        /// <summary>⭐ KSP's own failure channel (`onPartFailure`) — the game asserting a part failed,
+        /// which is a stronger statement than `part.lost` inferring it from an absent command. Kept as a
+        /// separate kind rather than a payload flag so a reader can filter for "what the game called a
+        /// failure" without trusting our classifier at all.</summary>
+        public const string PartFailure = "part.failure";
+        /// <summary>⭐ Structural break (`onPartJointBreak`, `EventData&lt;PartJoint,float&gt;`) — the
+        /// "unzip" case: the joint holding two parts together let go, carrying the break force. A joint
+        /// break need not kill either part, so this is NOT a duplicate of `part.lost`; it is often the
+        /// FIRST line of the sequence and the one `part.lost` alone would miss.</summary>
+        public const string PartJointBreak = "part.joint_break";
+        /// <summary>
+        /// ⛔ The part-loss budget was exhausted and the sequence was CUT. Carries `truncated_after`
+        /// (the cap) and `seen` (how many losses were actually offered), emitted EXACTLY ONCE however
+        /// long the cascade runs. It is in the RECORDING and not in a log line for the same reason
+        /// `crew.press_dropped` is: a recorder that loses data quietly is the S76 defect, and at a RUD
+        /// the truncation is itself a measurement of how violent the cascade was.
+        /// </summary>
+        public const string PartLossTruncated = "part.loss_truncated";
     }
 }

@@ -3142,9 +3142,26 @@ public static class FigmaUINavTest
         // columns beside it: a flight could record Alarm next to two Nominal component columns with
         // nothing saying why. `sev_events` is that missing column.
         Check("sev_events is in the schema", BlackBoxSchema.Index("sev_events") >= 0, "");
-        Check("...and it is a PURE APPEND, at the very end of the table",
-              BlackBoxSchema.Index("sev_events") == BlackBoxSchema.Columns.Length - 1,
-              "index " + BlackBoxSchema.Index("sev_events") + " of "
+        // ⚠ S227, 2026-09-08 — THIS ASSERTION USED TO READ, VERBATIM:
+        //       Check("...and it is a PURE APPEND, at the very end of the table",
+        //             BlackBoxSchema.Index("sev_events") == BlackBoxSchema.Columns.Length - 1, ...);
+        //   SUPERSEDED IN PLACE (C1.16 / G12), and the reasoning is kept because it is still right
+        //   about everything except its own arithmetic. It was TRUE when S137c wrote it and it says
+        //   what S137c meant — but as written it asserts `sev_events` is the LAST column FOREVER, so
+        //   it forbids the very thing §4.2 permits and this file's own doc-comment describes: another
+        //   PURE APPEND. S227's `part_count` is exactly that, and it broke this line.
+        //   ⭐ WHAT REPLACES IT IS STRICTLY STRONGER, not a relaxation: the old form pinned only a
+        //   RELATIVE position (last), which an insert-then-append satisfies; the new one pins the
+        //   ABSOLUTE index, which nothing but a genuine reorder can move.
+        Check("...and it is a PURE APPEND: sev_events still sits at its own pinned index",
+              BlackBoxSchema.Index("sev_events") == PrefixCount,
+              "index " + BlackBoxSchema.Index("sev_events") + " (want " + PrefixCount + ") of "
+              + BlackBoxSchema.Columns.Length);
+        // ⭐ S227's own append, pinned the same way so the NEXT one has to come here and say so too.
+        Check("...and part_count is the append after it (S227)",
+              BlackBoxSchema.Index("part_count") == BlackBoxSchema.Columns.Length - 1
+              && BlackBoxSchema.Index("part_count") > BlackBoxSchema.Index("sev_events"),
+              "part_count at " + BlackBoxSchema.Index("part_count") + " of "
               + BlackBoxSchema.Columns.Length);
         // ⭐ Which is why the version does NOT move. This file's own rule: "bumped when a column is
         // REORDERED or REMOVED; a pure append keeps the version (§4.2)". A recording made before this
@@ -3157,7 +3174,19 @@ public static class FigmaUINavTest
         // everything between - the exact reorder SchemaVersion exists to forbid. A hash over the names
         // BEFORE it is exact and, unlike a whole-table hash, a legal pure APPEND still passes.
         // ⚠ Re-pin BOTH numbers only when a reorder is deliberate, and bump SchemaVersion with them.
-        int pn2 = BlackBoxSchema.Columns.Length - 1;
+        // ⚠ S227, 2026-09-08 — THIS LINE USED TO READ, VERBATIM:
+        //       int pn2 = BlackBoxSchema.Columns.Length - 1;
+        //   SUPERSEDED IN PLACE (C1.16 / G12). ⛔ It made the prefix "everything except the last
+        //   column", which is only the same thing as "everything before `sev_events`" while
+        //   `sev_events` IS last. The moment a second pure append landed, the hash was computed over
+        //   206 names instead of 205 and the check failed — reporting a REORDER for an APPEND, which
+        //   is the opposite of what its own doc-comment promises ("a pure APPEND leaves both alone").
+        //   ⭐ AND THE CONSEQUENCE IS WORTH SPELLING OUT: because the prefix is now anchored to
+        //   `sev_events`' index instead of to the table's length, `PrefixCount` and `PrefixHash` are
+        //   UNTOUCHED by S227 — the same 205 names still hash to the same 164112981. That is the
+        //   evidence that S227 reordered nothing, and it is worth more than a re-pinned number would
+        //   have been, because a re-pin proves only that somebody typed the new value in.
+        int pn2 = BlackBoxSchema.Index("sev_events");
         uint h = 2166136261u;
         for (int i = 0; i < pn2; i++)
         {

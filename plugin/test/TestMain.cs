@@ -269,6 +269,15 @@ public static class TestMain
         // than only in a `KSP.log` that gets overwritten, and the manifest's live MechJeb block.
         // ⛔ Its load-bearing check is `SeededDivergence`: perturb one box, assert the verdict goes RED.
         bad += Suite(AscentReadbackTest.Run);   // S223: the audit reads back, and the guidance is recorded
+        // ⭐ S227 (owner, 2026-09-08: *"we need to know exactly if or when a part failed and which
+        // failed first"*). The recorder had no part channel at all — no `GameEvents` subscription
+        // anywhere in the glue, and every `stage.*` event is a COMMANDED action — so a separator that
+        // vanished uncommanded produced no record of any kind.
+        // ⛔ Its load-bearing check is `StagingDoesNotPromoteToCommanded`: a stage command must NOT
+        // license calling a death routine, because staging is the likeliest moment for a real failure.
+        // ⭐⭐ And `TheScannerCanFail` proves the Add/Remove scanner rejects a leak — including one
+        // whose `.Remove` is only commented out (S220's two surviving mutants).
+        bad += Suite(PartLossTest.Run);         // S227: which part went, when, and whether anybody asked
 
         // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------
         // `docs/BOOSTER_STEERING_MOD_SEARCH.md` (C1.15) could neither rule TCA in nor out; the owner ruled
