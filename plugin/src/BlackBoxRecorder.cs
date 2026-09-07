@@ -956,6 +956,14 @@ namespace DragonScreen.BlackBox
             BlackBoxSchema.Set(c, BlackBoxCols.Focus, act != null ? act.vesselName : "");
             // rec_build_us is set by the caller — it cannot be known until the row is finished.
 
+            // ⭐ S223: ONE guidance reading per row, shared by the R1/R2/R3 blocks below. Taken once so
+            // the three blocks cannot disagree with each other about what MechJeb was doing on the same
+            // row — the conductor's state can move between two reads, and a row that says the ascent was
+            // engaged in one column and idle in another is worse than one that says neither.
+            // ⛔ Scope.Capsule: withheld outright on a stream whose vessel does not hold the camera,
+            // because `MechConductor` is the CAPSULE's singleton (BB2).
+            GuidanceReadout gnc = focused ? MechConductor.Readout : GuidanceReadout.None();
+
             // ---------- B: R1 dynamic ----------
             BlackBoxSchema.Set(c, BlackBoxCols.Mach, v.mach);
             BlackBoxSchema.Set(c, BlackBoxCols.QPa, v.dynamicPressurekPa * 1000.0);
@@ -1018,6 +1026,31 @@ namespace DragonScreen.BlackBox
                 BlackBoxSchema.Set(c, BlackBoxCols.AbortMode, AbortControl.Mode.ToString());
             }
             if (hasTarget) BlackBoxSchema.Set(c, BlackBoxCols.ClosingMps, ClosingRate(v));
+
+            // ---------- ⭐⭐ E: GUIDANCE, R1 (S223 / NTSB-2026-001 R-03) ----------
+            // ⛔ WHAT MECHJEB IS ASKING THE VEHICLE TO DO. The 2026-09-07 flight spent 25 s in the PSG
+            // autopilot's unstable-guidance fallback — `min(90, SrfvelPitch(), VesselState.Pitch)`, a
+            // law that can only pitch DOWN — and NOTHING in the recording said so; it was readable only
+            // from a `KSP.log` that had not yet been overwritten. `cmd_pitch_deg` is that law's output.
+            // ⚠ Scope.Capsule and Conditional per group: `HaveCommand` is false whenever MechJeb is not
+            // master, because `RequestedAttitude` is only recomputed inside `AttitudeController.Drive`
+            // and a value read outside that window is a frozen stale read, not a command (§4.6).
+            // ⭐ A BLANK `pvg_*` IS THE SIGNAL, not a hole: `HaveGuidance` is exactly `IsStable()`, so
+            // the unstable window shows as blank Vgo/Tgo with `gnc_status` carrying the word.
+            if (focused && gnc.Valid)
+            {
+                if (gnc.HaveCommand)
+                {
+                    BlackBoxSchema.Set(c, BlackBoxCols.CmdPitchDeg, gnc.CmdPitchDeg);
+                    BlackBoxSchema.Set(c, BlackBoxCols.CmdHeadingDeg, gnc.CmdHeadingDeg);
+                    BlackBoxSchema.Set(c, BlackBoxCols.CmdThrottle, gnc.CmdThrottle);
+                }
+                if (gnc.HaveGuidance)
+                {
+                    BlackBoxSchema.Set(c, BlackBoxCols.PvgVgoMps, gnc.VgoMps);
+                    BlackBoxSchema.Set(c, BlackBoxCols.PvgTgoS, gnc.TgoS);
+                }
+            }
 
             // ================= R2: the state block =================
             if (plan.FillR2)
@@ -1101,6 +1134,21 @@ namespace DragonScreen.BlackBox
                     // ---- column starts moving and the file shows exactly when.
                     BlackBoxSchema.Set(c, BlackBoxCols.GncEngaged, AutoPilot.Engaged);
                     BlackBoxSchema.Set(c, BlackBoxCols.ModeIndex, FlightDriver.MissionMode.ToString());
+
+                    // ⭐ S223: WHICH MechJeb module holds the vehicle, and its own status word. `Module`
+                    // is "none" rather than blank while a core is bound and idle — §2.5's rule for the
+                    // idle seams, applied here: recording the constant IS the proof nothing was flying,
+                    // and a reader must be able to tell that from "nobody wrote this column".
+                    // ⚠ AND THE SAME REASON THE STATUS BECOMES "-" WHEN IT IS EMPTY. MechJeb's `Status`
+                    // starts as "" and a blank cell already means "not written"; a dash is §14.4(f)'s
+                    // genuinely-absent state, which is what an engaged module that has not yet said
+                    // anything actually is.
+                    if (gnc.Valid)
+                    {
+                        BlackBoxSchema.Set(c, BlackBoxCols.GncModule, gnc.Module);
+                        BlackBoxSchema.Set(c, BlackBoxCols.GncStatus,
+                                           string.IsNullOrEmpty(gnc.Status) ? "-" : gnc.Status);
+                    }
                     MissionPhase authoritative = Mission.AuthoritativePhase(
                         CrewProcedureOps.Engaged, CrewProcedureOps.ActivePhase, classified);
                     BlackBoxSchema.Set(c, BlackBoxCols.MissionPhase, Mission.Name(authoritative));
@@ -1150,6 +1198,17 @@ namespace DragonScreen.BlackBox
                     BlackBoxSchema.Set(c, BlackBoxCols.N2Store, sys.Nitrogen);
                     BlackBoxSchema.Set(c, BlackBoxCols.CanisterUsed, sys.CanisterUsed);
                     BlackBoxSchema.Set(c, BlackBoxCols.IsReturn, CrewProcedureOps.IsReturn);
+
+                    // ⭐ S223 (R-04): WHERE IT IS GOING, read LIVE out of MechJeb's own ascent settings
+                    // rather than from the destination we believe we wrote. That distinction is the
+                    // whole of S223 JOB 1, answered here per row — and it is what makes "what did we
+                    // fly" answerable from the recording alone, with `KSP.log` gone.
+                    if (gnc.Valid && gnc.HaveTarget)
+                    {
+                        BlackBoxSchema.Set(c, BlackBoxCols.TgtApKm, gnc.TgtApKm);
+                        BlackBoxSchema.Set(c, BlackBoxCols.TgtPeKm, gnc.TgtPeKm);
+                        BlackBoxSchema.Set(c, BlackBoxCols.TgtIncDeg, gnc.TgtIncDeg);
+                    }
                 }
 
                 CommNet.CommNetVessel conn = null;
@@ -2189,7 +2248,74 @@ namespace DragonScreen.BlackBox
             try { manifest.KspVersion = Versioning.VersionString; } catch { }
             CollectAssemblyInfo();
             CollectTunables();
-            manifest.MechJebCfgSha = null;   // no MechJeb core is embedded yet — T15. Honest null, not "".
+            CollectMechJeb();
+        }
+
+        /// <summary>
+        /// ⭐ S223 (NTSB-2026-001 R-04) — WHAT THE VEHICLE WAS FLOWN WITH, on MechJeb's side.
+        ///
+        /// ⛔ WHAT THIS REPLACES, AND WHY IT HAD TO (C1.16: the reasoning is superseded IN PLACE, not
+        /// deleted). The line here read, in full:
+        ///     `manifest.MechJebCfgSha = null;   // no MechJeb core is embedded yet — T15. Honest null, not "".`
+        /// It was honest when it was written and it stopped being true at §B12.1: a core IS embedded,
+        /// `MechHost.ApplyTune()` loads `mechjeb_settings_type_Crew-Dragon.cfg` from this mod's own
+        /// PluginData, and the preserved flight log shows it running three times. So the field sat null
+        /// with a comment asserting a reason that no longer held — which is worse than a null, because a
+        /// reader has no way to know the sentence has expired. `BlackBoxManifest`'s own header promises
+        /// *"THE TUNE IS REPRODUCIBLE ... the MechJeb cfg hash record WHAT THE VEHICLE WAS"*; this is
+        /// that promise kept.
+        ///
+        /// Two things go in, and they answer different questions:
+        ///   • `mechjeb_cfg_sha` + `_file` + `_note` — WHICH tune file was applied, by content. A
+        ///     digest identifies the exact bytes including an edit nobody committed, the same argument
+        ///     `dragonscreen_dll_sha256` is made on.
+        ///   • `mechjeb_ascent_settings` — the 77 audited boxes, READ LIVE off the core. ⭐ That is the
+        ///     one that makes "what did we fly" answerable from the recording ALONE: the cfg says what
+        ///     was ASKED FOR, and the last flight is the proof those are not the same thing.
+        /// </summary>
+        void CollectMechJeb()
+        {
+            try
+            {
+                // The audited ascent settings, live. Falls back to the conductor's most recent flight
+                // reading when the recorder opens before a core is bound, and says "?" per row when
+                // there is neither — never a plausible number (§4.6).
+                manifest.MechJebAscent = MechAscentReadback.ManifestLines(MechConductor.BoundCore);
+
+                string file = DragonScreen.Pure.MechProfile.TuneFileName;
+                manifest.MechJebCfgFile = file;
+                string path = DragonMechJebCore.TunePath(file);
+                if (!File.Exists(path))
+                {
+                    manifest.MechJebCfgSha = null;
+                    manifest.MechJebCfgNote = "no digest: the shipped tune " + file + " was not present at "
+                                            + "PluginData, so MechHost.ApplyTune() left the core at its "
+                                            + "own defaults";
+                    return;
+                }
+
+                using (var sha = new SHA256Managed())
+                using (var fs = File.OpenRead(path))
+                {
+                    byte[] h = sha.ComputeHash(fs);
+                    var sb = new StringBuilder(64);
+                    for (int i = 0; i < h.Length; i++) sb.Append(h[i].ToString("x2", CultureInfo.InvariantCulture));
+                    manifest.MechJebCfgSha = sb.ToString();
+                }
+                // ⚠ THE SHIPPED FILE, NOT PROOF EVERY VALUE IN IT LANDED. `ApplyTune` feeds each node
+                // through the module's own TYPE pass and counts what matched; whether a given field
+                // then held that value is what `mechjeb_ascent_settings` above answers, and the two are
+                // recorded side by side on purpose.
+                manifest.MechJebCfgNote = "sha256 of the tune MechHost.ApplyTune() loads from this mod's "
+                                        + "PluginData. It identifies what was ASKED FOR; "
+                                        + "mechjeb_ascent_settings records what the core actually HELD.";
+            }
+            catch (Exception e)
+            {
+                manifest.MechJebCfgSha = null;
+                manifest.MechJebCfgNote = "no digest: " + e.GetType().Name + ": " + e.Message;
+                Debug.LogWarning(Tag + "MechJeb manifest block: " + e.Message);
+            }
         }
 
         /// <summary>

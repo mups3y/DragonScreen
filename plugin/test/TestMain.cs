@@ -263,6 +263,12 @@ public static class TestMain
         bad += Suite(AscentProfileTest.Run);    // S219: every ascent setting accounted for + the countdown ordering
         bad += Suite(ConductorEngageTest.Run);  // S219 JOB 3: configured-AND-engaged, the ignition chain, the T-0 staging
         bad += Suite(AutoTargetTest.Run);       // S220: the station is targeted on the pad, and refuses rather than guesses
+        // ⭐ S223 (NTSB-2026-001 R-03/R-04). The audit above says what we DECIDED; this suite covers the
+        // instrument that says what MechJeb actually HOLDS — the read-back and its expectation table, the
+        // ten guidance columns fitted so the next unstable-guidance window is IN THE RECORDING rather
+        // than only in a `KSP.log` that gets overwritten, and the manifest's live MechJeb block.
+        // ⛔ Its load-bearing check is `SeededDivergence`: perturb one box, assert the verdict goes RED.
+        bad += Suite(AscentReadbackTest.Run);   // S223: the audit reads back, and the guidance is recorded
 
         // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------
         // `docs/BOOSTER_STEERING_MOD_SEARCH.md` (C1.15) could neither rule TCA in nor out; the owner ruled

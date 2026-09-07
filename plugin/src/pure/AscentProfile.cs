@@ -599,7 +599,15 @@ namespace DragonScreen
         /// <summary>One screen/log-ready line per row — the table, rendered where a human will see it.
         /// `MechConductor.Configure` writes this to `KSP.log` once per configure.
         /// ⭐ S222b added the two counts that make the owner's question answerable at a glance: how many
-        /// boxes we WRITE (8, down from 47) and how many the MENU writes for us (2).</summary>
+        /// boxes we WRITE (8, down from 47) and how many the MENU writes for us (2).
+        /// ⛔⛔ **S223: EVERY NUMBER IN THIS SENTENCE IS COMPUTED FROM OUR OWN INTENT.** Nothing in it
+        /// was ever read out of MechJeb, and the owner's 2026-09-08 brief is blunt about the
+        /// consequence: the mod logged `ApplyTune` success against a cfg carrying `PitchRate 0.75` while
+        /// the vehicle flew RO's 5.0, and both statements sat in the same log with nothing able to
+        /// reconcile them. The MEASUREMENT is `pure/AscentReadback.cs` + `src/MechAscentReadback.cs`, and
+        /// `MechConductor.Configure` appends its verdict to this very line — so the claim can no longer
+        /// appear without the read-back beside it. ⚠ No row below changed; what changed is what stands
+        /// next to them.</summary>
         public static string Render()
         {
             var sb = new System.Text.StringBuilder();

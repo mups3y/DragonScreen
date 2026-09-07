@@ -209,6 +209,22 @@ namespace DragonScreen.BlackBox
         const string WhenTargetOrbit = "blank unless the target has an orbit (PageState.HasTargetOrbit)";
         const string WhenBooster = "blank unless this stream's vessel is the vessel BoosterHost has bound";
         const string WhenLs      = "blank unless a life-support mod supplies it (TAC-LS)";
+        /// <summary>S223: the three conditions the fitted guidance columns are blank under. Each is its
+        /// OWN condition on purpose — see the E block's note for why one flag over all of them would
+        /// either withhold a signal that exists or record one that does not.</summary>
+        const string WhenMechCore = "blank unless the conductor has an embedded MechJeb core bound "
+                                  + "(MechConductor.Readout.Valid) — before T15's core exists on the vessel, "
+                                  + "and on any stream whose vessel never held the camera";
+        const string WhenCommand  = "blank unless MechJeb actually holds the vehicle "
+                                  + "(MechConductor.Readout.HaveCommand: DragonMechJebCore.DriveAuthorized). "
+                                  + "RequestedAttitude is only recomputed inside AttitudeController.Drive, which "
+                                  + "does not run on a core that is not master — a value recorded outside that "
+                                  + "window would be a frozen stale read presented as a command (§4.6)";
+        const string WhenPvg      = "blank unless the PSG ascent is engaged AND its solver has converged "
+                                  + "(MechConductor.Readout.HaveGuidance: Core.Guidance.IsStable()). ⭐ A BLANK "
+                                  + "HERE IS THE SIGNAL — it is precisely the unstable-guidance window in which "
+                                  + "the autopilot falls back to a pitch-down-only law, and gnc_status carries "
+                                  + "the word for the same rows";
 
         /// <summary>
         /// ⛔ THE ORDERED SOURCE OF TRUTH. Append freely inside a schema_version; reordering or removing
@@ -390,16 +406,58 @@ namespace DragonScreen.BlackBox
             // all and each names the increment that fills it (§B12.5: one property per increment).
             Cap("gnc_engaged", "0/1",  Tier.R2, "conductor", "AutoPilot.Engaged — LIVE since W10: the crew-gate conductor is engaged (not flying)"),
             Cap("mode_index",  "enum", Tier.R2, "conductor", "FlightDriver.MissionMode (idle seam — constant Idle until T17)"),
-            Unfit("gnc_module",   "string", Tier.R2, "the MechJeb module the conductor has engaged", "T17"),
-            Unfit("gnc_status",   "string", Tier.R2, "that module's own status/convergence word",    "T17"),
-            Unfit("pvg_vgo_mps",  "m/s",    Tier.R1, "PVG guidance",                                 "T18"),
-            Unfit("pvg_tgo_s",    "s",      Tier.R1, "PVG guidance",                                 "T18"),
-            Unfit("cmd_pitch_deg","deg",    Tier.R1, "the conductor's command struct",               "T18"),
-            Unfit("cmd_heading_deg","deg",  Tier.R1, "the conductor's command struct",               "T18"),
-            Unfit("cmd_throttle", "0..1",   Tier.R1, "the conductor's command struct",               "T18"),
-            Unfit("tgt_ap_km",    "km",     Tier.R3, "the ascent settings the conductor loaded",     "T18"),
-            Unfit("tgt_pe_km",    "km",     Tier.R3, "the ascent settings the conductor loaded",     "T18"),
-            Unfit("tgt_inc_deg",  "deg",    Tier.R3, "the ascent settings the conductor loaded",     "T18"),
+
+            // ⭐⭐ S223 (NTSB-2026-001 R-03) — **THESE TEN ARE FITTED.** They were declared for exactly
+            // the accident that then happened unrecorded: for 25 s of the 2026-09-07 flight MechJeb's
+            // ascent `Status` read "WARNING: Unstable Guidance" and the commanded pitch was
+            // `min(90, SrfvelPitch(), VesselState.Pitch)` — a law that can only pitch DOWN
+            // (`MechJebModuleAscentPSGAutopilot.cs:181-184`). None of it was in the recording; it was
+            // readable only because `KSP.log` had not yet been overwritten. The writer is
+            // `MechConductor.Readout` → `BlackBoxRecorder`, and it lands in the SAME commit as this
+            // declaration because `BlackBoxCoverage` fires either way round if they are split.
+            //
+            // ⛔ **SUPERSEDED IN PLACE (C1.16 / G12) — "the conductor's command struct" WAS WRONG.**
+            // The three `cmd_*` rows below used to be declared `Unfitted`, pending "T18", with the
+            // source *"the conductor's command struct"*. There is no such struct and there is not
+            // going to be one: under §14.4(a) the conductor does not command attitude — MechJeb does,
+            // and the conductor only decides WHICH MechJeb module holds the vehicle. Building a
+            // command struct to satisfy that note would have been inventing a signal (§1.4). The real
+            // sources are named per row and each was read in the vendored tree before it was chosen;
+            // the full argument is `pure/GuidanceReadout.cs`'s header.
+            //
+            // ⚠ CONDITIONAL, NOT LIVE, AND EACH AGAINST ITS OWN FLAG. §4.6: blank, never a plausible
+            // number. The three groups become readable at different moments — the target apsides as
+            // soon as a core is bound, the commanded attitude only once MechJeb holds the vehicle, the
+            // PVG numbers only once the solver converges — so one flag over all of them would either
+            // withhold a signal that exists or record one that does not.
+            CondCap("gnc_module", "string", Tier.R2, "conductor",
+                    "MechConductor.Readout.Module — the vendored TYPE NAME of the module the conductor has "
+                    + "engaged, or \"none\" while a core is bound and idle", WhenMechCore),
+            CondCap("gnc_status", "string", Tier.R2, "conductor",
+                    "MechConductor.Readout.Status — that module's own status word "
+                    + "(MechJebModuleAscentBaseAutopilot.Status: the field that read \"WARNING: Unstable "
+                    + "Guidance\"), widened with Core.Guidance.Status + IsStable() on the ascent", WhenMechCore),
+            CondCap("pvg_vgo_mps", "m/s", Tier.R1, "conductor",
+                    "MechConductor.Readout.VgoMps — MechJebModuleGuidanceController.Vgo (:50)", WhenPvg),
+            CondCap("pvg_tgo_s",   "s",   Tier.R1, "conductor",
+                    "MechConductor.Readout.TgoS — MechJebModuleGuidanceController.Tgo (:49)", WhenPvg),
+            CondCap("cmd_pitch_deg", "deg", Tier.R1, "conductor",
+                    "MechConductor.Readout.CmdPitchDeg — MechJebModuleAttitudeController.RequestedAttitude "
+                    + "(:109) resolved into VesselState's own surface frame", WhenCommand),
+            CondCap("cmd_heading_deg", "deg", Tier.R1, "conductor",
+                    "MechConductor.Readout.CmdHeadingDeg — the same quaternion through "
+                    + "VesselState.HeadingFromDirection (:1234)", WhenCommand),
+            CondCap("cmd_throttle", "0..1", Tier.R1, "conductor",
+                    "MechConductor.Readout.CmdThrottle — MechJebModuleThrustController.TargetThrottle (:211), "
+                    + "the throttle ASKED for, to pair with the applied `throttle` column", WhenCommand),
+            CondCap("tgt_ap_km",   "km",  Tier.R3, "conductor",
+                    "MechConductor.Readout.TgtApKm — the LIVE MechJebModuleAscentSettings.DesiredApoapsis, "
+                    + "not the value we believe we wrote (S223 JOB 1's question, answered per row)", WhenMechCore),
+            CondCap("tgt_pe_km",   "km",  Tier.R3, "conductor",
+                    "MechConductor.Readout.TgtPeKm — the LIVE DesiredOrbitAltitude", WhenMechCore),
+            CondCap("tgt_inc_deg", "deg", Tier.R3, "conductor",
+                    "MechConductor.Readout.TgtIncDeg — the LIVE DesiredInclination, which on a rendezvous "
+                    + "is written by §7.5's plane launch and not by us", WhenMechCore),
             Unfit("node_dv_left", "m/s",    Tier.R1, "Node Executor",                                "T19"),
             Unfit("node_point_err","deg",   Tier.R1, "Node Executor",                                "T19"),
             Unfit("replan_count", "count",  Tier.R2, "the §B12.4 re-plan loop",                      "T19"),

@@ -597,8 +597,11 @@ public static class BlackBoxTest
             if (f[i].Column == "range_m") { condNoted = true; condDefect = f[i].Defect; }
         Check(condNoted, "a CONDITIONAL column never written is still reported");
         Check(!condDefect, "...but as a NOTE, not a defect — otherwise it fires on every flight");
+        // ⚠ S223 CHANGED THE WITNESS, NOT THE CHECK. This used to name `pvg_vgo_mps`, which S223 FITTED
+        // (it is `Fit.Conditional` now, so it is correctly REPORTED as a note and this check would fire
+        // on it). `node_dv_left` is still `Fit.Unfitted` pending T19 and carries the same property.
         for (int i = 0; i < f.Count; i++)
-            if (f[i].Column == "pvg_vgo_mps")
+            if (f[i].Column == "node_dv_left")
                 Check(false, "an UNFITTED column never written is SILENT — that is its declared state");
 
         // The other direction, which nobody thought to check last time: an Unfitted column that
@@ -1034,6 +1037,12 @@ public static class BlackBoxTest
             "align_deg", "roll_err_deg", "pitch_err_deg", "yaw_err_deg",
             "ker_avail", "ker_stage_dv", "ker_total_dv", "ker_twr", "ker_isp", "ker_burn_s",
             "ker_stage_mass_kg", "ker_thrust_avail_n",
+            // S223: the ten guidance columns fitted for NTSB-2026-001 R-03/R-04. `MechConductor` is a
+            // CAPSULE singleton like every other name above it, so its readings must never land on a
+            // tracked booster's rows.
+            "gnc_module", "gnc_status", "pvg_vgo_mps", "pvg_tgo_s",
+            "cmd_pitch_deg", "cmd_heading_deg", "cmd_throttle",
+            "tgt_ap_km", "tgt_pe_km", "tgt_inc_deg",
         };
         for (int i = 0; i < capsule.Length; i++)
         {

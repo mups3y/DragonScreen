@@ -249,6 +249,11 @@ namespace DragonScreen
             manualDockingRequested = false;
             smartAssTarget = MuMech.MechJebModuleSmartASS.Target.OFF;
             lastRangeM = 0.0; lastRangeUT = 0.0; openingRateMps = 0.0;
+            // S223: the two ascent readings and the last logged status word are latches like every
+            // other one here — a reverted flight must not inherit the previous one's numbers and
+            // present them as its own.
+            MechAscentReadback.Reset();
+            lastAscentStatus = null; lastGuidanceStatus = null;
         }
 
         // ============================ THE TICK ============================
@@ -582,6 +587,9 @@ namespace DragonScreen
                 // recomputes it every frame and the stage table changes as stages burn away.
                 MirrorTheMenus(v);
 
+                // ⭐⭐ S223 — MECHJEB'S OWN STATUS WORD, ON CHANGE. See `TickGuidanceStatusLog`.
+                TickGuidanceStatusLog();
+
                 TickAscentSequence(v);
             }
             catch (Exception e)
@@ -815,6 +823,14 @@ namespace DragonScreen
             }
 
             configured = true;
+
+            // ⭐⭐ S223 — READING (a): WHAT THE CORE ACTUALLY HOLDS, TAKEN BEFORE THE CLAIM IS LOGGED.
+            // `AscentProfile.Render()` below is computed entirely from our own intent; until this line
+            // existed, nothing in that sentence had ever been read out of MechJeb. The reading is taken
+            // FIRST so its verdict can be appended to the very same log line — the claim cannot appear
+            // in `KSP.log` without the measurement beside it. ⛔ It READS ONLY (see MechAscentReadback).
+            AscentObserved[] readback = MechAscentReadback.TakeAtConfigure(core);
+
             Debug.Log("[DragonScreen] conductor: PVG configured — autostage OFF (§B8), AscentType PSG, "
                       + "target " + (t.PeriapsisM / 1000.0).ToString("F0") + " x "
                       + (t.ApoapsisM / 1000.0).ToString("F0") + " km "
@@ -825,7 +841,11 @@ namespace DragonScreen
                       + ", attach altitude LEFT AT RO's 110 km — unread, because OptimizeStageFlag is "
                       + "UI-derived and AttachAltFlag is RO's false, so MechJebLib forces attach = "
                       + "periapsis for a circular target (S222b). Countdown " + AscentProfile.WarpCountDownS
-                      + " s, autowarp ON. " + AscentProfile.Render());
+                      + " s, autowarp ON. " + AscentProfile.Render()
+                      + "  ⭐ " + MechAscentReadback.HeadlineOf(readback) + " (S223)");
+
+            // ...and then the table itself, box by box, as the core holds it.
+            MechAscentReadback.LogTable("immediately after Configure", readback);
         }
 
         // ============================================================================================
@@ -898,6 +918,161 @@ namespace DragonScreen
             }
         }
 
+        // ============================================================================================
+        //  ⭐⭐ S223 (NTSB-2026-001 R-03) — **MECHJEB'S OWN STATUS WORD, LOGGED ON CHANGE.**
+        // ============================================================================================
+        //  ⛔ THE ACCIDENT. For 25 seconds of the last flight `MechJebModuleAscentPSGAutopilot.Status`
+        //  read "WARNING: Unstable Guidance", and in that branch the commanded pitch is
+        //  `min(90, SrfvelPitch(), VesselState.Pitch)` (`:181-184`) — a law that can only pitch DOWN.
+        //  The convergence failures were visible in `KSP.log`; the STEERING CONSEQUENCE was not, and
+        //  neither was anywhere in the recording. The black-box half of the fix is `Readout` below.
+        //  This is the log half.
+        //
+        //  ⚠ ON CHANGE ONLY, NEVER PER TICK. This runs at physics rate. A per-tick line would put tens
+        //  of thousands of identical entries into `KSP.log` and would BURY the transition it exists to
+        //  show — the same reason S214's engage-hold and S215's window-hold are latched.
+        // ============================================================================================
+        static string lastAscentStatus;
+        static string lastGuidanceStatus;
+
+        static void TickGuidanceStatusLog()
+        {
+            try
+            {
+                if (core == null) return;
+                MuMech.MechJebModuleAscentBaseAutopilot ap = core.Ascent;
+                string status = ap == null ? null : ap.Status;
+                string guidance = core.Guidance == null
+                                ? null
+                                : core.Guidance.Status.ToString()
+                                  + (core.Guidance.IsStable() ? " (stable)" : " ⛔ NOT STABLE");
+
+                bool moved = !string.Equals(status, lastAscentStatus, StringComparison.Ordinal)
+                          || !string.Equals(guidance, lastGuidanceStatus, StringComparison.Ordinal);
+                if (!moved) return;
+
+                string was = lastAscentStatus;
+                lastAscentStatus = status; lastGuidanceStatus = guidance;
+
+                Debug.Log("[DragonScreen] conductor: ASCENT STATUS -> \"" + (status ?? "(none)")
+                          + "\"  [was \"" + (was ?? "(none)") + "\"], PVG " + (guidance ?? "(none)")
+                          + ". ⛔ 'WARNING: Unstable Guidance' means the PSG autopilot has fallen back "
+                          + "to `min(90, SrfvelPitch(), VesselState.Pitch)`, which can only pitch DOWN "
+                          + "(MechJebModuleAscentPSGAutopilot.cs:181-184). (S223)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: could not read the ascent status word: "
+                                 + e.Message);
+            }
+        }
+
+        // ============================================================================================
+        //  ⭐⭐ S223 (R-03/R-04) — **WHAT THE FLIGHT RECORDER IS TOLD ABOUT MECHJEB'S STEERING.**
+        // ============================================================================================
+        //  Fills `pure/GuidanceReadout.cs` — read that file's header for WHY each source was chosen and
+        //  for the superseded "the conductor's command struct" note it replaces. `BlackBoxRecorder`
+        //  calls this once per R1/R2/R3 row on the focused stream.
+        //
+        //  ⛔ IT READS AND DERIVES. Nothing here commands anything: `RequestedAttitude` is a
+        //  `{ get; private set; }` on the vendored controller and `TargetThrottle` is written by
+        //  `MechJebModuleThrustController.Drive` — the recorder is a spectator on both.
+        // ============================================================================================
+        public static GuidanceReadout Readout
+        {
+            get
+            {
+                GuidanceReadout r = GuidanceReadout.None();
+                try
+                {
+                    if (core == null) return r;
+                    r.Valid = true;
+                    r.Module = GuidanceReadout.NoModule;
+                    r.Status = "";
+
+                    // ---- WHICH module the conductor has engaged, by its vendored TYPE NAME ----------
+                    if (ascentEngaged && core.Ascent != null)
+                    {
+                        r.Module = core.Ascent.GetType().Name;
+                        r.Status = core.Ascent.Status ?? "";
+                        // ⭐ The ascent's own word AND the solver's convergence state, together. The
+                        // 2026-09-07 flight needed both to be readable: the word said "WARNING:
+                        // Unstable Guidance" and the reason was `Core.Guidance.IsStable()` false.
+                        if (core.Guidance != null)
+                            r.Status += " | PVG " + core.Guidance.Status
+                                      + (core.Guidance.IsStable() ? " stable" : " ⛔UNSTABLE");
+                    }
+                    else if (rendezvousEngaged)
+                    {
+                        MuMech.MechJebModuleRendezvousAutopilot ra =
+                            core.GetComputerModule<MuMech.MechJebModuleRendezvousAutopilot>();
+                        r.Module = "MechJebModuleRendezvousAutopilot";
+                        if (ra != null) r.Status = ra.status ?? "";
+                    }
+                    else if (dockingEngaged)
+                    {
+                        MuMech.MechJebModuleDockingAutopilot da =
+                            core.GetComputerModule<MuMech.MechJebModuleDockingAutopilot>();
+                        r.Module = "MechJebModuleDockingAutopilot";
+                        if (da != null) r.Status = da.status ?? "";
+                    }
+                    else if (nodeExecuting)
+                    {
+                        r.Module = "MechJebModuleNodeExecutor";
+                    }
+
+                    // ---- WHAT it is asking the vehicle to do -------------------------------------
+                    // ⛔ Gated on DriveAuthorized: `RequestedAttitude` is only recomputed inside
+                    // `MechJebModuleAttitudeController.Drive`, which does not run on a core that is not
+                    // master. Recording a frozen stale quaternion as a command is §4.6's frozen-under-
+                    // warp defect wearing a different hat.
+                    if (core.DriveAuthorized && core.Attitude != null && core.VesselState != null)
+                    {
+                        // The commanded BODY-FORWARD direction, in world space, resolved into the same
+                        // surface frame `VesselState.Pitch`/`Heading` are measured in — so commanded and
+                        // achieved can be subtracted by a reader without a frame conversion of their own.
+                        // `HeadingFromDirection` is MechJeb's OWN public helper (VesselState.cs:1234);
+                        // pitch is 90° minus the angle from local up, which is that frame's definition.
+                        Vector3d dir = core.Attitude.RequestedAttitude * Vector3d.forward;
+                        if (dir.sqrMagnitude > 1e-12)
+                        {
+                            r.CmdPitchDeg = 90.0 - Vector3d.Angle(dir, core.VesselState.Up);
+                            r.CmdHeadingDeg = core.VesselState.HeadingFromDirection(dir);
+                            r.CmdThrottle = core.Thrust == null ? 0.0 : core.Thrust.TargetThrottle;
+                            r.HaveCommand = true;
+                        }
+                    }
+
+                    // ---- the PVG solver's own numbers ---------------------------------------------
+                    if (ascentEngaged && core.Guidance != null && core.Guidance.IsStable())
+                    {
+                        r.VgoMps = core.Guidance.Vgo;
+                        r.TgoS = core.Guidance.Tgo;
+                        r.HaveGuidance = true;
+                    }
+
+                    // ---- and WHERE it is going, read LIVE out of the ascent settings (R-04) --------
+                    MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
+                    if (a != null)
+                    {
+                        r.TgtApKm = a.DesiredApoapsis.Val / 1000.0;
+                        r.TgtPeKm = a.DesiredOrbitAltitude.Val / 1000.0;
+                        r.TgtIncDeg = a.DesiredInclination.Val;
+                        r.HaveTarget = true;
+                    }
+                }
+                catch (Exception e)
+                {
+                    LogOnce("readout-failed", "[DragonScreen] conductor: the guidance readout could not "
+                            + "be taken; the guidance columns will be blank: " + e.Message);
+                }
+                return r;
+            }
+        }
+
+        /// <summary>S223: the bound core, for the black-box manifest's live ascent-settings read.
+        /// Internal — the recorder is in this assembly and nothing outside it has any business here.</summary>
+        internal static DragonMechJebCore BoundCore { get { return core; } }
 
         // ============================ S215 — THE LAUNCH WINDOW ============================
 
@@ -1190,6 +1365,14 @@ namespace DragonScreen
                 if (ap == null) { terminalCountTaken = true; return; }
                 ap.TimedLaunch = false;
                 terminalCountTaken = true;
+
+                // ⭐⭐ S223 — READING (b): THE LAST MOMENT BEFORE ANYTHING IS LIT, and the DELTA
+                // against reading (a). If the two agree, nothing re-seeded the ascent module after the
+                // conductor configured it and we know that rather than assume it; if they differ, the
+                // delta NAMES the box and both values. ⛔ Reads only, and takes nothing from the count:
+                // `TimedLaunch` has already been cleared on the line above.
+                MechAscentReadback.TakeAtTerminalCount(core);
+
                 Debug.Log("[DragonScreen] conductor: TERMINAL COUNT — the conductor has T-0. MechJeb's "
                           + "TimedLaunch is CLEARED at T-" + SecondsToWindow().ToString("F1")
                           + " s, so `StageManager.ActivateNextStage()` is now unreachable and IgnitionGate "

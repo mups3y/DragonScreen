@@ -100,8 +100,31 @@ namespace DragonScreen.BlackBox
 
         // ---- what the vehicle was flown WITH ----
         public string MechJebCfgSha;
-        /// <summary>"Type.Field = value" per `[Tunable]`, so a one-parameter tune step is identifiable.</summary>
+        /// <summary>
+        /// The tune file `MechHost.ApplyTune()` hashed, by name — so `mechjeb_cfg_sha` is attributable
+        /// to a file rather than being a bare digest. Null when no tune was applied, with
+        /// <see cref="MechJebCfgNote"/> saying why.
+        /// </summary>
+        public string MechJebCfgFile;
+        /// <summary>
+        /// ⛔ S223: WHY `mechjeb_cfg_sha` is null, when it is. Its old comment in the recorder said
+        /// *"no MechJeb core is embedded yet — T15"*, which stopped being true when §B12.1 embedded one;
+        /// a null whose stated reason is false is worse than a null. Never null itself: it says either
+        /// which file was hashed or why none was.
+        /// </summary>
+        public string MechJebCfgNote;
+        /// <summary>"Type.Field = value" per `[Tunable]`, so a one-parameter tune step is identifiable.
+        /// ⛔ DRAGONSCREEN'S OWN, and nothing else — see <see cref="MechJebAscent"/>.</summary>
         public List<string> Tunables;
+        /// <summary>
+        /// ⭐ S223 (NTSB-2026-001 R-04). The 77 audited MechJeb ascent boxes, READ LIVE off the running
+        /// core, "MechJeb.&lt;Name&gt; = &lt;value&gt;" per row.
+        /// ⛔ **A SEPARATE COLLECTION, DELIBERATELY.** `tunables` is DragonScreen's own `[Tunable]`
+        /// statics — 74 of them, and not one of the 77 boxes that actually shape the ascent. Merging the
+        /// two would leave a reader unable to tell whose setting a line is, which is the one thing the
+        /// manifest exists to prevent. `MechJeb.` prefixes every entry for the same reason.
+        /// </summary>
+        public List<string> MechJebAscent;
 
         // ---- filled at close ----
         public bool Closed;
@@ -127,6 +150,7 @@ namespace DragonScreen.BlackBox
             m.ModVersions = new List<string>();
             m.Crew = new List<string>();
             m.Tunables = new List<string>();
+            m.MechJebAscent = new List<string>();
             m.Coverage = new List<CoverageFinding>();
             m.Policy = RatePolicy.Adaptive();
             return m;
@@ -198,7 +222,14 @@ namespace DragonScreen.BlackBox
             sb.Append("  \"dynamic_phase_rule\": ").Append(S(m.DynamicPhaseRule)).Append(",\n");
 
             sb.Append("  \"mechjeb_cfg_sha\": ").Append(S(m.MechJebCfgSha)).Append(",\n");
+            // S223: the digest alone was never attributable. These two say WHICH file it is of, and —
+            // when there is no digest — WHY, in a sentence that is current rather than one written
+            // before the core existed.
+            sb.Append("  \"mechjeb_cfg_file\": ").Append(S(m.MechJebCfgFile)).Append(",\n");
+            sb.Append("  \"mechjeb_cfg_note\": ").Append(S(m.MechJebCfgNote)).Append(",\n");
             Arr(sb, "tunables", m.Tunables);
+            // ⛔ ITS OWN KEY, never merged into `tunables`. See ManifestInfo.MechJebAscent.
+            Arr(sb, "mechjeb_ascent_settings", m.MechJebAscent);
 
             // ---- columns[]: the dataframe layout. DERIVED from the one ordered table. ----
             sb.Append("  \"columns\": [\n");

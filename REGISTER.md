@@ -26753,7 +26753,7 @@ the window was solved for. The vehicle launches at once, into the wrong RAAN, wh
 
 ---
 
-### S223 [O] FIT THE GUIDANCE INSTRUMENT, and make the ascent audit READ BACK what MechJeb actually holds — **DOING** — [owner directive 2026-09-08 (NTSB-2026-001 R-03/R-04); TIER 1: the audit's "8 written, 53 at the RO default" is computed from our own intent and nothing in it was ever read out of MechJeb]
+### S223 [O] FIT THE GUIDANCE INSTRUMENT, and make the ascent audit READ BACK what MechJeb actually holds — **DONE 2026-09-08 — the audit now measures instead of restating; the ten guidance columns are FITTED, declaration and writer in one commit; the manifest records the tune digest and the 77 boxes live. ⛔ THE VEHICLE'S BEHAVIOUR DID NOT CHANGE: NO setting, gate, steering law or throttle was written. 356 checks, 29 of 29 mutants killed** — [owner directive 2026-09-08 (NTSB-2026-001 R-03/R-04); TIER 1: the audit's "8 written, 53 at the RO default" is computed from our own intent and nothing in it was ever read out of MechJeb]
 ⛔ **THIS CHANGES NOTHING THE VEHICLE DOES.** No ascent setting, no gate, no steering law, no throttle.
 It adds READING and RECORDING. The owner's standing order is *"let native mechjeb do it AND THEN WE TUNE
 FROM TRUSTED CAPTURED VALUES!!!"* (2026-09-08) and an instrument is not a tune. ⛔ NTSB-2026-001's R-01,
@@ -26772,3 +26772,127 @@ the stock mechjeb style mission before tuning etc."* `PitchRate` and `LimitDynam
 - **DONE when:** `test` green · `harnesscheck` green · mutation-tested · a headless assertion that the
   read-back goes RED on a seeded divergence · coverage clean · the register states plainly that the
   vehicle's behaviour did not change.
+
+#### ⭐ WHAT WAS BUILT
+
+**JOB 1 — the audit READS BACK.** `pure/AscentReadback.cs` (new) carries one EXPECTATION per audited box:
+the value that box's declared source actually produces, **as a number in the unit the live field holds**,
+with a citation into the vendored source. `src/MechAscentReadback.cs` (new, glue) is the only thing that
+asks the running core — `a.PitchRate.Val` and 76 friends, read at call time. `MechConductor.Configure`
+takes reading **(a)** and **appends its verdict to the very line that logs `AscentProfile.Render()`**, so
+the claim can no longer appear in `KSP.log` without the measurement beside it; `TickTerminalCount` takes
+reading **(b)** and logs the **DELTA**. ⛔ The headline **goes RED**: `⛔ N row(s) DISAGREE WITH THEIR
+DECLARED SOURCE`, and `AscentReadbackTest.SeededDivergence` perturbs one box and asserts it does — a green
+that cannot go red is the S130 failure and this line was written not to repeat it.
+⚠ **The pure/glue split is deliberate and is NOT a route around the brief's *"it does not go in
+`plugin/src/pure/`"*.** The READ — everything that needs a MechJeb type — is in the glue, exactly as
+directed. What is pure is the table of names and numbers and the comparison over them, because
+`build.py test` compiles `src/pure` + `test` ONLY, so a comparator in the glue could not have been
+asserted at all — and the brief's own DONE-WHEN requires that assertion.
+
+**JOB 2 — the guidance columns are FITTED (R-03).** `gnc_module` · `gnc_status` · `cmd_pitch_deg` ·
+`cmd_heading_deg` · `cmd_throttle` · `pvg_vgo_mps` · `pvg_tgo_s` · `tgt_ap_km` · `tgt_pe_km` ·
+`tgt_inc_deg` — **all ten**, declaration and writer **in this one commit** (the `BlackBoxCoverage` trap
+fires either way round if they are split). Sources, each read in the vendored tree first:
+`MechJebModuleAttitudeController.RequestedAttitude` (`:109`) resolved into `VesselState`'s own surface
+frame via its public `HeadingFromDirection` (`:1234`) — **chosen precisely because it captures the
+unstable-guidance fallback's output**, the number that ran away downward ·
+`MechJebModuleThrustController.TargetThrottle` (`:211`) · the ascent autopilot's own `Status` widened
+with `Core.Guidance.Status`/`IsStable()` · `Guidance.Vgo`/`.Tgo` (`:49-50`) · the LIVE ascent settings.
+⛔ **The declared note *"the conductor's command struct"* was WRONG and was NOT built to** — under
+§14.4(a) MechJeb commands attitude, not the conductor, and there is no such struct. Corrected **in
+place** (C1.16/G12) with the reason attached; the full argument is `pure/GuidanceReadout.cs`'s header.
+All ten are `Fit.Conditional` + `Scope.Capsule`, each group gated on **its own** flag — ⭐ a blank
+`pvg_*` **is the signal**, it is exactly the window in which guidance is not stable. Plus MechJeb's
+ascent `Status` to `KSP.log` **on change only**, never per tick.
+
+**JOB 3 — the manifest says what we flew (R-04).** `mechjeb_cfg_sha` is filled from the sha256 of the
+tune `ApplyTune()` actually loads, with new `mechjeb_cfg_file` + `mechjeb_cfg_note` so a digest is
+attributable and a null carries a **current** reason. The stale `// no MechJeb core is embedded yet — T15`
+is superseded **in place**, quoted, with why it expired. `mechjeb_ascent_settings` is a **separate**
+manifest key holding the 77 boxes read live, `MechJeb.`-prefixed, never merged with our own 74
+`[Tunable]`s.
+
+#### ⛔ DID THE VEHICLE'S BEHAVIOUR CHANGE? **NO.**
+Not one ascent setting, gate, steering law or throttle was written. `plugin/src/pure/AscentProfile.cs`'s
+**77 audit rows are byte-identical to what [[S222b]] left** (the only edit to that file is a doc comment
+on `Render()` pointing at the measurement). The one enforcement that matters is a test, not a promise:
+`AscentReadbackTest.NothingIsWritten` parses `src/MechAscentReadback.cs` and **fails the build on any
+`a.<field> =`, `core.<field> =` or `.Val =`**, and on `Users.Add` / `AuthorizeDrive` / `ApplyRODefaults` /
+`ActivateNextStage`. That check is itself proven to reject a real write.
+⛔ **NTSB-2026-001 R-01, R-02, R-05, R-06 were NOT acted on**, per the owner, verbatim: *"do not act on
+it's advice until we have completed the stock mechjeb style mission before tuning etc."* `PitchRate` and
+`Core.Thrust.LimitDynamicPressure` remain `OwnerQuestion`, unwritten, exactly as [[S222b]] left them —
+asserted by two checks in the new suite.
+
+#### VERIFICATION
+- `python plugin/build.py test` **GREEN** · `python plugin/build.py harnesscheck` **GREEN** (S167: fault
+  named, exit 1, all 168 clean report lines still present).
+- `AscentReadbackTest`: **356 checks, 0 failed**. **29 of 29 mutants KILLED** across all six touched
+  files — including *"the read-back WRITES a setting"*, *"the headline never reports a disagreement"*,
+  *"the status log fires every tick"*, *"the readout leaks onto an unfocused stream"* and *"the stale
+  honest-null comes back"*.
+- Text assertions use the S220 `Live()` helper, so a call that is commented out cannot pass as a call.
+- **Coverage:** `unexpected_writer` can no longer fire on these ten (they are not `Unfitted`), and
+  `partially_written` cannot either (`Conditional` is exempt). A flight that never engages the ascent
+  still emits `never_written` for them — **as a NOTE carrying the declared condition, `defect: false`**,
+  which is the declared behaviour and is asserted both ways in the new suite. The `unexpected_writer`
+  machinery is proven still to have teeth on a column that IS still `Unfitted`.
+- ⚠ `previewdiff` **was NOT run and is NOT cited**: this changes no render input, so S168 would
+  correctly refuse to report anything, exactly as the brief says.
+- ⚠ `SchemaVersion` stays **1**: no column was added, removed or reordered — only `Fit`/`Scope`/`Note`
+  metadata moved, and the manifest carries those per column.
+
+#### ⛔ STRAYS LOGGED, NOT DONE (C1.1)
+1. **`AscentProfile`'s `DesiredAttachAlt` row says "110 km (RO)" and RO's real seed is 145 km.**
+   `ApplyRODefaults()` assigns that field **twice** — `DESIRED_ATTACH_ALT_DEFAULT` near the top and
+   `DesiredAttachAlt.Val = 145000` beside `DesiredOrbitAltitude.Val = 145000` further down — and the
+   audit's prose caught the same double-assignment for `Core.Thrust.MaxDynamicPressure` but not this
+   one. ⛔ **NO FLIGHT EFFECT**: the field is unread on our path (`AttachAltFlag` is RO's false). The
+   expectation table follows RO's ACTUAL last assignment so the instrument does not fire a false red;
+   the claim row is left exactly as it is, because a task does not quietly edit the claim it is
+   measuring. **Needs its own line to correct the prose.**
+2. **`cmd_att_err_deg` (`MechJebModuleAttitudeController.attitudeError`, `:117`) is not fitted.** It
+   would be a genuinely useful eleventh column — a command nobody achieved is a different event from a
+   command nobody gave — but a column inserted among the ten REORDERS the schema and forces a
+   `SchemaVersion` bump, which stops an analyser chaining a new recording with an old one (§4.2). It
+   belongs in an append at the END of the table, which is a decision of its own.
+3. **The shipped tune's `AutodeploySolarPanels` key does not match the field `AutoDeploySolarPanels`.**
+   `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:32` spells it with a lower-case `d`, so that
+   node value cannot bind to the vendored field at all. Noticed while reading the cfg; **not touched** —
+   it is a tune-file question and tuning is T22's.
+4. **The NTSB artefacts the brief cites are NOT in this repo** — no `NTSB/` tree, no `NTSB-2026-001`, no
+   `KSP_run_20260908_003223.log`, no `New_Crew-2_20260908_003223` recording. C7 forbids reaching outside
+   the repo for build inputs, so **none of them were read**. Everything asserted here was verified
+   against repo sources (the vendored MechJeb, the shipped cfg, the schema) or is quoted from the brief
+   itself and attributed to it.
+
+### ⛔ LINES SKIPPED AND WHY (so blockers cannot accumulate unseen)
+[[S213]], [[S214]], [[S215]], [[S219]], [[S222b]] are all `NEEDS-WORK` awaiting the same `install` +
+glass gate. [[S198]] is `TODO` but owner-gated on a glass pass. **[[S222c]] (the terminal count fires
+~20,000 s early) is `TODO` and was deliberately NOT folded in** — the brief says so explicitly and C1.1
+forbids it; it is arithmetic in `SecondsToWindow()`, untouched here. No line was reached past.
+
+## Open questions for the owner
+
+- **Q1 — the audit row for `DesiredAttachAlt` states RO's seed wrongly (stray 1 above).** The row says
+  "110 km (RO)"; `ApplyRODefaults()` leaves **145 km**. No flight effect — the field is unread while
+  `AttachAltFlag` is RO's false — but the audit is the project's record of what RO's defaults ARE, and
+  it is wrong about one of them. Options: (1) **a small follow-up line corrects the prose to
+  "145 km (RO) — RO assigns it twice"** *(recommended: a one-row prose fix with a citation, and the
+  instrument already carries the discrepancy in code)*; (2) fold it into T22's tuning pass, where the
+  attach altitude is looked at anyway; (3) leave it and let `pure/AscentReadback.cs`'s comment be the
+  record. ⚠ Not a gate — knowable, so C1.14 lets the overseer settle it.
+- **Q2 — should `cmd_att_err_deg` be appended (stray 2)?** One column at the END of the schema (so no
+  version bump), answering "was the command achieved" alongside "was a command given". Options:
+  (1) **append it in a small line before the reference flight** *(recommended: the flight it would
+  measure is the one coming, and afterwards it is too late for that flight)*; (2) defer to T22;
+  (3) never — `att_rate_meas` and the applied-control block are close enough. ⚠ Knowable, not a gate.
+- **Q3 — `install` + glass, still the owner's alone (C1.12).** ⛔ **This chat opened nothing.** S223 is
+  an instrument: **every one of its outputs — the read-back tables, the delta, the status transitions,
+  the ten columns, the manifest block — exists only in flight.** The five lines already waiting on that
+  gate ([[S213]], [[S214]], [[S215]], [[S219]], [[S222b]]) now have a sixth reason to want the same
+  single flight: without it, whether the shipped tune reaches `MechJebModuleAscentSettings` stays
+  unanswered, and ⛔ **that question is the one blocking any honest tune at T22.** Options: (1) **open
+  the gate for one flight covering all six** *(recommended — ⚠ but [[S222c]]'s 20,000 s early launch
+  would waste it, so fix that first)*; (2) fix [[S222c]] and fly once afterwards; (3) hold.
