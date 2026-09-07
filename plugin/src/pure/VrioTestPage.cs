@@ -355,6 +355,38 @@ namespace DragonScreen
             Ico("ic_refresh", ColX - RefreshGap - RefreshS, SectInk + 19.1f / 2f - RefreshS / 2f,
                 RefreshS, Accent);
             // ⭐ TIER-2 FILL (S162): section label and title both take the frame's single left column.
+            // ⭐⭐ S224, 2026-09-08 — A TIER-1 PHOTOGRAPH NOW CORROBORATES THE LEFT ALIGNMENT ABOVE.
+            //    The comment line above is left EXACTLY as written (C1.16 / G12: superseded reasoning is
+            //    marked in place, never rewritten), and its **`TIER-2 FILL` mark STAYS**. This annotation
+            //    raises the CONFIDENCE in the two draws below. It does not change the tier, and ⛔ **no
+            //    pixel moved** — nothing here touched a coordinate, a colour, a size or a draw call.
+            //    ⭐ WHAT IS CONFIRMED. When [[S162]] ruled, no photograph was reachable, so the single
+            //    left column both elements take was INFERRED from `frame59`, the tier-2 export. A
+            //    photograph is now reachable and it AGREES: the layout [[S153c]] applied is CONFIRMED,
+            //    not merely filled. Independent source, same answer.
+            //    ⭐ MEASURED, NOT ASSERTED — THE LIBRARIAN, 2026-09-08, on `discovery2.jpg` at native
+            //    resolution, ink extents isolated by colour, keystone corrected +0.086 px/px:
+            //      `SECTION 2: IN PROGRESS`          measured left 37, left-if-centred 216 → 179 px apart
+            //      step title `Execute Suit Leak Check` measured left 42, left-if-centred 167 → 125 px
+            //    Both sit hard left, and both are an order of magnitude further from their centred
+            //    position than any keystone or ink-extent error, so neither is a close call.
+            //    ⚠ THE STRENGTH IS **TEMPLATE-LEVEL, NOT PAGE-LEVEL** — DO NOT OVERSTATE IT.
+            //    `discovery2.jpg` photographs procedure **4.011 Suit Leak Check**, NOT this page's
+            //    **4.700**. It is still the right evidence at the right strength, and `REGISTER.md:4578`
+            //    is why: *"4.011's photographed grammar is the grammar copied."* The photograph fixes the
+            //    TEMPLATE's column; it does not photograph THIS page. That residual gap is precisely why
+            //    the tier does NOT move and the mark above stays.
+            //    ⚠ PROVENANCE, STATED SO IT IS NOT MISTAKEN FOR AN IN-REPO SOURCE: `discovery2.jpg` is
+            //    NOT in this repository (`find . -iname "discovery*"` → nothing, 2026-09-08 — the same
+            //    absence [[S162]] found four ways). The numbers above are RELAYED and cannot be
+            //    re-measured from this repo as it stands. See [[S184]] Q1 for the reachability question.
+            //    🟢 THE OWNER RULED IT, 2026-09-08, verbatim **"option 2"** — re-label the affected
+            //    comment. ⛔ **`VT-02` WAS NOT REOPENED** and is not reopened here.
+            //    ⭐ AND WHY A FULL REOPEN WAS REJECTED, because a future reader will ask: **4 of the 7
+            //    `VT-02` elements are not visible in ANY of the 80 archived photographs.** A reopened
+            //    element-by-element pass would still be INFERENCE on those four, and would land on the
+            //    same pixels these draws already use — re-deciding nothing, at the cost of re-opening a
+            //    closed finding.
             L("SECTION 4: IN PROGRESS", ColX, SectInk, 30, Accent);
             L("Test VRIO Health LEDs", ColX, TitleInk, 62, White);
             Rule(MainRuleX0, MainRuleX1, TopRule);     // `Line 100`

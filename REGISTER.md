@@ -26899,7 +26899,7 @@ forbids it; it is arithmetic in `SecondsToWindow()`, untouched here. No line was
 
 ---
 
-### S224 [O] The tier-1 photograph corroborates `VT-02`'s left alignment — re-label the one comment that carries it — **DOING** — [owner `OVERRIDE` of an [[S162]] outcome, 2026-09-08, verbatim *"option 2"*; TIER 3: provenance, comment-only]
+### S224 [O] The tier-1 photograph corroborates `VT-02`'s left alignment — re-label the one comment that carries it — **DONE 2026-09-08 — the annotation is added beneath a byte-identical S162 comment line; the `TIER-2 FILL` mark STAYS. ⛔ NO RENDERED PIXEL CHANGED — `previewdiff` saw the changed render input and reported 130 of 130 pages unchanged. 32 added lines, all comments, 0 deletions** — [owner `OVERRIDE` of an [[S162]] outcome, 2026-09-08, verbatim *"option 2"*; TIER 3: provenance, comment-only]
 - **Marker committed before any edit (C1.1).** Tree clean at `03403fa`.
 - **Authority — the owner's ruling, 2026-09-08, quoted (C1.12 evidentiary standard).** Asked whether a
   tier-1 photograph corroborating `VT-02`'s layout should (1) be left alone, (2) re-label the affected
@@ -26917,3 +26917,128 @@ forbids it; it is arithmetic in `SecondsToWindow()`, untouched here. No line was
 - **DONE when:** `build.py test` green · `harnesscheck` green · ⭐ **`previewdiff` reports the VRIO page
   UNCHANGED** (the proof no pixel moved) · the register states plainly whether any rendered pixel changed
   · strays logged not fixed · local commit, **no push**.
+
+#### ⭐ BUILT — ONE COMMENT, ONE SITE, THIRTY-TWO ADDED LINES, ZERO DELETIONS
+
+`plugin/src/pure/VrioTestPage.cs:357` — the `⭐ TIER-2 FILL (S162)` comment. **The comment line itself is
+byte-identical** (C1.16 / G12: superseded reasoning is marked in place, never rewritten); the annotation was
+**added beneath it**, and its `TIER-2 FILL` mark **stays**. The annotation records, in the file's own voice:
+
+- ⭐ **WHAT IS CONFIRMED.** [[S162]] inferred the single left column from `frame59` (the tier-2 export)
+  because no photograph was reachable. A photograph is now reachable and it **agrees** — so the layout
+  [[S153c]] applied is **confirmed, not merely filled**. Independent source, same answer.
+- ⭐ **THE MEASUREMENT, MEASURED NOT ASSERTED.** THE LIBRARIAN, 2026-09-08, on `discovery2.jpg` at native
+  resolution, ink extents isolated by colour, keystone corrected **+0.086 px/px**:
+  `SECTION 2: IN PROGRESS` — measured left **37**, left-if-centred **216** (**179 px** apart); the step
+  title `Execute Suit Leak Check` — measured left **42**, left-if-centred **167** (**125 px**). Both are an
+  order of magnitude further from centred than any keystone or ink-extent error: neither is a close call.
+- ⚠ **THE STRENGTH IS TEMPLATE-LEVEL, NOT PAGE-LEVEL, AND THE ANNOTATION SAYS SO IN THOSE WORDS.**
+  `discovery2.jpg` photographs **4.011 Suit Leak Check**, not this page's **4.700**. `REGISTER.md:4578` is
+  why it is still the right evidence at the right strength: *"4.011's photographed grammar is the grammar
+  copied."* The photograph fixes the TEMPLATE's column; it does not photograph THIS page. ⛔ **That residual
+  gap is exactly why the tier does NOT move** — the annotation raises confidence, not tier.
+- 🟢 **THE OWNER'S RULING, QUOTED (C1.12).** 2026-09-08, verbatim **"option 2"** — re-label the affected
+  comment. ⛔ **`VT-02` was NOT reopened** and is not reopened here.
+- ⭐ **WHY A FULL REOPEN WAS REJECTED**, written down because a future reader will ask: **4 of the 7
+  `VT-02` elements are not visible in ANY of the 80 archived photographs.** A reopened element-by-element
+  pass would still be inference on those four, and would land on the same pixels these draws already use.
+
+⚠ **ONE THING THE ANNOTATION ADDS BEYOND THE BRIEF, AND WHY.** It states that **`discovery2.jpg` is NOT in
+this repository** — `find . -iname "discovery*"` → nothing, re-run 2026-09-08, the same absence [[S162]]
+found four ways — so the numbers above are **RELAYED and cannot be re-measured from this repo**, and it
+points at [[S184]] Q1 for the reachability question. This adds no scope (same one comment, no pixel) and it
+is the C7 honesty the annotation would otherwise be missing: without it the comment reads as though the
+photograph were an in-repo source a later chat could open, and it is not.
+
+#### ⛔ THE ONE-SITE DISCIPLINE, HELD
+
+The request said *"two of the six call sites"*. The overseer had already corrected it: all six S162 sites
+(`304, 311, 339, 357, 380, 388`) were read and **both measured elements land on the SAME comment at 357**,
+which covers the section label **and** the title. ⛔ **One site was annotated. No second site was hunted to
+satisfy the word "two."**
+
+#### ⭐ VERIFIED — AND THE PIXEL QUESTION ANSWERED PLAINLY
+
+- **`python plugin/build.py test`** → **`ALL SUITES PASSED`**. Every gate below it green: harness fault
+  check ok (168 clean report lines), 38/38 event kinds emitted, 0 bare part-name reads, 206 indexed
+  black-box columns with 20 unfitted-and-owned, previewdiff selftest 19 checks, `SELFTEST OK`.
+- **`python plugin/build.py harnesscheck`** → **ok** (S167: a throwing suite cannot hide the ones below it).
+- ⭐ **`python plugin/build.py previewdiff`** → **`130 unchanged`, `0 existing page(s) changed, 0 new,
+  0 removed (of 130 compared)`.**
+- ⭐⭐ **AND THE PASS IS NOT VACUOUS, WHICH IS THE WHOLE POINT OF S168.** The run reported
+  **`1 changed render input(s): plugin/src/pure/VrioTestPage.cs`** before rendering, so the baseline and
+  the working tree were **actually rendered and actually compared** — S168's refusal ("a render that did
+  not happen is never *nothing moved*") had a real input to work with and still returned unchanged. ⚠ Had
+  the input list been empty, this check would have been worth nothing and the register would say so.
+- ⛔ **DID ANY RENDERED PIXEL CHANGE? NO.** 130 of 130 pages identical, the VRIO page among them. Proven
+  three independent ways: `previewdiff` above; `git diff --numstat` = **32 insertions, 0 deletions**; and
+  **every one of the 32 added lines is a comment** (`git diff -U0 | grep "^+[^+]" | grep -cv "^+ *//"` →
+  **0**). No coordinate, colour, size or draw call was touched.
+- **Instrument NOT used, and why:** `python plugin/build.py preview` on its own. `previewdiff` supersedes
+  it here — it renders both sides and compares them, which a bare `preview` cannot do, and a bare `preview`
+  of a comment-only change would only have produced a picture to eyeball. `python plugin/build.py install`
+  was **NOT** run: the brief says **INSTALL: NOT PERMITTED**, and no glass was needed to close this line.
+
+#### ⚠ PRE-EXISTING WARNING, NOT THIS LINE'S
+
+`previewdiff` reprints `!! WARNING: …\assets\kenney_ui_scifi is now EMPTY`. That is the standing
+[[S207]]/[[S218]] warning: the directory is gitignored (`.gitignore:79`), has **never** been tracked
+(`git ls-files` → 0), and its mtime is **2026-09-06 12:49 — before this session**. ⛔ **This chat did not
+empty it**, and per C1.1 it is not fixed here. No new line opened: [[S218]] already carries it.
+
+#### ⛔ LINES SKIPPED AND WHY (so blockers cannot accumulate unseen)
+
+This was a directed task, not a `/next` pick, so no line was reached past. For the record, the loop's own
+rule would have stopped at [[LZ1]] (`NEEDS-WORK`, **blocked on owner action** since 2026-09-04 — re-opened
+by [[S89]] because the DONE rested on a fabricated owner ruling) before reaching the first eligible line,
+[[BB8]].
+
+**Commits:** `422e174` (the DOING marker, before any edit) · this one. **No `git push` — the owner pushes
+from GitHub Desktop.**
+
+---
+
+### S225 [S] `ASCENT STATUS ->` logs **16,068 times** — the "on change only" guard never settles because the string embeds a moving number — **TODO** — [logged by [[S224]] per C1.1, 2026-09-08; TIER 2: an S223 instrument that floods the log it was built to make readable]
+- **Provenance:** found by the overseer in `KSP_run_20260908_034133.log` and relayed to this chat.
+  ⛔ **This chat did not read that log** — it is in the KSP install, which C7 makes a DEPLOY TARGET, not a
+  build input. The count and the symptom are the overseer's; the code reading below is this chat's own.
+- **Site:** `plugin/src/MechConductor.cs:938-967`, `TickGuidanceStatusLog()`.
+- **The mechanism, read from the code.** The guard is real and looks right —
+  `bool moved = !string.Equals(status, lastAscentStatus, …) || !string.Equals(guidance, …); if (!moved) return;`
+  — but the value it compares is `MechJebModuleAscentBaseAutopilot.Status`, and for PVG that string
+  **embeds a continuously changing number** (`63.55° → 63.62° → 63.68° …`). So `moved` is true on almost
+  every tick and the "on change only" contract is satisfied literally while being defeated in practice:
+  **~2 lines/second, 16,068 lines in one run.**
+- ⭐ **WHY IT MATTERS AND IS NOT COSMETIC.** [[S223]] built this line so a reader could see the ascent's
+  status TRANSITIONS. At 16,068 repetitions the transitions are the needle and the instrument is the
+  haystack — the log is *less* readable than before the instrument existed, which is the opposite of
+  what the line was for.
+- **Likely shape of a fix (NOT decided here):** compare a NORMALISED key rather than the raw string —
+  e.g. digits-stripped, or the `Status` enum / phase rather than its rendered text — so the numeric drift
+  cannot re-trigger it; and/or rate-limit. ⚠ Whichever is chosen must still fire on a REAL transition:
+  a fix that suppresses the flood by suppressing the signal is worse than the flood.
+- **DONE when:** a status transition still logs exactly once, a steadily-drifting number logs zero extra
+  lines, and the check MUTATION-TESTS both directions (a mutant that stops logging transitions must die).
+
+### S226 [S] The same log line appends *"⛔ 'WARNING: Unstable Guidance' means…"* to lines that read **`Stable Guidance`** — **TODO** — [logged by [[S224]] per C1.1, 2026-09-08; TIER 2: an instrument that will make a future reader diagnose a fault that is not there]
+- **Provenance:** the overseer, from the same `KSP_run_20260908_034133.log`; ⛔ this chat did not read it
+  (C7 — the KSP install is a deploy target). The code reading is this chat's own.
+- **Site:** `plugin/src/MechConductor.cs:957-961` — the same emitter as [[S225]], a different defect.
+- **The mechanism, read from the code.** The trailing explanation is concatenated **unconditionally**:
+  `+ ". ⛔ 'WARNING: Unstable Guidance' means the PSG autopilot has fallen back to min(90, SrfvelPitch(), VesselState.Pitch)…"`
+  It is appended to EVERY line, including the ones whose guidance field was just built as
+  `core.Guidance.Status + (core.Guidance.IsStable() ? " (stable)" : " ⛔ NOT STABLE")` and therefore reads
+  **stable**. ⭐ **The emitter already computes the stability boolean it fails to branch on** — `IsStable()`
+  is called four lines above — so the fix has its condition to hand.
+- ⭐ **WHY IT MATTERS.** This is the failure mode this project has a name for: an instrument that lies.
+  A future reader — most likely NTSB, reading a flight where nothing was wrong — finds a prominent ⛔
+  unstable-guidance explanation on 16,068 healthy lines ([[S225]]) and starts diagnosing a fallback that
+  never happened. ⚠ The explanation itself is **correct and worth keeping** (it cites
+  `MechJebModuleAscentPSGAutopilot.cs:181-184`); it is attached to the wrong lines.
+- **Likely shape of a fix (NOT decided here):** emit the explanation only when `IsStable()` is false —
+  and, since it is then rare, it can be emitted in full rather than trimmed.
+- ⚠ **SEQUENCE:** [[S225]] and [[S226]] are the same method and should be read together, but they are
+  **two defects, not one** — a fix for either leaves the other standing. Whoever takes them may batch them
+  in one line **only** if the batch is declared and both are proven separately.
+- **DONE when:** a `Stable Guidance` line carries no unstable-guidance explanation, an unstable one still
+  carries it in full, and a mutant that inverts the condition dies.
