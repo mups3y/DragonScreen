@@ -25842,7 +25842,7 @@ previewdiff mirror list record that it is deliberately gone so the warning stops
 
 ---
 
-### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DONE · JOB 2 DONE · JOB 3 DOING** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
+### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **ALL THREE JOBS DONE — NEEDS-WORK: the in-flight half is behind a fresh `install` + glass gate** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
 
 ⚠ **NUMBERING.** The owner's prompt titles this **S218**. That number was already taken by the
 kenney-assets line [[S218]], logged by [[S215]] earlier the same day, so this line is **S219** and the two
@@ -26160,4 +26160,218 @@ Was: `speedLimit` + `forceRol`. Now also, before the engage:
 | J2-j | the rendezvous AP left at 100 m, inside the KOS | RendezvousOpsTest |
 | J2-k | `RCSOnly` inverted (the Dragon burns on a cold abort motor) | RendezvousOpsTest |
 | J2-l | the conductor's own path stops being enum 0 | RendezvousOpsTest |
+
+
+---
+
+## ⭐ JOB 3 — THE ENGAGE, THE ACTIVATION, AND THE T-0 STAGING
+
+New suite `plugin/test/ConductorEngageTest.cs` — **65 checks, 0 failed**.
+
+### A. ⛔ "IT WILL SIT THERE READY TO GO BUT DO NOTHING" — A TEST THAT FAILS ON EXACTLY THAT
+
+`src/MechConductor.cs` needs KSP to compile, so no headless test can CALL it. But *"this module is
+configured and never engaged"* is **a claim about text**, and this repo already proves claims about text
+against real files (`MechHostTest` reads the pinned MechJeb tree; `RendezvousOpsTest` reads the vendored
+Operation classes). Same idiom, same reason.
+
+For each module, **scoped to its own runner** — because `ap.Users.Add(Owner)` is the idiom for three
+different modules and a file-wide search would cheerfully match the wrong one:
+
+| module | configured with | engaged with | order asserted |
+|---|---|---|---|
+| PVG ascent | `Configure(v)` | `ap.Users.Add(Owner)` | ✓ (in `RunAscent`) |
+| rendezvous AP | `ap.desiredDistance.Val = …` | `ap.Users.Add(Owner)` | ✓ |
+| docking AP | `ap.forceRol = true` | `ap.Users.Add(Owner)` | ✓ |
+| node executor | `SetNodeRcsOnly(v)` | `ne.ExecuteOneNode(Owner)` | ✓ |
+| SmartASS | `sa.mode = …Target2Mode…` | `sa.Engage()` | ✓ |
+
+**And the two failures that live next door to it, both asserted:** every `Users.Add(Owner)` has a matching
+`Users.Remove(Owner)` (a module left holding MechJeb's attitude/thrust/RCS pools on a core that stopped
+driving is *a vehicle nobody is steering and nobody has given back*), and every runner takes
+`AuthorizeDrive(true)` **before** it engages (`MechJebCore.FixedUpdate` drives only the master core, so a
+module enabled without authority has `OnModuleEnabled` grab the pools while `Drive` never fires).
+
+⚠ **THE SUITE FOUND A REAL DEFECT IN JOB 2's OWN WORK ON ITS FIRST RUN.** The commit block had **two**
+`DesiredInclination` writes — the original one *before* `StartCountdown` and the new one *after* — so
+§7.5's order was violated by a leftover. Removed; the ordering check is what caught it, which is the
+argument for the check.
+
+### B. ⭐⭐ THE FULL IGNITION CHAIN, HEADLESS — five links, each failing by name
+
+Owner: *"or mechjeb will throttle up but never activate the engines."* Walked from the real part names
+(`docs/reference/craftdump.csv`), each link's output feeding the next:
+
+| link | proves |
+|---|---|
+| **1 BIND** | `OctawebBinding.Bind` accepts the real vessel and names `TE.19.F9.S1.Engine` |
+| **2 RESOLVE** | the three `engineID` modes resolve to **three distinct** modules — by id, never by position |
+| **3 COMMAND** | the liftoff command lights **exactly one** module — and **not** the SuperDraco abort motor. ⛔ The regression guard is flight_0822_201219: lighting Three/Centre as well **cooked the S1 tank** |
+| **4 SEQUENCE** | at T-3 s **with a solution**, `IgniteStageOne` is commanded — and **not a second early**, and **never without a guidance solution** (S214) |
+| **5 THRUST** | 99% of available on one lit module **releases the hold-downs**; a commanded-but-unlit octaweb **holds** them; thrust that never arrives **safes the pad with the clamps still held** |
+
+...and then one line asserting the whole chain end to end, which is what fails if any link is cut.
+
+### C. ⛔⛔ THE T-0 STAGING — **ESTABLISHED, AND THE BRIEF'S OPTION (2) IS FALSE**
+
+The hazard, verbatim (`MechJebModuleAscentBaseAutopilot.cs:122-137`):
+```
+if (TimedLaunch) {
+    if (TMinus < 3 * DeltaT || (TMinus > 10.0 && _lastTMinus < 1.0)) {
+        if (Enabled && VesselState.ThrustAvailable < 10E-4) StageManager.ActivateNextStage();
+        TimedLaunch = false;
+    } else { if (Core.Node.Autowarp) Core.Warp.WarpToUT(_launchTime - WarpCountDown); }
+}
+```
+
+**⛔ OPTION (2) — *"the staging list is inert"* — IS FALSE ON THIS CRAFT, AND THE CRAFT FILE SAYS SO.**
+Read out of `docs/reference/Crew-2.craft` **by the test itself**, not by hand:
+
+| KSP stage | part |
+|---|---|
+| **8** | `TE.19.F9.S1.Engine` — **the octaweb, alone** |
+| **7** | `TE.Ghidorah.Erector` — ⛔ **THE HOLD-DOWNS, ALONE** |
+
+So `ActivateNextStage()` on a cold pad **lights the octaweb outside `IgnitionGate`**, and a second call
+**releases the clamps**. And `AscentSettings.Autostage` does nothing about it: the property governs only
+`Core.Staging.Users` (`:82`, `:128-133`) and has no bearing on a direct `StageManager` call.
+
+**⚠ OPTION (1) — *"our octaweb is lit before T-0"* — IS TRUE ON THE NOMINAL PATH ONLY**, and [[S215]]
+already said why that is not enough: *"a safety property that holds only because we win a race is not a
+safety property."* **And the case it loses is the important one:** `IgnitionGate` safing the pad at ~T-1 s
+**shuts the engines**, so `ThrustAvailable` is back to **zero** at T-0 — and MechJeb would **re-light the
+octaweb the gate just shut**, outside the gate, with the clamps held.
+
+⭐ **SO NEITHER IS RELIED ON. THE BRANCH IS MADE UNREACHABLE.** `TickTerminalCount` clears `TimedLaunch`
+at **T-10 s**, using **the same write MechJeb's own Abort button makes**
+(`MechJebModuleAscentMenu.cs:305`) — a documented UI action, not a patch (`plugin/mech/` untouched).
+The whole `if (TimedLaunch)` block, staging included, is dead from then on.
+**That is establishment, not a race, and it is the answer to the third bullet.**
+
+⛔ **`IgnitionGate` IS BYTE-FOR-BYTE UNTOUCHED** — 99% / 2 s, and the suite asserts both literally.
+
+**Pinned against the vendored tree**, so a re-pin that moved the staging call out from under
+`if (TimedLaunch)` fails here rather than in the capsule: the call exists, its `Enabled &&
+ThrustAvailable < 10E-4` gate exists, it sits **inside** `if (TimedLaunch)`, `TimedLaunch` is still a
+`public` field, and the Abort button still makes that write.
+
+### Verification (C1.3)
+
+`python plugin/build.py test` — **ALL SUITES PASSED.** `ConductorEngageTest` **65/0** · `AscentProfileTest`
+**88/0** · `RendezvousOpsTest` **129/0** · booster HOST **262/0**.
+`python plugin/build.py previewdiff HEAD~4` (the whole S219 span) — **0 changed, 0 new, 0 removed of 130**.
+*(`previewdiff` with no ref REFUSES here, correctly: no render input differs from HEAD, so "0 changed"
+would be arithmetic rather than a measurement — S168's own guard.)*
+*(The `kenney_ui_scifi is now EMPTY` warning is register [[S218]], pre-existing.)*
+
+**MUTATION PROOF — 12 of 12 killed:**
+
+| # | mutant | killed by |
+|---|---|---|
+| J3-a | the **rendezvous** AP is configured and never engaged | ConductorEngageTest |
+| J3-b | the **docking** AP is configured and never engaged | ConductorEngageTest |
+| J3-c | a module engaged **without drive authority** | ConductorEngageTest |
+| J3-d | `StandDown` stops releasing the rendezvous AP | ConductorEngageTest |
+| J3-e | MechJeb's countdown never armed (**a silent revert to S215**) | ConductorEngageTest |
+| J3-f | §7.5's order breaks — inclination before the countdown | ConductorEngageTest |
+| J3-g | `TimedLaunch` never cleared — **MechJeb keeps T-0** | ConductorEngageTest |
+| J3-h | the terminal count moves inside `IgnitionGate`'s hold window | AscentProfileTest |
+| J3-i | **`IgnitionGate` weakened** (the brief forbids it) | IgnitionGateTest |
+| J3-j | the octaweb may light **without a guidance solution** (S214) | ConductorEngageTest + AscentSequenceTest |
+| J3-k | the liftoff command lights Three/Centre too (**the tank cook**) | ActuationTest |
+| J3-l | the node-composing path **deleted** instead of kept selectable | **the compile** — stated plainly: `Engage` still calls it, so removing it does not reach the assertion. The suite's *"the node-composing path survives"* check covers a rename, not a deletion. |
+
+**Grand total across S219: 29 of 29 mutants killed.**
+
+---
+
+## ⛔ WHAT IS *NOT* PROVEN, STATED PLAINLY
+
+- **`src/MechConductor.cs` and `src/BoosterHost.cs` cannot be compiled headlessly.** Everything in them is
+  proven either as TEXT (the engage/order/lifecycle claims above) or as the PURE decisions they feed.
+  **Nothing here proves a `Users.Add` on a live core actually takes the vehicle.** That is glass.
+- **No number in `AscentProfile` is TUNED.** Every one is a mission fact, a value the vendored source
+  calls mandatory, or RO's own default asserted explicitly. The two that want a decision are below.
+- **The 2026-09-07 octaweb refusal itself** is diagnosed from the craft file and the code, not from the
+  log — `KSP.log` is not in the repo and C7 forbids reading the install. What Job 1 changed is that the
+  refusal now names the vessel, so next time it will not need reconstructing.
+
+---
+
+## ⭐ OPEN QUESTIONS FOR THE OWNER (C1.13 / C1.14) — paste-ready for the overseer
+
+### Q1 — `PitchRate`: RO's 5.0 °/s, or your own flown 0.75?
+
+**Situation.** `AscentProfile` writes RO's default **5.0 °/s**. Your own tuned cfg for this exact craft
+(`docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:53`) records **0.75 °/s**. The pitch-program rate
+is how fast the vehicle rotates away from vertical before guidance takes over; 5 °/s is brisk for a
+Falcon 9 in RSS-RO and 0.75 °/s is what you actually flew.
+**Options:** (1) fly RO's 5.0 as the baseline and converge it at T22 from the first recorded flight —
+*recommended, it is what the Part-B gate says*; (2) write 0.75 now on the authority of your own cfg;
+(3) something else.
+⛔ (2) is a **deviation from the RO baseline** and needs an `OVERRIDE` (C1.8). This chat proceeds past none.
+
+### Q2 — max-Q throttle-down: you asked for it; RO turns it off deliberately
+
+**Situation.** Your words: *"We should also be ticking/selecting max q throttle down etc."* The control is
+`Core.Thrust.LimitDynamicPressure` + `MaxDynamicPressure`. RO's `ApplyRODefaults()` sets the limiter
+**false twice, deliberately**, and leaves the cap at **50 kPa**. We fly RO's default and have written the
+cap explicitly so it is on the record. ⚠ Note the q-**alpha** limiter (`LimitQaEnabled` / `LimitQa` =
+2000 Pa·rad) IS on — that is the one PVG calls mandatory, and it is a different quantity.
+**Options:** (1) leave it off for flight 1 and converge at T22 — *recommended, one variable at a time*;
+(2) turn it on at RO's own 50 kPa; (3) turn it on at a value you name.
+⛔ (2) and (3) both deviate from the RO baseline and need an `OVERRIDE`.
+
+### Q3 — which docking PORT does the conductor target?
+
+**Situation.** §9's module reads `acquireRange` off the target **only when the target is a
+`ModuleDockingNode`** and aligns in that port's frame. §B10.3 names **IDA-2**, but nothing in the repo maps
+a station's ports to that name (§1.4 forbids inventing one), and the crew's own target selection is the
+authority. Today the conductor **annunciates loudly** and flies on.
+**Options:** (1) leave it as an annunciation and target the port by hand on the glass — *recommended for
+flight 1*; (2) add a port picker to the NAV screen (a new register line); (3) auto-pick the nearest
+free compatible port on the targeted vessel.
+
+### Q4 — register numbering
+
+The brief titles this **S218**. That number was already taken by the kenney-assets line [[S218]], logged by
+[[S215]] earlier the same day, so this is **S219**. Say if you would rather they were renumbered.
+
+---
+
+## 🟠 GATE REQUEST — `install` + glass, ONE flight (C1.13, paste-ready)
+
+⛔ **A BUILD CHAT DOES NOT OPEN THIS GATE AND HAS NOT (C1.12).**
+
+**The situation.** Everything decidable without the game is closed: `test` green, `previewdiff` empty,
+**29 of 29 mutants killed**. ⛔ **Nothing in S219 is observable until the vehicle flies** — and it wants
+the **same flight** as [[S214]] and [[S215]], which are both `NEEDS-WORK` awaiting exactly this.
+
+**The decision needed:** open `install` + glass for **one flight covering S214 + S215 + S219**.
+
+### The numbered pad-to-dock checklist
+
+| # | watch for | pass | fail means |
+|---|---|---|---|
+| **1** | **Configure.** One `PVG configured` line, ending in the `ASCENT SETTINGS AUDIT` summary. | Reads `… attach 210 km (§7.2: NOT RO's 110 km), countdown 32 s, autowarp ON` and `77 boxes: 47 written … 2 ⛔ AWAITING THE OWNER`. | No audit line ⇒ an old DLL is installed. |
+| **2** | **GO polled first.** Work G1–G6, then G7 **with no target selected**. | G7 shows `HOLD - NO TARGET…` and **GO does nothing**. | GO clears with no target ⇒ S215-Q4's ordering in `CrewGate.Step`. |
+| **3** | Select the station, re-poll G7, press **GO**. | `LAUNCH WINDOW COMMITTED — T-0 in … s, plane …°` **followed by** `MechJeb's own countdown is ARMED (§7.5)`. | `⛔ MechJeb's countdown could NOT be armed` ⇒ `core.Ascent` or `VesselState` was null; the T-0 still stands but **there will be no warp**. |
+| **4** | ⭐ **AUTO-WARP — and it is MechJeb's now, not ours.** | Warp runs and **stops on its own near T-32 s**. | Warp never starts ⇒ `Core.Node.Autowarp` (check the audit line said `autowarp ON`). Warp overshoots T-0 ⇒ report it: MechJeb's own `WarpToUT` is sustaining it. |
+| **5** | ⭐ **GUIDANCE STARTS AT T-32 s**, inside the countdown — not at ignition. | PSG converges during the last 32 s; `MechJeb module … threw an exception` **absent**. | An `AscentBuilder.Build` throw ⇒ S214's stage-table hold did not hold; quote the trace. |
+| **6** | ⭐⭐ **TERMINAL COUNT AT T-10 s.** `TERMINAL COUNT — the conductor has T-0. MechJeb's TimedLaunch is CLEARED…` | Present, once, at about T-10 s. | **ABSENT ⇒ STOP AND SAY SO.** MechJeb still owns T-0 and `ActivateNextStage()` is live on a craft whose stage 7 is the hold-downs. |
+| **7** | **T-0.** `ASCENT Idle -> Ignition` at **T-3 s**, not before. | Ignition ~3 s before the committed UT. | Early ⇒ the countdown hold; late ⇒ PSG had not converged. |
+| **8** | ⭐ **IGNITION.** `thrust good — hold-downs released` — **the line that was ABSENT on 2026-09-07** (S214's pass criterion). | Present. | `PAD SAFED` **with a non-zero thrust number** is a *different* failure from last time — **report the number**. And check nothing re-lights afterwards: that would mean item 6 did not happen. |
+| **9** | **Insertion.** The vehicle flies the S214 chain to SECO. | ⭐ Insertion **circular at ~210 km**, not elliptical. | An **elliptical** insertion (low periapsis) ⇒ the attach altitude did not take — §7.2's bug, item 1's line is the check. |
+| **10** | ⭐ **PLANE MATCH.** After insertion, check the orbit against the station. | Inclination **and RAAN** both match; relative inclination ≈ 0. | Right inclination + wrong RAAN ⇒ `LaunchingToPlane` did not reach `SetTarget`. |
+| **11** | ⭐⭐ **THE RENDEZVOUS ACTUALLY BURNS.** `⭐ RENDEZVOUS AUTOPILOT ENGAGED` and then `Node Executor RCSOnly -> True … Burning on Dracos`. | Nodes are planned **and flown**; range closes. | Nodes planned and **never burned** ⇒ the `RCSOnly` finding is wrong or did not apply — the single most important new thing to watch. |
+| **12** | **HAND-OFF at 200 m.** `rendezvous leg complete at … m` then `DOCKING AUTOPILOT engaged`. | Hand-off at ~200 m, not 100 m. | Inside 200 m on nodes ⇒ `desiredDistance` did not take. |
+| **13** | **DOCK.** ⚠ If you target the *vessel* rather than a *port*, expect the loud `WITHOUT A PORT TARGET` warning — that is Q3, not a fault. | Capture. | — |
+
+⚠ **Also cheap and worth a glance:** any `mirror DISAGREES with the vendored Astro` (should never appear),
+any `the target was LOST after the plane was committed`, and — Job 1's — any `BOOSTER HOST — that is the
+SPENT UPPER STAGE`, which is now the **correct** line to see after Dragon separation.
+
+**Options:** (1) open the gate for **one flight covering S214 + S215 + S219** — *recommended, they are the
+same flight*; (2) fly a subset; (3) hold.
+⛔ **All three need an owner gate-open** (C1.12). This chat proceeds past none of them.
 

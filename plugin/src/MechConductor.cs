@@ -973,13 +973,11 @@ namespace DragonScreen
             MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
             if (a != null)
             {
-                // ⭐ Q2: THE COMPUTED INCLINATION WINS AT LAUNCH — and by here it has already been proven
-                // to agree with the §B5 mission fact inside `LaunchWindow.Solve`, or we would not be
-                // holding an `Armed` plan. ⭐ THIS ALSO SETTLES T18's Q1 (the inclination SIGN): the sign
-                // is the northgoing/southgoing choice `MinimumTimeToPlane` just made on TIMING grounds,
-                // not a value inherited from whichever cfg happened to be loaded.
-                a.DesiredInclination.Val = window.InclinationDeg;
-
+                // ⚠ S219: THE INCLINATION IS **NOT** WRITTEN HERE ANY MORE. §7.5's sequence
+                // (`MechJebModuleAscentMenu.cs:245-258`) writes it LAST, after `StartCountdown`, and
+                // following that order literally is the whole of the owner's 2026-09-07 directive. It
+                // is written below, once, with Q2's argument attached to it there.
+                //
                 // ⭐ THE ONE FLAG THAT MAKES THE ASCENT REACH THE TARGET'S **PLANE** AND NOT MERELY ITS
                 // INCLINATION. `MechJebModuleAscentPSGAutopilot.SetTarget` (`:103-116`) reads it: with
                 // `LaunchingToPlane` set it passes `lanflag = true` and `Core.Target.TargetOrbit.LAN`

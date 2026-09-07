@@ -1,0 +1,402 @@
+/*
+ * S219 JOB 3 — PROVE THE ENGAGE, PROVE THE ACTIVATION, AND ESTABLISH THE T-0 STAGING.
+ *
+ * THE THREE DEFECTS THIS SUITE EXISTS TO CATCH, in the owner's own words (2026-09-07):
+ *
+ *   (1) "otherwise it will sit there ready to go but do nothing."
+ *       ⛔ A MODULE CONFIGURED AND NEVER ENGAGED. The brief: *"A test that FAILS when a module is
+ *       configured but not engaged. That is the defect he described and it must not be discoverable
+ *       only in flight."*
+ *
+ *   (2) "or mechjeb will throttle up but never activate the engines."
+ *       ⛔ THE IGNITION CHAIN. bind → named parts resolve → activation commanded → thrust observed,
+ *       end to end, headless.
+ *
+ *   (3) `StageManager.ActivateNextStage()` at T-0 — ESTABLISHED, NOT RACED.
+ *
+ * ---- ⭐ HOW (1) IS TESTABLE AT ALL, GIVEN THE GLUE CANNOT BE COMPILED HEADLESSLY ----
+ * `src/MechConductor.cs` needs KSP to compile, so no headless test can CALL it. But "this module is
+ * configured and never engaged" is a claim about TEXT, and this repo already proves claims about text
+ * against real files — `MechHostTest` reads the pinned MechJeb tree, `RendezvousOpsTest` reads the
+ * vendored Operation classes. Same idiom, same reason: these are exactly the claims that rot silently.
+ *
+ * ⚠ WHAT THIS DOES NOT PROVE. That the engage WORKS in the game — that a `Users.Add` on a live core
+ * takes the vehicle. That is glass time, and it is the checklist on this register line, not here.
+ */
+using DragonScreen;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
+
+public static class ConductorEngageTest
+{
+    static int checks, failures;
+    static void Check(string what, bool ok, string detail)
+    {
+        checks++;
+        if (!ok) { failures++; Console.WriteLine("  FAIL  " + what + (detail == "" ? "" : "   " + detail)); }
+    }
+
+    // plugin/build/DragonScreenTest.exe -> "../.." = the repo root. The MechHostTest idiom.
+    static string Repo(params string[] parts)
+    {
+        var bits = new List<string> {
+            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "..", ".." };
+        bits.AddRange(parts);
+        return Path.GetFullPath(Path.Combine(bits.ToArray()));
+    }
+
+    public static int Run()
+    {
+        Console.WriteLine("ConductorEngageTest (S219 JOB 3: configured-AND-engaged, the ignition chain, the T-0 staging)");
+        checks = failures = 0;
+
+        ConfiguredMeansEngaged();
+        TheIgnitionChain();
+        TheTZeroStaging();
+
+        Console.WriteLine("  " + checks + " checks, " + failures + " failed");
+        return failures == 0 ? 0 : 1;
+    }
+
+    // =====================================================================================
+    // 1. ⛔ "IT WILL SIT THERE READY TO GO BUT DO NOTHING" — CONFIGURED **AND** ENGAGED
+    // =====================================================================================
+    //
+    // Every autopilot module the conductor writes settings into must ALSO be handed the vehicle, and
+    // must ALSO be given back. Three separate failures, each real:
+    //   • configured, never engaged  -> the owner's sentence: ready to go, doing nothing;
+    //   • engaged, never released    -> the module keeps MechJeb's attitude/thrust/RCS user pools on a
+    //                                   core that has stopped driving — a vehicle nobody is steering
+    //                                   and nobody has given back;
+    //   • engaged without authority  -> `OnModuleEnabled` grabs those pools while `Drive` never fires,
+    //                                   because `MechJebCore.FixedUpdate` only drives the master core.
+    static void ConfiguredMeansEngaged()
+    {
+        string src = File.ReadAllText(Repo("plugin", "src", "MechConductor.cs"));
+
+        // ⭐⭐ THE CORE CHECK, ONE MODULE AT A TIME AND **SCOPED TO ITS OWN RUNNER**. For each: it is
+        // CONFIGURED, it is ENGAGED, and the configure happens FIRST — "set the options, then ENGAGE",
+        // which is the owner's central point. Scoping matters: `ap.Users.Add(Owner)` is the idiom for
+        // three different modules, so a file-wide search would happily match the wrong one's engage.
+        //
+        // ⛔ ADDING A MODULE HERE IS THE POINT. A fifth autopilot that is configured and never engaged
+        // fails this suite instead of being discovered on the pad.
+        SetThenEngage(src, "the rendezvous autopilot", "RunRendezvousAutopilot",
+                      "ap.desiredDistance.Val = RendezvousOps.AutopilotHandoffRangeM",
+                      "ap.Users.Add(Owner)");
+        SetThenEngage(src, "the docking autopilot", "RunDocking",
+                      "ap.forceRol = true", "ap.Users.Add(Owner)");
+        SetThenEngage(src, "SmartASS", "SetSmartAss",
+                      "sa.mode = MuMech.MechJebModuleSmartASS.Target2Mode", "sa.Engage()");
+        SetThenEngage(src, "the node executor", "BurnNode",
+                      "SetNodeRcsOnly(v)", "ne.ExecuteOneNode(Owner)");
+
+        // The ascent is the one whose settings live in their own method, so the ordering claim is
+        // "Configure is CALLED before the engage", which is the same guarantee one level up.
+        string ascent = Body(src, "RunAscent");
+        int cfgCall = ascent.IndexOf("Configure(v)", StringComparison.Ordinal);
+        int engAsc = ascent.IndexOf("ap.Users.Add(Owner)", StringComparison.Ordinal);
+        Check("S219: the PVG ascent autopilot is CONFIGURED", cfgCall >= 0, "");
+        Check("S219: the PVG ascent autopilot is ENGAGED (not left ready-to-go doing nothing)",
+              engAsc >= 0, "");
+        Check("S219: ...and Configure runs before the engage", cfgCall >= 0 && engAsc > cfgCall,
+              "configure@" + cfgCall + " engage@" + engAsc);
+        Check("S219: ...and Configure actually writes the ascent settings",
+              Body(src, "Configure").Contains("a.AscentType = MuMech.AscentType.PSG")
+              && Body(src, "Configure").Contains("a.LimitQaEnabled = true"), "");
+
+        // ⛔ AUTHORITY BEFORE ENGAGEMENT. `MechJebCore.FixedUpdate` only drives the MASTER core, so a
+        // module enabled on a core without drive authority has `OnModuleEnabled` run — taking the
+        // attitude and thrust pools — while `Drive` never fires. Every runner must authorise first.
+        string[] runners = { "RunAscent", "RunRendezvousAutopilot", "RunDocking", "RunAttitudeHold", "BurnNode" };
+        for (int i = 0; i < runners.Length; i++)
+            Check("S219: " + runners[i] + " takes drive authority before it engages anything",
+                  Body(src, runners[i]).Contains("AuthorizeDrive(true)"), "");
+
+        // ⛔ AND STAND-DOWN MUST RELEASE EVERY ONE OF THEM, or a phase change leaves a module holding
+        // the vehicle. `StandDown` is the single funnel; these are the four exits it must name.
+        string standDown = Body(src, "StandDown");
+        Check("S219: StandDown releases the ascent autopilot",
+              standDown.Contains("ap.Users.Remove(Owner)"), "");
+        Check("S219: StandDown releases the docking autopilot",
+              standDown.Contains("ReleaseDocking"), "");
+        Check("S219: StandDown releases the rendezvous autopilot",
+              standDown.Contains("ReleaseRendezvous"), "");
+        Check("S219: StandDown releases SmartASS and aborts the node executor",
+              standDown.Contains("ReleaseAttitude") && standDown.Contains("Node.Abort"), "");
+        Check("S219: ...and gives the drive authority back",
+              standDown.Contains("AuthorizeDrive(false)"), "");
+
+        // ⭐ §7.5's OWN SEQUENCE, in the order the menu writes it. Not a style point: the menu writes
+        // `DesiredInclination` AFTER `StartCountdown`, and following the source is the whole directive.
+        int plane = src.IndexOf("a.LaunchingToPlane = true", StringComparison.Ordinal);
+        int countdown = src.IndexOf("ap.StartCountdown(", StringComparison.Ordinal);
+        int inclination = src.IndexOf("a.DesiredInclination.Val = window.InclinationDeg", StringComparison.Ordinal);
+        Check("S219/§7.5: LaunchingToPlane, then StartCountdown, then DesiredInclination",
+              plane > 0 && countdown > plane && inclination > countdown,
+              "plane=" + plane + " countdown=" + countdown + " inc=" + inclination);
+
+        // ⛔ AND THE COUNTDOWN IS ARMED AT ALL. This is the single line S215 refused to write, and the
+        // one the owner's directive is about. A silent revert to a hand-rolled warp fails here.
+        Check("S219/§7.5: MechJeb's own countdown IS armed (the call S215 refused)",
+              Count(src, "ap.StartCountdown(") == 1,
+              "found " + Count(src, "ap.StartCountdown(") + " call(s)");
+        Check("S219: ...and the conductor's replaced warp controller is NOT called any more",
+              Count(src, "TickLaunchWarp()") == 1, "kept as a superseded definition, never invoked");
+
+        // ⛔ AND IT IS SUPERSEDED IN PLACE, NOT DELETED (C1.16 / G12).
+        Check("S219/C1.16: the superseded warp controller is still in the file, marked",
+              src.Contains("SUPERSEDED IN PLACE") && src.Contains("TickLaunchWarp"), "");
+        string lw = File.ReadAllText(Repo("plugin", "src", "pure", "LaunchWindow.cs"));
+        Check("S219/C1.16: LaunchWindow's Q1 is marked superseded in place, not removed",
+              lw.Contains("SUPERSEDED IN PLACE") && lw.Contains("Q1"), "");
+
+        // ⛔ AND THE NODE-COMPOSING PATH IS STILL THERE. The brief: "DO NOT DELETE the node-composing
+        // path — add this as a selectable mode."
+        Check("S219: the conductor's own node-composing path survives the rendezvous OVERRIDE",
+              src.Contains("static void PlanOperation") && src.Contains("static void BurnNode")
+              && src.Contains("static void Replan"), "");
+        Check("S219: ...and it is selectable, not orphaned",
+              src.Contains("SelectRendezvousDrive")
+              && src.Contains("RendezvousDrive.Conductor"), "");
+    }
+
+    /// <summary>The set-then-engage pairing for one module, INSIDE ITS OWN RUNNER: both present, and
+    /// in that order. Scoped, because the `Users.Add(Owner)` idiom is shared by three modules and a
+    /// file-wide search would match whichever one happens to appear first.</summary>
+    static void SetThenEngage(string src, string what, string runner, string configure, string engage)
+    {
+        string body = Body(src, runner);
+        Check("S219: " + runner + " is a method this file still has", body.Length > 0, "");
+        int c = body.IndexOf(configure, StringComparison.Ordinal);
+        int e = body.IndexOf(engage, StringComparison.Ordinal);
+        Check("S219: " + what + " is CONFIGURED", c >= 0, "looked for: " + configure);
+        Check("S219: " + what + " is ENGAGED (not left ready-to-go doing nothing)", e >= 0,
+              "looked for: " + engage);
+        Check("S219: " + what + " is configured BEFORE it is engaged", c >= 0 && e > c,
+              "configure@" + c + " engage@" + e);
+    }
+
+    static int Count(string s, string needle)
+    {
+        int n = 0, i = 0;
+        while ((i = s.IndexOf(needle, i, StringComparison.Ordinal)) >= 0) { n++; i += needle.Length; }
+        return n;
+    }
+
+    /// <summary>The body of a method, from its signature to the next method at the same indent. Crude
+    /// on purpose: it only has to be good enough to answer "does this method mention X".</summary>
+    static string Body(string src, string method)
+    {
+        Match m = Regex.Match(src, @"(static|public)[^\n]*\b" + Regex.Escape(method) + @"\s*\(");
+        if (!m.Success) return "";
+        int start = m.Index;
+        Match next = Regex.Match(src.Substring(start + 1), @"\n        (static|public|///|// =)");
+        int len = next.Success ? next.Index : Math.Min(6000, src.Length - start - 1);
+        return src.Substring(start, len);
+    }
+
+    // =====================================================================================
+    // 2. ⭐⭐ THE FULL IGNITION CHAIN, HEADLESS — bind → resolve → command → thrust
+    // =====================================================================================
+    //
+    // Owner: *"or mechjeb will throttle up but never activate the engines."*
+    //
+    // Every link is pure and is walked here in order, from the REAL part names, with each link's
+    // output feeding the next. ⛔ A break anywhere fails a NAMED link rather than the whole thing, so
+    // a regression says which link went.
+    static void TheIgnitionChain()
+    {
+        // The real vessel, from `docs/reference/craftdump.csv`'s own names.
+        const string OCTAWEB = "TE.19.F9.S1.Engine";
+        const string S1TANK = "TE.19.F9.S1.Tank";
+        const string POD = "TE.18.DRAGONV2.POD";
+        string[] partNames = { POD, S1TANK, OCTAWEB, "TE.Ghidorah.Erector" };
+
+        // ---- LINK 1: BIND. The §B16.4 guard accepts this vessel and names the octaweb part. --------
+        string bound;
+        OctawebBind verdict = OctawebBinding.Bind(partNames, out bound);
+        Check("S219 chain 1/5 BIND: the guard accepts the real vessel",
+              verdict == OctawebBind.Ok && bound == OCTAWEB, "verdict=" + verdict + " bound=" + bound);
+
+        // ---- LINK 2: RESOLVE. The three engineID modes resolve to three distinct indices. ----------
+        OctawebEngineRef[] refs =
+        {
+            Ref(OCTAWEB, OctawebBinding.EngineIdAll),
+            Ref(OCTAWEB, OctawebBinding.EngineIdThreeLanding),
+            Ref(OCTAWEB, OctawebBinding.EngineIdCenterOnly),
+            Ref(POD, "SuperDraco"),
+        };
+        OctawebTable t = OctawebResolve.Build(partNames, refs);
+        Check("S219 chain 2/5 RESOLVE: the named table binds",
+              t.Ok, "plan=" + t.Plan + " guard=" + t.Guard);
+        Check("S219 chain 2/5 RESOLVE: ...to three DISTINCT modules, by engineID and nothing else",
+              t.Ok && t.AllIndex != t.ThreeIndex && t.ThreeIndex != t.CentreIndex
+              && t.AllIndex != t.CentreIndex,
+              "all=" + t.AllIndex + " three=" + t.ThreeIndex + " centre=" + t.CentreIndex);
+        Check("S219 chain 2/5 RESOLVE: ...and the all-engines mode is the one liftoff names",
+              t.Ok && refs[t.AllIndex].EngineId == OctawebBinding.EngineIdAll, "");
+
+        // ---- LINK 3: COMMAND. `IgniteOctawebLiftoff` lights `EngineRole.OctawebAll`, and ONLY it. ---
+        // ⛔ REGRESSION GUARD, flight_0822_201219: lighting Three/Centre as well COOKED THE S1 TANK.
+        int lit = 0;
+        for (int i = 0; i < refs.Length; i++)
+            if (Actuation.EngineLightsFor(refs[i].PartName, refs[i].EngineId, EngineRole.OctawebAll)) lit++;
+        Check("S219 chain 3/5 COMMAND: exactly ONE module lights for the liftoff command",
+              lit == 1, "lit=" + lit);
+        Check("S219 chain 3/5 COMMAND: ...and the SuperDraco abort motor is NOT one of them",
+              !Actuation.EngineLightsFor(POD, "SuperDraco", EngineRole.OctawebAll)
+              && Actuation.EngineRoleOf(POD, "SuperDraco") == EngineRole.PodAbort, "");
+
+        // ---- LINK 4: THE SEQUENCE COMMANDS IT. Idle + GO + a solution + T-0 arrived => IgniteStageOne.
+        AscentInputs s = AscentInputs.Nominal();
+        s.LaunchCommanded = true;
+        s.GuidanceReady = true;                       // S214: nobody owns the throttle without one
+        s.WindowRequired = true; s.WindowArmed = true;
+        s.SecondsToWindowS = AscentInputs.IgnitionLeadSeconds;   // T-3 s exactly
+        AscentDecision d = AscentSequence.Step(s, AscentStep.Idle);
+        Check("S219 chain 4/5 SEQUENCE: at T-3 s with a solution, the octaweb is COMMANDED alight",
+              d.Act == AscentAct.IgniteStageOne && d.Next == AscentStep.Ignition,
+              "act=" + d.Act + " next=" + d.Next);
+
+        // ...and NOT one second earlier, and NOT without a guidance solution. Both are S214's rules and
+        // both are what stop a cold octaweb lighting into a commanded zero.
+        AscentInputs early = s; early.SecondsToWindowS = AscentInputs.IgnitionLeadSeconds + 1.0;
+        Check("S219 chain 4/5 SEQUENCE: ...but not a second early",
+              AscentSequence.Step(early, AscentStep.Idle).Act != AscentAct.IgniteStageOne, "");
+        AscentInputs blind = s; blind.GuidanceReady = false;
+        Check("S219 chain 4/5 SEQUENCE: ...and never without a guidance solution (S214)",
+              AscentSequence.Step(blind, AscentStep.Idle).Act != AscentAct.IgniteStageOne, "");
+
+        // ---- LINK 5: THRUST OBSERVED => THE HOLD-DOWNS RELEASE. -------------------------------------
+        // `IgnitionGate` is the only thing that may release a clamp, and it releases on MEASURED thrust.
+        double max = 8227000.0;   // the flown octaweb's own available thrust, from the S214 log line
+        Check("S219 chain 5/5 THRUST: 99% of available on one lit module releases the hold-downs",
+              IgnitionGate.Evaluate(max * IgnitionGate.ReleaseThrustFrac, max, 1, 0.5) == ClampAction.Release, "");
+        Check("S219 chain 5/5 THRUST: a COMMANDED but unlit octaweb holds them",
+              IgnitionGate.Evaluate(0.0, max, 0, 0.5) == ClampAction.Hold, "");
+        Check("S219 chain 5/5 THRUST: ⭐ and thrust that never arrives SAFES the pad, clamps still held",
+              IgnitionGate.Evaluate(0.0, max, 1, IgnitionGate.MaxHoldS + 0.1) == ClampAction.SafeAbort, "");
+
+        // ⛔ THE WHOLE CHAIN, AS ONE STATEMENT. This is what "bind → named parts resolve → activation
+        // commanded → thrust observed" means, and it is the line that fails if ANY link is cut.
+        bool chain = verdict == OctawebBind.Ok && t.Ok && lit == 1
+                     && d.Act == AscentAct.IgniteStageOne
+                     && IgnitionGate.Evaluate(max, max, 1, 0.5) == ClampAction.Release;
+        Check("S219: ⭐ THE FULL IGNITION CHAIN HOLDS END TO END", chain, "");
+    }
+
+    static OctawebEngineRef Ref(string part, string id)
+    {
+        OctawebEngineRef r = new OctawebEngineRef();
+        r.PartName = part; r.EngineId = id;
+        return r;
+    }
+
+    // =====================================================================================
+    // 3. ⭐⭐ THE T-0 STAGING — ESTABLISHED FROM SOURCE AND FROM THE CRAFT, NOT RACED
+    // =====================================================================================
+    //
+    // THE HAZARD, verbatim from `MechJebModuleAscentBaseAutopilot.cs:122-137`:
+    //     if (TimedLaunch) {
+    //         if (TMinus < 3 * DeltaT || (TMinus > 10.0 && _lastTMinus < 1.0)) {
+    //             if (Enabled && VesselState.ThrustAvailable < 10E-4) StageManager.ActivateNextStage();
+    //             TimedLaunch = false;
+    //         } else { if (Core.Node.Autowarp) Core.Warp.WarpToUT(_launchTime - WarpCountDown); }
+    //     }
+    //
+    // The brief offered two ways it might be harmless and demanded we prove WHICH:
+    //   (1) our octaweb is lit before T-0 so it never fires;
+    //   (2) with autostage OFF and direct part control, the staging list is inert.
+    //
+    // ⛔ (2) IS FALSE ON THIS CRAFT, AND THE CRAFT FILE SAYS SO — asserted below. The staging list is
+    //    live: stage 8 is the octaweb ALONE and stage 7 is the Ghidorah erector — THE HOLD-DOWNS —
+    //    ALONE. `AscentSettings.Autostage` governs only `Core.Staging.Users` (`:82`, `:128-133`); it
+    //    does nothing whatever to a direct `StageManager.ActivateNextStage()` call.
+    //
+    // ⚠ (1) IS TRUE **ON THE NOMINAL PATH ONLY**, and [[S215]] already said why that is not enough:
+    //    *"a safety property that holds only because we win a race is not a safety property."* And the
+    //    case it loses is the important one: `IgnitionGate` SAFING the pad at ~T-1 s shuts the engines,
+    //    so `ThrustAvailable` is back to ZERO at T-0 and MechJeb would re-light the octaweb the gate
+    //    just shut — outside the gate, with the clamps held.
+    //
+    // ⭐ SO NEITHER IS RELIED ON. The branch is made UNREACHABLE: `TimedLaunch` is cleared at T-10 s
+    //    by `MechConductor.TickTerminalCount`, using the same write MechJeb's own Abort button makes
+    //    (`MechJebModuleAscentMenu.cs:305`). The whole `if (TimedLaunch)` block, staging included, is
+    //    dead from then on. That is establishment, not a race.
+    static void TheTZeroStaging()
+    {
+        // ---- (a) THE VENDORED SOURCE STILL SAYS WHAT WE READ IT TO SAY ----------------------------
+        // A re-pin that moved the staging call out from under `if (TimedLaunch)` would silently break
+        // the entire argument above, so it is pinned against the tree rather than remembered.
+        string ap = File.ReadAllText(Repo("plugin", "mech", "MechJeb2", "MechJebModuleAscentBaseAutopilot.cs"));
+        Check("S219: the vendored T-0 staging call still exists",
+              ap.Contains("StageManager.ActivateNextStage()"), "");
+        Check("S219: ...still gated on `Enabled && VesselState.ThrustAvailable < 10E-4`",
+              ap.Contains("if (Enabled && VesselState.ThrustAvailable < 10E-4)"), "");
+
+        int timed = ap.IndexOf("if (TimedLaunch)", StringComparison.Ordinal);
+        int stage = ap.IndexOf("StageManager.ActivateNextStage()", StringComparison.Ordinal);
+        Check("S219: ⭐ ...and still sits INSIDE `if (TimedLaunch)` — the whole basis of the fix",
+              timed > 0 && stage > timed, "timed@" + timed + " stage@" + stage);
+        Check("S219: TimedLaunch is a PUBLIC field, so clearing it is a UI action, not a patch",
+              ap.Contains("public bool TimedLaunch;"), "");
+
+        string menu = File.ReadAllText(Repo("plugin", "mech", "MechJeb2", "MechJebModuleAscentMenu.cs"));
+        Check("S219: ...and MechJeb's own Abort button makes exactly that write",
+              menu.Contains("_autopilot.TimedLaunch = false"), "");
+
+        // ---- (b) WE ACTUALLY MAKE IT, AND BEFORE WE LIGHT ANYTHING --------------------------------
+        string src = File.ReadAllText(Repo("plugin", "src", "MechConductor.cs"));
+        Check("S219: the conductor clears TimedLaunch",
+              src.Contains("ap.TimedLaunch = false"), "");
+        Check("S219: ...from TickTerminalCount, which is on the ascent tick",
+              Body(src, "TickTerminalCount").Contains("ap.TimedLaunch = false")
+              && src.Contains("TickTerminalCount();"), "");
+        Check("S219: ⭐ ...and it happens BEFORE the ignition lead, so MechJeb never owns T-0",
+              AscentProfile.TerminalCountS > AscentInputs.IgnitionLeadSeconds,
+              "terminal=" + AscentProfile.TerminalCountS + " ignition=" + AscentInputs.IgnitionLeadSeconds);
+
+        // ---- (c) ⛔ AND THE STAGING LIST IS **NOT** INERT — the craft file, read here ---------------
+        // This is the check that disproves the brief's option (2). If a future craft revision made the
+        // staging list genuinely harmless this would fail and someone would have to re-establish it.
+        string craft = File.ReadAllText(Repo("docs", "reference", "Crew-2.craft"));
+        int octawebStage = StageOf(craft, "TE.19.F9.S1.Engine_");
+        int erectorStage = StageOf(craft, "TE.Ghidorah.Erector_");
+        Check("S219: the octaweb has a real KSP stage (the list is NOT inert)",
+              octawebStage >= 0, "istg=" + octawebStage);
+        Check("S219: ⛔ so do the HOLD-DOWNS — the erector is a staged decoupler",
+              erectorStage >= 0, "istg=" + erectorStage);
+        Check("S219: ⭐ and the erector stages IMMEDIATELY AFTER the octaweb — two ActivateNextStage "
+              + "calls on a cold pad would release the clamps",
+              octawebStage >= 0 && erectorStage == octawebStage - 1,
+              "octaweb istg=" + octawebStage + " erector istg=" + erectorStage);
+
+        // ---- (d) THE CASE THE RACE WOULD HAVE LOST, spelled out as a check -------------------------
+        // A pad-safe shuts the engines. If MechJeb still owned T-0 at that moment, `ThrustAvailable`
+        // would be zero and it would re-light what the gate just shut.
+        double max = 8227000.0;
+        Check("S219: a pad-safe leaves the stage SHUT — which is zero ThrustAvailable at T-0",
+              IgnitionGate.Evaluate(0.0, max, 1, IgnitionGate.MaxHoldS + 0.1) == ClampAction.SafeAbort, "");
+        Check("S219: ⭐ ...and that is exactly why the branch is removed rather than out-run",
+              AscentProfile.TerminalCountS > AscentInputs.IgnitionLeadSeconds
+              && AscentProfile.TerminalCountS > IgnitionGate.MaxHoldS, "");
+
+        // ---- (e) ⛔ AND IgnitionGate ITSELF IS UNTOUCHED. The brief: "Do not weaken IgnitionGate." ---
+        Check("S219: IgnitionGate's release fraction is still 99%",
+              IgnitionGate.ReleaseThrustFrac == 0.99, "");
+        Check("S219: IgnitionGate's hold window is still 2 s",
+              IgnitionGate.MaxHoldS == 2.0, "");
+    }
+
+    /// <summary>The `istg` of the first part whose `part =` line starts with <paramref name="prefix"/>,
+    /// read straight out of the .craft file. −1 if absent.</summary>
+    static int StageOf(string craft, string prefix)
+    {
+        Match m = Regex.Match(craft,
+            @"part = " + Regex.Escape(prefix) + @"\d+\r?\n(?:.*\r?\n)*?\tistg = (-?\d+)");
+        return m.Success ? int.Parse(m.Groups[1].Value) : -1;
+    }
+}
