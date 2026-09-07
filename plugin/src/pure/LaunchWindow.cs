@@ -39,6 +39,41 @@
 // A mirror nobody checks is a second implementation waiting to be wrong. This one is checked every
 // launch, by the only party that can see both.
 //
+// ⛔⛔ **Q1 BELOW IS SUPERSEDED IN PLACE — 2026-09-07, register S219 JOB 2.** Read the paragraph and
+// then read this. (C1.16 / G12: reasoning is marked superseded where it stands and is never deleted —
+// this one especially, because it is CORRECT about the hazard and only wrong about the remedy.)
+//
+// **WHAT Q1 CLAIMED.** That there is no `StartCountdown` call in this build and that this file is why one
+// is not needed, because arming MechJeb's countdown hands T-0 to `StageManager.ActivateNextStage()`.
+//
+// **WHAT THE OWNER RULED**, 2026-09-07, verbatim:
+//     *"this is all the research I ordered to be completed, I should not have to explain step by step how
+//      to use mechjeb if the research has been done."*
+//     *"The overseer put this file in the T18 prompt's READ-FIRST list and then ruled against
+//      `StartCountdown` without opening §7.5. ⭐ THE MAP IS THE SPECIFICATION. Follow it section by
+//      section. Do not re-derive it, and do not invent a parallel mechanism again."*
+// `docs/MECHJEB_MASTER_MAP.md` §7.5 documents the plane launch as ONE sequence ending in
+// `StartCountdown`, and `MechJebModuleAscentMenu.cs:245-258` is that sequence in source. S219 now
+// reproduces it exactly.
+//
+// ⭐ **AND Q1's OWN OBJECTION IS ANSWERED RATHER THAN OVERRULED.** Its sharpest sentence is still true:
+//     *"a safety property that holds only because we win a race is not a safety property."*
+// Exactly so — and the answer it did not find is that the race can be DELETED. `TimedLaunch` is a
+// public field, MechJeb's own ascent window clears it from its Abort button
+// (`MechJebModuleAscentMenu.cs:305`), and `OnFixedUpdate:122` runs the entire staging block only
+// `if (TimedLaunch)`. `MechConductor.TickTerminalCount` clears it at T-10 s, so from then on MechJeb has
+// no T-0 of any kind and `StageManager.ActivateNextStage()` is unreachable — including in the one case
+// Q1's race would have lost, where `IgnitionGate` safes the pad and leaves `ThrustAvailable` at zero.
+//
+// **WHAT ELSE STOOD DOWN WITH IT.** `MechConductor.TickLaunchWarp` + `WarpLeadSeconds` (this file's
+// warp half) are superseded in place there; MechJeb's countdown warps now, and the composed 20 s + 12 s
+// lead moved into its own `WarpCountDown` box as `AscentProfile.WarpCountDownS`.
+//
+// ⚠ **WHAT DID *NOT* STAND DOWN, AND MUST NOT.** Everything else in this file. §7.5's own call IS
+// `Astro.MinimumTimeToPlane`, which `SolveWindow` already makes; the MIRROR below is what checks the
+// vendored answer and HOLDS THE LAUNCH if a re-pin ever changed the maths; and Q2/Q3/Q4 are untouched.
+// The parallel mechanism the owner objected to was the countdown and the warp, not the arithmetic.
+//
 // ---- THE FOUR DECISIONS THIS FILE APPLIES (all settled BEFORE S215 began; see REGISTER.md S215) ----
 // **Q1 — there is no `StartCountdown` call anywhere in this build, and this file is why one is not
 // needed.** `MechJebModuleAscentBaseAutopilot.cs:127` fires `StageManager.ActivateNextStage()` at T-0,

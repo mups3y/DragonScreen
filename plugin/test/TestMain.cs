@@ -260,6 +260,7 @@ public static class TestMain
         bad += Suite(LandingTargetTest.Run);    // W25: the booster aim point - sourced coords, land-anywhere
         bad += Suite(IgnitionGateTest.Run);     // W5: the clamp-release + ullage gates, RESTORED AS AN OPEN DEFECT
         bad += Suite(BoosterHostTest.Run);      // §B16 booster host: selection, stop, command gate, engine roles
+        bad += Suite(AscentProfileTest.Run);    // S219: every ascent setting accounted for + the countdown ordering
 
         // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------
         // `docs/BOOSTER_STEERING_MOD_SEARCH.md` (C1.15) could neither rule TCA in nor out; the owner ruled

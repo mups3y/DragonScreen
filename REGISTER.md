@@ -25842,7 +25842,7 @@ previewdiff mirror list record that it is deliberately gone so the warning stops
 
 ---
 
-### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DONE · JOB 2 DOING · JOB 3 TODO** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
+### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DONE · JOB 2 DONE · JOB 3 TODO** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
 
 ⚠ **NUMBERING.** The owner's prompt titles this **S218**. That number was already taken by the
 kenney-assets line [[S218]], logged by [[S215]] earlier the same day, so this line is **S219** and the two
@@ -25987,4 +25987,177 @@ returning `Ambiguous` without the fix.
 header says so), so the `FlightGlobals.ready` hold, the `PartListSettled` derivation and the two census
 helpers are **reasoned from the KSP API and compiled, not executed**. The pure decisions they feed are
 proven above.
+
+
+---
+
+## ⭐ JOB 2 — THE UI'S OWN SEQUENCE, DRIVEN SECTION BY SECTION
+
+`docs/MECHJEB_MASTER_MAP.md` §7.5, §8 and §9 read end to end first, and followed rather than re-derived.
+
+### A. ASCENT — §7.5 reproduced call for call
+
+`MechJebModuleAscentMenu.cs:245-258` is the rendezvous button in source, and all four of its steps are
+now in `MechConductor`, in that order:
+
+| §7.5 / the menu | where it is now |
+|---|---|
+| `_launchingToPlane = true` | `UpdateLaunchWindow`, at the crew's GO |
+| `Astro.MinimumTimeToPlane(rotationPeriod, lat, lon, LAN − LaunchLANDifference, inc)` | `SolveWindow` — the **vendored** call, cross-checked against the pure mirror |
+| **`StartCountdown(VesselState.Time + timeToPlane)`** | ⭐ **NEW** — the step [[S215]] refused |
+| `DesiredInclination.Val = inclination` | written **after** the countdown, as the menu writes it |
+
+`LaunchLANDifference = 0` (§7.5's "0 for the exact plane") and `LimitQaEnabled = true` (the vendored menu
+asserts it every frame with *"this is mandatory for PSG"*) are both written. **Then it engages.**
+
+### ⛔⛔ AND [[S215]]'s Q1 IS ANSWERED, NOT OVERRULED
+
+Its objection to `StartCountdown` was that `MechJebModuleAscentBaseAutopilot:127` fires
+`StageManager.ActivateNextStage()` at T-0, and its sharpest sentence is still true:
+
+> *"a safety property that holds only because we win a race is not a safety property."*
+
+Exactly so — **so the race is deleted rather than won.** `TimedLaunch` is a **public field**, MechJeb's own
+ascent window clears it from its **Abort button** (`MechJebModuleAscentMenu.cs:305`), and
+`OnFixedUpdate:122` runs the whole staging block only `if (TimedLaunch)`. `TickTerminalCount` clears it at
+**T-10 s**, so from then on **MechJeb has no T-0 of any kind** and `IgnitionGate` owns the pad. Full
+establishment, including the craft's own stage list, is JOB 3.
+
+**The three-number countdown, asserted rather than trusted** (`AscentProfile.CountdownOrderingHolds`):
+
+| T- | who | what |
+|---|---|---|
+| **32 s** | MechJeb | autowarp lands **and** PSG is handed the target and starts converging (`Drive:47-53`) |
+| **10 s** | **the conductor** | `TimedLaunch` cleared — MechJeb loses T-0 |
+| **3 s** | `IgnitionGate` | the octaweb is commanded alight |
+
+⚠ **`WarpCountDown` is 32 s, not stock's 11 s**, and it is not a preference: it carries [[S215]]'s composed
+**20 s** (the vendored tree's own *"PSG can take ~20s to converge from a cold start"*) **+ 12 s**
+(`WarpPlan.BurnLeadS`) into **MechJeb's own box** — which is the difference between a parallel mechanism
+and using the UI. Stock can afford 11 s because stock's T-0 does not wait on a solution; ours does.
+
+### ⛔ WHAT STOOD DOWN — SUPERSEDED IN PLACE, NOT DELETED (C1.16 / G12)
+
+| what | where | state |
+|---|---|---|
+| `MechConductor.TickLaunchWarp` + `WarpLeadSeconds` | `src/MechConductor.cs` | **kept, unreferenced**, under a banner saying what it claimed, what replaced it and why. Its two arguments (issue `WarpToUT` once; `activateSASOnWarp` must be off) are **still true and still load-bearing** — `Configure` step (6) writes that SAS flag for exactly the reason recorded there. |
+| `pure/LaunchWindow.cs` **Q1** | its file header | **marked superseded in place**, with the owner's words, and with the answer it could not find. |
+| the rest of `pure/LaunchWindow.cs` | — | **untouched, and must be.** §7.5's own call *is* `MinimumTimeToPlane`; the mirror is what HOLDS THE LAUNCH if a re-pin changes the maths. The parallel mechanism the owner objected to was the countdown and the warp, not the arithmetic. |
+
+### B. ⭐ THE SHAPING TABLE — THE DELIVERABLE
+
+`plugin/src/pure/AscentProfile.cs`. **Every box the four vendored ascent menus put on screen**, enumerated
+from the menus themselves, one row each, carrying our decision, the value it flies at, and the reason.
+**76 rows**: **48 written**, **7 written at runtime** (mission facts), **13 left at RO's default**, **8
+CLASSIC-only** (never read under PSG), **2 ⛔ awaiting the owner**.
+
+⭐ It is **pure and headless-tested**, because a table in a comment cannot fail. `AscentProfileTest` holds an
+**independent copy of the menu list**, so a row quietly dropped from the audit is a failing check rather than
+a setting nobody decided about.
+
+**The rows the research names, and what each would have cost:**
+
+| setting | flown | why it is not "whatever the profile set" |
+|---|---|---|
+| ⭐⭐ **`DesiredAttachAltFixed`** | **= the mission apoapsis (210 km)** | §7.2 names RO's 110 km default against a 210 km orbit as **a bug already found on this craft**: *"attach < peR = 'periapsis insertion' (elliptical)"*. `SetTarget:100-101` reads this exact field while `OptimizeStageFlag` is false — which is its default. **Left alone, a flawless ascent inserts elliptical.** |
+| **`OptimizeStageFlag`** | false | it is what *selects* that field; written so the choice is deliberate |
+| **`OverrideWarpToPlane`** | false | `StartCountdown:102-107` branches on it — a stale `true` turns the plane launch into an **immediate** one |
+| ⭐ **`Core.Node.Autowarp`** | **true** | the owner's *"auto warp for all modes"* — see below |
+| **`SkipCircularization`** | **true** (RO's default is false) | ⛔ not a tune: `DriveCircularizationBurn:244-286` **places a maneuver node** on exit and hands it to `Core.Node`, colliding with T19's own executor. PVG already inserts at the target orbit. The owner's own flown cfg has it true (`docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:34`). |
+| **`AutoDeploySolarPanels` / `AutoDeployAntennas`** | **false** (RO's default is true) | §B12.7: direct part control is ours. Left true, `DrivePrelaunch:202-214` **holds the prelaunch mode** retracting panels, and `DriveDeployableComponents` extends real antennas (RealAntennas is installed). |
+| **`MinDeltaV` / `LastStage`** | 40 m/s / −1 | S214's `PvgPreflight` **reads them** to decide whether the engage may proceed at all |
+| `LaunchingToMatchLan` / `LaunchingToLan` / `RelativeLAN` | false | the three launch modes are mutually exclusive in `SetTarget:103-106` |
+
+### C. ⭐ AUTO-WARP — "which flag does each autopilot read?" ESTABLISHED, AND IT IS **ONE FIELD**
+
+The brief asked for this to be established, not assumed. Read off the vendored source:
+
+| phase | reads | line |
+|---|---|---|
+| **ascent countdown** | `Core.Node.Autowarp` | `MechJebModuleAscentBaseAutopilot.cs:132` — `if (Core.Node.Autowarp) Core.Warp.WarpToUT(...)` |
+| **node executor** (both warps) | `Core.Node.Autowarp` | `MechJebModuleNodeExecutor.cs:242, :293` |
+| **rendezvous autopilot** | `Core.Node.Autowarp` — it owns **no flag of its own**, it **narrows** that one | `MechJebModuleRendezvousAutopilot.cs:46` — `Autowarp = Autowarp && Target.Distance > 1000` |
+| **docking autopilot** | **nothing — it never warps** | no `Warp` reference anywhere in the file |
+
+⇒ **`Configure` sets the one field true**, and `RunRendezvousAutopilot` **re-asserts it outside 1 km**,
+because that narrowing is a *write*: once inside 1 km the autopilot latches it false and it would stay
+false for the next phase that wants a warp.
+**ONE WARP OWNER PER PHASE:** ascent = the ascent autopilot's countdown · rendezvous = the node executor ·
+docking = nobody, by design.
+
+### D. RENDEZVOUS — §8, under the owner's `OVERRIDE`
+
+Owner, verbatim: *"mechjeb rendezvous autopilot just for now to get things moving… Then we move to the more
+complicated, mission accurate fidelity way"*.
+
+⛔ **THE NODE-COMPOSING PATH IS NOT DELETED.** `PlanOperation` / `BurnNode` / `Replan` — §B12.4's
+compose→fly→judge→replan loop and §B11's WP0/WP1/WP2 ladder — are **untouched**, and are **one assignment
+away**: `MechConductor.SelectRendezvousDrive(RendezvousDrive.Conductor)`. `RendezvousDrive.Conductor` is
+enum value **0**, so an uninitialised value can never hand the vehicle to MechJeb by accident (asserted).
+It is marked **SUPERSEDED-FOR-NOW** in `pure/RendezvousOps.cs`, where the owner's words live.
+
+⭐ **AND §8's OWN VERDICT IS WHY THIS IS VIABLE NOW AND WAS NOT BEFORE.** §8 says the eight-branch tree is
+**sound**, and that the reason it fails for us is **branch 8**: two 51.64° orbits at different RAAN have a
+large *relative* inclination and the plane-match burn is unaffordable. Its own answer — *"Launch coplanar
+(§7.5) and it drops into branch 6 (cheap Hohmann phasing) instead"* — is what Job 2's ascent half delivers.
+**The two halves of this job are one change.**
+
+**Set, then engage.** `desiredDistance` → **200 m**, `RendezvousOps.AutopilotHandoffRangeM`: MechJeb's own
+default is **100 m, which is INSIDE §B11's Keep-Out Sphere** — left alone the autopilot flies the Dragon
+*through* the KOS on maneuver nodes, which §B11 forbids and `Conductor.Approach` already refuses to plan.
+`maxClosingSpeed` (100 m/s) and `maxPhasingOrbits` (5) stay at MechJeb's own values, stated: both only cap
+something the tree already computed, and lowering either is a §B5/T22 tune.
+
+### ⭐⭐ E. AND §8's CLOSING NOTE TURNED OUT TO BE THE DIFFERENCE BETWEEN A BURN AND A HANG
+
+§8: *"it drives via maneuver nodes + NodeExecutor, so a Dragon on Dracos executes on RCS (`RCSOnly`)."*
+Read against `docs/reference/Crew-2.craft`: after Dragon separation **the only `ModuleEnginesRF` left on
+the vessel is on `TE.18.DRAGONV2.POD` — the SuperDracos**, which `Actuation.EngineRoleOf` classifies
+`EngineRole.PodAbort`. The Dracos that actually fly a rendezvous are `ModuleRCSFX`.
+
+⇒ A Node Executor left at `RCSOnly = false` commands `mainThrottle` against an **abort motor that is not
+ignited**. `VesselState.AddNewEngine` returns early on `!e.EngineIgnited`, so `ThrustAvailable` is **zero**
+and the executor has no thrust to compute a burn time from. **Every on-orbit and deorbit burn hangs,
+silently, pointed correctly, doing nothing** — the exact shape of the owner's *"sit there ready to go but
+do nothing"*. `SetNodeRcsOnly` now decides it from the **parts** (not the phase) on **every** node burn,
+because the deorbit burn goes through the same executor.
+
+### F. DOCKING — §9's "what else the module needs"
+
+Was: `speedLimit` + `forceRol`. Now also, before the engage:
+
+- **`rol = 0`** — the roll ANGLE `forceRol` aligns to (`Drive:227-229`). It is **`Pass.LOCAL` persisted**,
+  so "its own default of 0" was only ever true on a vessel never docked before.
+- **`overrideSafeDistance` / `overrideTargetSize` = false** — also `Pass.LOCAL` persisted. A stale `true`
+  makes `OnFixedUpdate:256-263` use **5 m / 10 m constants instead of the measured bounding boxes**. T20's
+  reasoning for not *forcing* them stands unchanged; "leave the default" now means **write** it.
+- **`drawBoundingBox = false`** — the module registers `DrawBoundingBox` on the core's post-draw queue in
+  `OnStart` regardless of T15b's GUI suppression.
+- ⚠ **`Core.Target.Target` must be a `ModuleDockingNode`, and it is ANNUNCIATED, not chosen.**
+  `InitDocking:349-352` reads `acquireRange` off the target only when it is a docking node (else 0.25 m),
+  and every alignment is in `TARGET_ORIENTATION` — the **port's** frame, or the whole vessel's. §B10.3 names
+  IDA-2, but **nothing in the repo maps a station's ports to that name** (§1.4: no invented source), so the
+  conductor warns loudly rather than picking. Raised as **Q3**.
+
+### Verification (C1.3)
+
+`build.py test` — **ALL SUITES PASSED**. New suite `AscentProfileTest` **88 checks, 0 failed**;
+`RendezvousOpsTest` **129 checks, 0 failed** (was 117). `previewdiff` — **0 changed, 0 new, 0 removed of 130**.
+
+**MUTATION PROOF — 12 of 12 killed, each attributed to the suite under test (`S167`):**
+
+| # | mutant | killed by |
+|---|---|---|
+| J2-a | a row silently drops out of the audit | AscentProfileTest |
+| J2-b | `WarpCountDown` falls back to stock's 11 s | AscentProfileTest — *and the solver window collapses to 8 s* |
+| J2-c | the terminal count drops **below** the ignition lead | AscentProfileTest |
+| J2-d | the terminal count rises **above** the warp countdown | AscentProfileTest |
+| J2-e | the attach altitude reverts to RO's 110 km (§7.2's bug) | AscentProfileTest |
+| J2-f | autowarp written false | AscentProfileTest |
+| J2-g | a build chat **tunes** `PitchRate` instead of asking | AscentProfileTest |
+| J2-h | a build chat **turns max-Q on** instead of asking | AscentProfileTest |
+| J2-i | `SkipCircularization` reverts (MechJeb plants an unowned node) | AscentProfileTest |
+| J2-j | the rendezvous AP left at 100 m, inside the KOS | RendezvousOpsTest |
+| J2-k | `RCSOnly` inverted (the Dragon burns on a cold abort motor) | RendezvousOpsTest |
+| J2-l | the conductor's own path stops being enum 0 | RendezvousOpsTest |
 

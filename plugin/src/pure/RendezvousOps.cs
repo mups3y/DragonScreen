@@ -33,6 +33,35 @@ using System;
 
 namespace DragonScreen
 {
+    /// <summary>
+    /// ⭐ S219 JOB 2 — WHICH RENDEZVOUS DRIVER IS FLYING. A SELECTABLE MODE, because the owner asked
+    /// for one and because both drivers are real.
+    ///
+    /// Owner, 2026-09-07, verbatim (an `OVERRIDE` of §B1/§B12.4's default, C1.8):
+    ///     *"mechjeb rendezvous autopilot just for now to get things moving… Then we move to the more
+    ///      complicated, mission accurate fidelity way"*
+    ///
+    /// ⛔ NEITHER PATH IS DELETED, and the brief is explicit: *"DO NOT DELETE the node-composing path
+    /// (§B10.1/§B12.4) — add this as a selectable mode and mark the other SUPERSEDED-FOR-NOW. He is
+    /// coming back to it."*
+    /// </summary>
+    public enum RendezvousDrive : byte
+    {
+        /// <summary>⛔ **SUPERSEDED-FOR-NOW, 2026-09-07, NOT retired.** §B1/§B12.4's design: the conductor
+        /// composes MechJeb's Maneuver-Planner operations itself, flies them one node at a time through
+        /// the Node Executor, and re-plans when a burn missed its intent. It walks §B11's real waypoint
+        /// ladder (WP0 400 m → WP1 220 m → WP2 20 m) with a crew gate at each rung, which is the
+        /// "mission accurate fidelity way" the owner is coming back to. Every line of it still stands.</summary>
+        Conductor = 0,
+
+        /// <summary>⭐ THE OWNER'S CHOICE FOR NOW. MechJeb's own `MechJebModuleRendezvousAutopilot` —
+        /// `docs/MECHJEB_MASTER_MAP.md` §8's eight-branch decision tree — flown to the Keep-Out Sphere
+        /// and handed to the Docking Autopilot there. ⚠ IT DOES NOT WALK §B11's WAYPOINTS: it goes
+        /// phasing → Hohmann → intercept → match velocities and stops at `desiredDistance`. That is the
+        /// fidelity the owner has knowingly traded for motion.</summary>
+        MechJebAutopilot = 1
+    }
+
     /// <summary>Which on-orbit leg the conductor is flying, identified by the gate it ends at.</summary>
     public enum RendezvousLeg : byte
     {
@@ -113,6 +142,38 @@ namespace DragonScreen
                 default:                      return RendezvousLeg.None;
             }
         }
+
+        /// <summary>
+        /// ⭐⭐ S219 JOB 2 — **DOES A NODE BURN ON THIS VEHICLE HAVE TO RUN ON RCS?**
+        ///
+        /// `docs/MECHJEB_MASTER_MAP.md` §8's closing note: *"it drives via **maneuver nodes +
+        /// NodeExecutor**, so a Dragon on Dracos executes on RCS (`RCSOnly`)."* That is not a
+        /// refinement — on this craft it is the difference between a burn and a hang.
+        ///
+        /// ⛔ READ OFF THE CRAFT FILE (`docs/reference/Crew-2.craft`): once the Dragon has separated,
+        /// the **only `ModuleEnginesRF` left on the vessel is on `TE.18.DRAGONV2.POD` — the
+        /// SuperDracos**, which `Actuation.EngineRoleOf` classifies `EngineRole.PodAbort`. The Dracos
+        /// that actually fly a rendezvous are `ModuleRCSFX`. So a Node Executor left at `RCSOnly = false`
+        /// commands `mainThrottle` against an ABORT motor that is not ignited: `VesselState`'s engine
+        /// walk skips it (`AddNewEngine` returns on `!e.EngineIgnited`), `ThrustAvailable` is zero, and
+        /// the executor has no thrust to compute a burn time from. **Every on-orbit and deorbit burn
+        /// hangs, silently, with the vehicle pointed correctly and nothing happening** — which is the
+        /// exact shape of the owner's *"sit there ready to go but do nothing"*.
+        ///
+        /// ⚠ It is deliberately a function of a MEASURED fact — is there a main engine on this vessel
+        /// right now — and not of a mission phase, because the phase is a plan and the engine is a part.
+        /// </summary>
+        public static bool NodeBurnsOnRcs(bool hasMainEngine) { return !hasMainEngine; }
+
+        /// <summary>
+        /// ⭐ §8 / §B11 — WHERE MECHJEB'S RENDEZVOUS AUTOPILOT MUST STOP AND HAND OVER.
+        /// Its own default is 100 m, which is **inside** §B11's 200 m Keep-Out Sphere — so left alone it
+        /// would fly the Dragon through the KOS on maneuver nodes, which §B11 forbids and which
+        /// `Conductor.Approach` already refuses to plan. The hand-off range is the published KOS, so
+        /// this is a MISSION FACT and not a tune: inside it the Docking Autopilot is the DEFAULT
+        /// (O6 / §B10.3 / §B12.3).
+        /// </summary>
+        public static double AutopilotHandoffRangeM { get { return KeepOutSphereM; } }
 
         /// <summary>The range this leg is walking to, metres. `Phasing` has no range target — it ends on
         /// its orbit, not on a distance — and returns 0.</summary>

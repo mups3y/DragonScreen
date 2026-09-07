@@ -99,7 +99,15 @@ namespace DragonScreen
         /// the UT passes, so it re-establishes the warp by itself even if the player cancels it.
         /// Re-commanding here each tick would fight that module rather than help it.
         /// </summary>
-        static bool warpArmed;
+        static bool warpArmed;                // ⛔ S219: unused — see the superseded warp block below
+
+        /// <summary>S219: MechJeb's own countdown was armed at the commit (§7.5's `StartCountdown`).
+        /// False means the arm failed and there is no autowarp; the committed T-0 still stands.</summary>
+        static bool countdownArmed;
+
+        /// <summary>S219: `TimedLaunch` has been cleared, so MechJeb no longer has a T-0 of any kind and
+        /// `StageManager.ActivateNextStage()` is unreachable. One-shot, at T-`TerminalCountS`.</summary>
+        static bool terminalCountTaken;
 
         // ── T19: the on-orbit leg (§B9 P2/P3, §B10.2, §B12.4) ────────────────────────────────────
         static RendezvousLeg leg;            // which leg, from the gate it walks to
@@ -112,6 +120,30 @@ namespace DragonScreen
         static double lastRangeM, lastRangeUT, openingRateMps;
         static int approachPasses;           // how many times this leg has walked the chain
         static string approachNote;          // what the far-field lamp says
+
+        /// <summary>⭐ S219 JOB 2 — WHICH rendezvous driver flies the target-relative ops. Defaults to
+        /// MechJeb's own autopilot on the owner's `OVERRIDE` of 2026-09-07; `pure/RendezvousOps.cs`'s
+        /// `RendezvousDrive` carries his words and what each mode costs. ⛔ The conductor's own
+        /// node-composing path is intact and one assignment away.</summary>
+        static RendezvousDrive rendezvousMode = RendezvousDrive.MechJebAutopilot;
+
+        /// <summary>S219: MechJeb's rendezvous autopilot currently holds the vehicle through us.</summary>
+        static bool rendezvousEngaged;
+
+        /// <summary>S219: which driver is flying, for a screen or a log. Read-only — changing it is
+        /// `SelectRendezvousDrive`, which stands the running one down first.</summary>
+        public static RendezvousDrive RendezvousMode { get { return rendezvousMode; } }
+
+        /// <summary>S219: switch rendezvous drivers. Stands the outgoing one down rather than leaving it
+        /// holding the attitude/thrust user pools — two drivers on one vehicle is the failure this
+        /// whole file's `Owner` sentinel exists to prevent.</summary>
+        public static void SelectRendezvousDrive(RendezvousDrive drive)
+        {
+            if (drive == rendezvousMode) return;
+            if (rendezvousEngaged) ReleaseRendezvous("the crew selected " + drive);
+            rendezvousMode = drive;
+            Debug.Log("[DragonScreen] conductor: rendezvous driver -> " + drive + " (S219)");
+        }
 
         // ── T20: the docking leg (§B9 P4, §B10.3, O6) ────────────────────────────────
         static DockingLeg dockLeg;
@@ -201,6 +233,8 @@ namespace DragonScreen
             launchLatched = false; configured = false; ascentEngaged = false; stageStatsWaitLogged = false;
             window = new WindowPlan(); launchWindowUT = 0.0;
             windowHoldLogged = false; warpArmed = false;
+            countdownArmed = false; terminalCountTaken = false;   // S219
+            rendezvousEngaged = false; rendezvousMode = RendezvousDrive.Conductor;   // S219
             note = "idle";
             ResetLeg();
             leg = RendezvousLeg.None;
@@ -438,10 +472,18 @@ namespace DragonScreen
                 // is never left under an authority that is not steering it.
                 // T19: §B9 Phase 2-3 — the planner composes the operation, the Node Executor flies it,
                 // and §B12.4 re-plans when the burn did not achieve its intent.
+                // ⭐ S219 JOB 2 — THE RENDEZVOUS FORK. Only the TARGET-RELATIVE ops fork: a
+                // circularisation or a deorbit periapsis burn is not a rendezvous and stays on the
+                // conductor's own planner whichever driver is selected. `NeedsTarget` is already the
+                // predicate that names them, so the fork uses it rather than inventing a second list.
                 case ConductorModule.ManeuverPlanner:
+                    if (rendezvousMode == RendezvousDrive.MechJebAutopilot && NeedsTarget(a.Op))
+                    { RunRendezvousAutopilot(v, a); return; }
                     PlanOperation(v, a);
                     return;
                 case ConductorModule.NodeExecutor:
+                    if (rendezvousMode == RendezvousDrive.MechJebAutopilot && NeedsTarget(a.Op))
+                    { RunRendezvousAutopilot(v, a); return; }
                     BurnNode(v, a);
                     return;
                 // T20: §B9 Phase 4 — the Docking Autopilot, the DEFAULT inside the Keep-Out Sphere (O6).
@@ -604,37 +646,131 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// The three things T18 writes into MechJeb, and nothing else. Each carries its own authority;
-        /// none of them is a tune. The full argument — including why this is profile-NEUTRAL and why
-        /// T18 may not answer register S195 — is in `pure/AscentSequence.cs`'s header.
+        /// ⭐⭐ S219 JOB 2 — **SET THE OPTIONS THE WAY A USER OF THE UI WOULD, THEN ENGAGE.**
+        ///
+        /// The owner, 2026-09-07, verbatim: *"How can the conductor act like it's a user using mechjebs
+        /// UI if it does not know what setting/options to set"* and *"No value may be left as 'whatever
+        /// the profile set'"*. Before this line, this method wrote FOUR values and then logged, in as
+        /// many words, that every ascent-SHAPING value was *"whatever the loaded profile set"*.
+        ///
+        /// ⭐ **THE TABLE IS `pure/AscentProfile.cs` AND IT IS THE SPECIFICATION FOR THIS METHOD.**
+        /// Every box the vendored ascent menus put on screen has a row there, carrying our decision and
+        /// the reason for it; this method writes the rows marked `Write`, and the rows marked
+        /// `RuntimeMission` are written where their value becomes known (the destination here, the plane
+        /// at the crew's GO). `RoDefault`, `ClassicOnly` and `OwnerQuestion` rows are deliberately NOT
+        /// written — which is a decision recorded in the table, not an omission.
+        ///
+        /// ⛔ **NOTHING HERE IS A TUNE.** The Part-B gate is *"RSS-RO DEFAULT settings as the baseline to
+        /// tune from"*, so every value written below is either a MISSION FACT, or something the vendored
+        /// source itself calls mandatory, or **RO's own default asserted explicitly** so the flown value
+        /// is ours on the record instead of inherited from a persisted cfg. The two places where a
+        /// deviation looks warranted are `OwnerQuestion` rows and are asked at the end of the register
+        /// line, never decided here (C1.8 / C1.12).
         /// </summary>
         static void Configure(Vessel v)
         {
             MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
             if (a == null) { note = "the core has no AscentSettings module"; return; }
 
-            // (1) §B8's owner directive, 2026-09-03. BOTH profiles ship this ON — RO's own
-            //     `ApplyRODefaults()` has `Autostage = true;` and the shipped cfg has
-            //     `_autostage = True` — so it must be written, and writing it is not a tune.
-            //     ⛔ Set through the PROPERTY, never the `_autostage` field: the property is what
-            //     removes the ascent autopilot from `Core.Staging.Users`, and the field alone would
-            //     leave the StagingController still holding a user and still able to actuate.
-            a.Autostage = false;
+            // ---- (1) THE PATH ITSELF ------------------------------------------------------------
+            // ⛔ Set through the PROPERTY, never the `_autostage` field: the property is what removes
+            // the ascent autopilot from `Core.Staging.Users`, and the field alone would leave the
+            // StagingController still holding a user and still able to actuate.
+            a.Autostage = false;                                      // §B8 owner directive
+            a.AscentType = MuMech.AscentType.PSG;                     // §B8
+            a.LimitQaEnabled = true;                                  // "mandatory for PSG" (AscentMenu:374)
+            a.LimitQa.Val = 2000.0;                                   // RO default, asserted: it is always live
+            a.OptimizeStageFlag = false;                              // routes SetTarget to DesiredAttachAltFixed
 
-            // (2) §B8: "AscentType — CLASSIC(0)/PVG(1). Target PVG(1)." Already RO's default
-            //     (`ApplyRODefaults` ends with `AscentType = AscentType.PSG`), asserted because a
-            //     persisted craft or type value could still be CLASSIC.
-            a.AscentType = MuMech.AscentType.PSG;
+            // ---- (2) §7.5's PLANE LAUNCH — the flags, here; the solve, at the crew's GO ----------
+            a.LaunchLANDifference.Val = AscentProfile.LaunchLanDifferenceDeg;   // "0 for the exact plane"
+            a.LaunchingToMatchLan = false;
+            a.LaunchingToLan = false;
+            a.RelativeLAN = false;                                    // the STATION's absolute LAN
+            // ⛔ LOAD-BEARING: `StartCountdown` branches on this and a stale TRUE means "launch NOW".
+            a.OverrideWarpToPlane = false;
+            a.WarpCountDown.Val = AscentProfile.WarpCountDownS;        // MechJeb's own "Launch countdown"
 
-            // (2b) MechJeb's own ascent menu asserts this with the comment "this is mandatory for PSG"
-            //      (MechJebModuleAscentMenu.cs:374). A no-op under every profile in this tree — RO's
-            //      `LIMIT_QA_ENABLED_DEFAULT` is true and the shipped cfg has `LimitQaEnabled = True` —
-            //      kept as a belt against a persisted false. ⚠ The LimitQa VALUE is a tune and is NOT
-            //      touched; only the enable, which the source calls mandatory.
-            a.LimitQaEnabled = true;
+            // ---- (3) THE PITCH PROGRAM AND THE ROLL ---------------------------------------------
+            // ⚠ RO's own numbers, written rather than inherited. `PitchRate` is an `OwnerQuestion` row
+            // (the owner's own flown cfg says 0.75 °/s against RO's 5.0) — we fly RO's and ask.
+            a.PitchStartHeight.Val = 100.0;
+            a.ForceRoll = true;
+            a.VerticalRoll.Val = 0.0;
+            a.TurnRoll.Val = 0.0;
+            a.RollAltitude.Val = 50.0;
 
-            // (3) §B5's named exception: the destination is a MISSION FACT, not a tune. The SIGN of the
-            //     inclination is preserved from whatever is loaded — see `AscentTargets.For`.
+            // ---- (4) THE PSG STAGE MODEL --------------------------------------------------------
+            // `MinDeltaV` and `LastStage` are read by our OWN preflight (`pure/PvgPreflight.cs`, S214)
+            // to decide whether the engage may proceed at all, so they must be known values.
+            a.MinDeltaV.Val = 40.0;
+            a.LastStage.Val = -1;
+            a.MaxCoast.Val = 450.0;
+            a.MinCoast.Val = 0.0;
+            a.CoastStageFlag = false;
+            a.CoastStageInternal.Val = -1;
+            a.CoastLocation = -1;
+            a.SpinupStageFlag = false;
+            a.SpinupStageInternal.Val = -1;
+            a.UnguidedStagesFlag = false;
+            a.FixedStagesFlag = false;
+            a.PreStageTime.Val = 10.0;
+            a.OptimizerPauseTime.Val = 5.0;
+            a.Cd.Val = 0.5;
+            a.Aref.Val = 0.0;
+            a.DesiredArgPFlag = false;
+
+            // ---- (5) ⛔ WHAT MECHJEB WOULD OTHERWISE ACTUATE ON OUR VEHICLE ----------------------
+            // Not tuning — these three are §B12.7 boundary lines. `SkipCircularization` stops
+            // `DriveCircularizationBurn` PLACING A MANEUVER NODE on exit (it would collide with T19's
+            // own node executor); the two auto-deploys stop MechJeb extending real hardware the crew
+            // procedure owns. See `pure/AscentProfile.cs` for the full argument on each.
+            a.SkipCircularization = true;
+            a.AutoDeploySolarPanels = false;
+            a.AutoDeployAntennas = false;
+
+            // ---- (6) ⭐ AUTOWARP — ONE FLAG, AND ALL THREE PHASES READ IT ------------------------
+            // The owner: *"It must also select auto warp for all modes."* Established from the vendored
+            // source rather than assumed: the ascent countdown warps only `if (Core.Node.Autowarp)`
+            // (`MechJebModuleAscentBaseAutopilot.cs:132`); the node executor gates both of its warps on
+            // the same field (`:242`, `:293`), which is what the rendezvous autopilot flies through; and
+            // the rendezvous autopilot NARROWS that same field rather than owning one of its own
+            // (`Core.Node.Autowarp = Core.Node.Autowarp && Core.Target.Distance > 1000`). The docking
+            // autopilot never warps at all — it is pure RCS from the keep-out sphere inward.
+            // ⇒ ONE WARP OWNER PER PHASE: ascent = the ascent autopilot's countdown; rendezvous = the
+            //   node executor; docking = nobody, by design.
+            try
+            {
+                if (core.Node != null) core.Node.Autowarp = true;
+                if (core.Warp != null) core.Warp.activateSASOnWarp = false;
+            }
+            catch (Exception e)
+            { Debug.LogWarning("[DragonScreen] conductor: could not set the autowarp flags: " + e.Message); }
+
+            // ---- (7) THE THRUST CONTROLLER — RO's own baseline, asserted -------------------------
+            // ⛔ `LimitDynamicPressure` (max-Q throttle-down) is the owner's named item and is an
+            // `OwnerQuestion` row: RO turns it OFF deliberately, and turning it on needs a Q magnitude,
+            // which is the §B5/T22 tune the Part-B gate defers. We write RO's default and ask.
+            try
+            {
+                MuMech.MechJebModuleThrustController th = core.Thrust;
+                if (th != null)
+                {
+                    th.LimitToPreventUnstableIgnition = false;
+                    th.AutoRCSUllaging = true;
+                    th.MinThrottle.Val = 0.05;
+                    th.LimiterMinThrottle = true;
+                    th.LimitThrottle = false;
+                    th.LimitAcceleration = false;
+                    th.LimitToPreventOverheats = false;
+                    th.LimitDynamicPressure = false;              // ⛔ OwnerQuestion Q2
+                    th.MaxDynamicPressure.Val = 50000.0;
+                }
+            }
+            catch (Exception e)
+            { Debug.LogWarning("[DragonScreen] conductor: could not set the thrust baseline: " + e.Message); }
+
+            // ---- (8) THE DESTINATION — §B5's named exception, a MISSION FACT ---------------------
             AscentTarget t = AscentTargets.For(CrewProcedureOps.Profile, a.DesiredInclination.Val);
 
             // ⛔ S214: **NEVER HAND THE SOLVER AN INCLINATION IT CANNOT TAKE.** The domain is the
@@ -656,6 +792,17 @@ namespace DragonScreen
             a.DesiredInclination.Val   = t.InclinationDeg;
             a.DesiredOrbitAltitude.Val = t.PeriapsisM;
             a.DesiredApoapsis.Val      = t.ApoapsisM;
+            a.DesiredFPA.Val           = 0.0;      // a circular terminal state has zero flight-path angle
+
+            // ⭐⭐ THE ATTACH ALTITUDE — the one shaping value that is a MISSION FACT, and the one
+            // §7.2 already records as a BUG FOUND ON THIS CRAFT: *"attach = orbit alt gives a clean
+            // circular insertion; attach < peR = 'periapsis insertion' (elliptical), which is the bug
+            // found in the Crew-2 cfg (110 km attach vs 210 km orbit → fixed to 210)."* RO's default is
+            // 110 km and our orbit is 210 km, so leaving it would fly exactly that elliptical insertion.
+            // Both fields are written together so `OptimizeStageFlag` cannot pick a stale one.
+            a.DesiredAttachAltFixed.Val = t.ApoapsisM;
+            a.DesiredAttachAlt.Val      = t.ApoapsisM;
+            a.AttachAltFlag             = true;
 
             configured = true;
             Debug.Log("[DragonScreen] conductor: PVG configured — autostage OFF (§B8), AscentType PSG, "
@@ -663,9 +810,9 @@ namespace DragonScreen
                       + (t.ApoapsisM / 1000.0).ToString("F0") + " km @ "
                       + t.InclinationDeg.ToString("F4") + "° "
                       + (t.FromProfileApsides ? "(mission apsides)" : "(standard ISS insertion)")
-                      + ". ⚠ No ascent-SHAPING value was written: pitch rate, pitch-start velocity, "
-                      + "LimitQa, MaxAoA and the attitude PID are whatever the loaded profile set "
-                      + "(register S195 — which profile flight 1 flies is a §B5/T22 question).");
+                      + ", attach " + (t.ApoapsisM / 1000.0).ToString("F0")
+                      + " km (§7.2: NOT RO's 110 km), countdown " + AscentProfile.WarpCountDownS
+                      + " s, autowarp ON. " + AscentProfile.Render());
         }
 
         // ============================ S215 — THE LAUNCH WINDOW ============================
@@ -839,16 +986,11 @@ namespace DragonScreen
                 // into the glue ball, so PVG targets the RAAN as well as the inclination. Without it,
                 // `docs/MECHJEB_MASTER_MAP.md` §7.5's exact failure — "right inclination, wrong RAAN,
                 // and the rendezvous autopilot then needs an unaffordable plane change."
-                // ⛔ IT IS **NOT** `StartCountdown`, WHICH IS THE THING WE MUST NOT ARM (Q1).
-                // `LaunchingToPlane` is a TARGETING flag; `TimedLaunch` — the field that lets
-                // `MechJebModuleAscentBaseAutopilot:127` call `StageManager.ActivateNextStage()` — is set
-                // ONLY by `StartCountdown`, which nothing in this build calls. It stays false, so that
-                // whole branch is dead code for us and `IgnitionGate` keeps T-0.
                 a.LaunchingToPlane = true;
             }
 
             // MechJeb's own target controller only syncs inside `OnFixedUpdate`, so set it explicitly
-            // rather than race it: `SetTarget` above is about to read `Core.Target.TargetOrbit`.
+            // rather than race it: `SetTarget` is about to read `Core.Target.TargetOrbit`.
             try
             {
                 if (core.Target != null && v.targetObject != null) core.Target.Set(v.targetObject);
@@ -856,11 +998,126 @@ namespace DragonScreen
             catch (Exception e)
             { Debug.LogWarning("[DragonScreen] conductor: could not sync MechJeb's target: " + e.Message); }
 
+            // ============================================================================
+            // ⭐⭐ S219 JOB 2 — **ARM MECHJEB'S OWN COUNTDOWN.** §7.5, step for step.
+            // ============================================================================
+            // `docs/MECHJEB_MASTER_MAP.md` §7.5 documents the rendezvous button as ONE sequence, and
+            // `MechJebModuleAscentMenu.cs:245-258` is that sequence in source:
+            //
+            //     _launchingToPlane = true;
+            //     (timeToPlane, inclination) = Astro.MinimumTimeToPlane(rotationPeriod, lat, lon,
+            //                                      TargetOrbit.LAN - LaunchLANDifference,
+            //                                      TargetOrbit.inclination);
+            //     _autopilot.StartCountdown(VesselState.Time + timeToPlane);
+            //     _ascentSettings.DesiredInclination.Val = inclination;
+            //
+            // All four steps are now here, in that order: the flag above, the solve in `SolveWindow`
+            // (which calls the same vendored `Astro.MinimumTimeToPlane` and cross-checks it against the
+            // pure mirror), the countdown here, and the inclination — which the vendored order writes
+            // LAST, after the countdown, and so do we.
+            //
+            // ⛔⛔ [[S215]]'s Q1 REFUSED TO CALL THIS, AND WAS OVERTURNED BY THE OWNER, 2026-09-07:
+            //     "The overseer put this file in the T18 prompt's READ-FIRST list and then ruled against
+            //      StartCountdown without opening §7.5. ⭐ THE MAP IS THE SPECIFICATION."
+            // Its stated fear was real and is answered rather than dismissed — see `TickTerminalCount`
+            // below, which removes `StageManager.ActivateNextStage()` from reach instead of racing it.
+            try
+            {
+                MuMech.MechJebModuleAscentBaseAutopilot ap = core.Ascent;
+                MuMech.VesselState vs = core.VesselState;
+                if (ap != null && vs != null)
+                {
+                    ap.StartCountdown(vs.Time + window.TimeToWindowS);
+                    countdownArmed = true;
+                }
+                else
+                {
+                    Debug.LogWarning("[DragonScreen] conductor: the ascent autopilot or VesselState was "
+                                     + "null at the commit — MechJeb's countdown was NOT armed, so there "
+                                     + "is no autowarp. The committed T-0 still stands. (S219)");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: StartCountdown failed: " + e.Message
+                                 + " — no autowarp; the committed T-0 still stands.");
+            }
+
+            if (a != null)
+            {
+                // ⭐ Q2: THE COMPUTED INCLINATION WINS AT LAUNCH — and by here it has already been proven
+                // to agree with the §B5 mission fact inside `LaunchWindow.Solve`, or we would not be
+                // holding an `Armed` plan. ⭐ THIS ALSO SETTLES T18's Q1 (the inclination SIGN): the sign
+                // is the northgoing/southgoing choice `MinimumTimeToPlane` just made on TIMING grounds,
+                // not a value inherited from whichever cfg happened to be loaded.
+                // ⚠ WRITTEN AFTER `StartCountdown`, because that is the order the menu writes them in.
+                a.DesiredInclination.Val = window.InclinationDeg;
+            }
+
             Debug.Log("[DragonScreen] conductor: LAUNCH WINDOW COMMITTED — T-0 in "
                       + window.TimeToWindowS.ToString("F1") + " s, plane "
                       + window.InclinationDeg.ToString("F4") + "° (LAN-targeted: LaunchingToPlane ON). "
-                      + "Warping to T-" + WarpLeadSeconds.ToString("F0") + " s. ⛔ MechJeb's own countdown "
-                      + "is NOT armed — IgnitionGate keeps T-0 (§B8/§B12.7). (S215)");
+                      + (countdownArmed
+                            ? "MechJeb's own countdown is ARMED (§7.5) — it warps to T-"
+                              + AscentProfile.WarpCountDownS + " s on Core.Node.Autowarp and starts PSG "
+                              + "converging there."
+                            : "⛔ MechJeb's countdown could NOT be armed — no autowarp.")
+                      + " The conductor takes the terminal count at T-"
+                      + AscentProfile.TerminalCountS.ToString("F0")
+                      + " s and IgnitionGate keeps T-0 (§B8/§B12.7). (S219)");
+        }
+
+        /// <summary>
+        /// ⭐⭐ S219 JOB 2/3 — **TAKE THE TERMINAL COUNT, AND WITH IT MECHJEB'S T-0.**
+        ///
+        /// `MechJebModuleAscentBaseAutopilot.OnFixedUpdate:122-137` runs its whole T-0 block only
+        /// `if (TimedLaunch)`, and inside it:
+        ///     if (TMinus &lt; 3 * DeltaT || (TMinus &gt; 10.0 &amp;&amp; _lastTMinus &lt; 1.0))
+        ///     {
+        ///         if (Enabled &amp;&amp; VesselState.ThrustAvailable &lt; 10E-4) StageManager.ActivateNextStage();
+        ///         TimedLaunch = false;
+        ///     }
+        /// ⛔ **THAT `ActivateNextStage()` IS NOT HARMLESS ON THIS CRAFT.** `docs/reference/Crew-2.craft`
+        /// puts the octaweb alone in KSP stage 8 and **the Ghidorah erector — the hold-downs — alone in
+        /// stage 7**. And the case where it fires is precisely our worst one: `IgnitionGate` safing the
+        /// pad at T-1 s leaves `ThrustAvailable` at ZERO, so MechJeb would re-light the octaweb we just
+        /// shut down, outside the gate that shut it.
+        ///
+        /// ⭐ **SO THE BRANCH IS REMOVED FROM REACH, NOT RACED.** `TimedLaunch` is a public field and
+        /// MechJeb's own ascent window clears it from its **Abort** button
+        /// (`MechJebModuleAscentMenu.cs:305`) — so this is a documented UI action, not a patch
+        /// (`plugin/mech/` untouched, §B12.1). From T-<see cref="AscentProfile.TerminalCountS"/> onward
+        /// `TimedLaunch` is false, MechJeb has no T-0 of any kind, and `IgnitionGate` owns the pad
+        /// exactly as §B8/§B12.7 require.
+        ///
+        /// ⚠ AND IT IS LATE ENOUGH TO COST NOTHING. By T-10 s the autowarp has already landed (it ends
+        /// at T-32 s) and PSG has already been handed the target and told to converge
+        /// (`MechJebModuleAscentPSGAutopilot.Drive:47-53`, at `TMinus &lt;= WarpCountDown`). Clearing the
+        /// flag then simply moves `Drive` onto its `else` branch, which is the SAME `SetTarget()` plus a
+        /// full `AssertStart()` — guidance keeps converging, and `DriveAscent` stops answering "Awaiting
+        /// liftoff" and starts flying the vertical ascent the moment the vehicle actually moves.
+        /// </summary>
+        static void TickTerminalCount()
+        {
+            if (!countdownArmed || terminalCountTaken || launchWindowUT <= 0.0) return;
+            if (SecondsToWindow() > AscentProfile.TerminalCountS) return;
+
+            try
+            {
+                MuMech.MechJebModuleAscentBaseAutopilot ap = core.Ascent;
+                if (ap == null) { terminalCountTaken = true; return; }
+                ap.TimedLaunch = false;
+                terminalCountTaken = true;
+                Debug.Log("[DragonScreen] conductor: TERMINAL COUNT — the conductor has T-0. MechJeb's "
+                          + "TimedLaunch is CLEARED at T-" + SecondsToWindow().ToString("F1")
+                          + " s, so `StageManager.ActivateNextStage()` is now unreachable and IgnitionGate "
+                          + "owns the pad. Guidance keeps converging on the untimed path. (S219)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: could not clear TimedLaunch: " + e.Message
+                                 + " — ⛔ MechJeb may still stage at T-0.");
+            }
         }
 
         /// <summary>
@@ -897,6 +1154,29 @@ namespace DragonScreen
         /// <summary>Seconds to the committed T-0. Meaningless unless <see cref="launchWindowUT"/> is set.</summary>
         static double SecondsToWindow() { return launchWindowUT - Now(); }
 
+        // =====================================================================================
+        // ⛔ SUPERSEDED IN PLACE — 2026-09-07, register S219 JOB 2 (C1.16 / G12: reasoning is never
+        // deleted, and neither is the code a rule was learned on).
+        // =====================================================================================
+        // WHAT IT CLAIMED. `WarpLeadSeconds` + `TickLaunchWarp` were [[S215]]'s OWN warp controller:
+        // having declined to arm MechJeb's countdown (its Q1), it had to warp to the launch window
+        // itself, so it commanded `Core.Warp.WarpToUT` once at the commit and let the warp controller
+        // sustain and end it.
+        //
+        // WHAT REPLACED IT, AND WHY. The owner, 2026-09-07, verbatim: *"S215 built a custom launch-window
+        // calculator instead. ⭐ THE MAP IS THE SPECIFICATION. Follow it section by section. Do not
+        // re-derive it, and do not invent a parallel mechanism again."* MechJeb's own countdown now warps
+        // — `MechJebModuleAscentBaseAutopilot.cs:133`, `Core.Warp.WarpToUT(_launchTime - WarpCountDown)`,
+        // re-issued every fixed update while `TimedLaunch` and gated on `Core.Node.Autowarp`, which
+        // `Configure` now sets. `AscentProfile.WarpCountDownS` carries this block's composed 20 s + 12 s
+        // lead forward into MechJeb's own `WarpCountDown` box, so the REASONING survives its mechanism.
+        //
+        // ⚠ NOTHING CALLS `TickLaunchWarp` ANY MORE. It is kept, unreferenced, because C1.16's
+        // extension says reasoning is marked superseded in place and not removed — and because the two
+        // paragraphs below it (why `WarpToUT` is issued once, why `activateSASOnWarp` must be off) are
+        // both still TRUE and both still load-bearing: `Configure` step (6) writes that SAS flag for
+        // exactly the reason recorded here.
+        // =====================================================================================
         /// <summary>
         /// S215. Warp to the committed window, and stop warping in time to fly it.
         ///
@@ -970,8 +1250,14 @@ namespace DragonScreen
             // commit is what writes the plane into MechJeb and fixes T-0; the warp is armed off that
             // commit; and the plane target is re-checked every tick because losing it would fault PVG's
             // own `SetTarget` on the next frame.
+            // ⭐ S219: the window is solved/committed FIRST (the commit is what writes the plane into
+            // MechJeb, fixes T-0 and ARMS MECHJEB'S OWN COUNTDOWN, which is what warps); the terminal
+            // count is taken off that commit; and the plane target is re-checked every tick because
+            // losing it would fault PVG's own `SetTarget` on the next frame.
+            // ⛔ `TickLaunchWarp` is GONE FROM THIS ORDER and superseded in place below — MechJeb's
+            // countdown owns the warp now (§7.5).
             UpdateLaunchWindow(v);
-            TickLaunchWarp();
+            TickTerminalCount();
             HoldPlaneTargetOrClear();
 
             AscentInputs s = AscentInputs.Nominal();
@@ -1130,6 +1416,11 @@ namespace DragonScreen
                 core.AuthorizeDrive(true);
                 MuMech.MechJebModuleNodeExecutor ne = core.Node;
                 if (ne == null) { StandDown(v, "the core has no Node Executor"); return; }
+
+                // ⭐ S219 — §8's `RCSOnly`, on EVERY node burn and not only the rendezvous ones. The
+                // deorbit burn goes through this same executor and the free-flying Dragon has no main
+                // engine either; see `RendezvousOps.NodeBurnsOnRcs` for the craft-file evidence.
+                SetNodeRcsOnly(v);
 
                 int count = NodeCount(v);
 
@@ -1416,6 +1707,167 @@ namespace DragonScreen
             Debug.Log(message);
         }
 
+        // ============================ §8 — MECHJEB'S RENDEZVOUS AUTOPILOT (S219) ============================
+        //
+        //  Owner, 2026-09-07, verbatim — an `OVERRIDE` of §B1/§B12.4's default (C1.8):
+        //      "mechjeb rendezvous autopilot just for now to get things moving… Then we move to the more
+        //       complicated, mission accurate fidelity way"
+        //
+        //  `docs/MECHJEB_MASTER_MAP.md` §8 is the specification, and its verdict is the reason this is
+        //  now viable at all: the eight-branch tree is SOUND, and the reason it "doesn't work for us" was
+        //  never the autopilot — it was **branch 8**. Two 51.64° orbits at different RAAN have a large
+        //  RELATIVE inclination, and the LEO plane-match burn is hundreds of m/s the Dragon cannot afford,
+        //  so it churns and runs dry. §8's own answer: *"Launch coplanar (§7.5) and it drops into branch 6
+        //  (cheap Hohmann phasing) instead."* Job 2's ascent half is what makes that true, so the two
+        //  halves of this register line are one change, not two.
+        //
+        //  ⛔ THE CONDUCTOR'S OWN PATH IS NOT DELETED. `PlanOperation` / `BurnNode` / `Replan` — §B12.4's
+        //  compose-fly-judge-replan loop and §B11's waypoint ladder — are untouched and one assignment
+        //  away (`SelectRendezvousDrive`). They are marked SUPERSEDED-FOR-NOW in `RendezvousDrive`, which
+        //  is where the owner's words live.
+
+        /// <summary>Set MechJeb's rendezvous autopilot up the way §8 says, engage it, and watch for the
+        /// hand-off. ⭐ SET, **THEN ENGAGE** — the owner's central point: *"otherwise it will sit there
+        /// ready to go but do nothing."*</summary>
+        static void RunRendezvousAutopilot(Vessel v, ConductorAction a)
+        {
+            try
+            {
+                MuMech.MechJebModuleRendezvousAutopilot ap =
+                    core.GetComputerModule<MuMech.MechJebModuleRendezvousAutopilot>();
+                if (ap == null) { StandDown(v, "the core has no Rendezvous Autopilot"); return; }
+
+                MuMech.MechJebModuleTargetController tc = core.Target;
+                if (tc == null || !tc.NormalTargetExists)
+                {
+                    if (rendezvousEngaged) ReleaseRendezvous("the target was lost");
+                    StandDown(v, "no target for the rendezvous autopilot - " + a.Reason);
+                    return;
+                }
+
+                double rangeM, relSpeedMps;
+                Measure(v, out rangeM, out relSpeedMps);
+
+                core.AuthorizeDrive(true);
+
+                // ---- ⭐ THE OPTIONS, PER §8's DECISION TREE. Re-asserted every tick, like the docking
+                // ---- ladder, because they are what the tree branches on and a stale one changes the branch.
+                //
+                // (1) `desiredDistance` — WHERE IT STOPS. MechJeb's default is 100 m, which is INSIDE
+                //     §B11's 200 m Keep-Out Sphere; left alone the autopilot would fly the Dragon through
+                //     the KOS on maneuver nodes. The hand-off range is the published KOS (a MISSION FACT,
+                //     `RendezvousOps.AutopilotHandoffRangeM`), and inside it the Docking Autopilot is the
+                //     DEFAULT (O6 / §B10.3 / §B12.3).
+                if (ap.desiredDistance.Val != RendezvousOps.AutopilotHandoffRangeM)
+                    ap.desiredDistance.Val = RendezvousOps.AutopilotHandoffRangeM;
+
+                // (2) `maxClosingSpeed` — §8's branch 4/5 clamp on the approach. Left at MechJeb's own
+                //     100 m/s: it only ever caps a closing speed the tree already computed, it is never a
+                //     commanded speed, and the speed that actually matters to the crew is the docking
+                //     ladder's cap inside the KOS, which `RunDocking` owns. Lowering it is a §B5/T22 tune.
+                // (3) `maxPhasingOrbits` — 5, MechJeb's own. It is how many revolutions the tree may
+                //     spend catching up before it gives up and phases; there is no in-repo source for a
+                //     different number, so RO's baseline stands (the Part-B gate's rule).
+
+                // (4) ⭐⭐ `Core.Node.RCSOnly` — §8's closing note, and on this craft the difference
+                //     between a burn and a hang. The rule and the craft-file evidence are in
+                //     `RendezvousOps.NodeBurnsOnRcs`. Measured from the vessel every tick, because the
+                //     answer changes at Dragon separation and a phase label is not a part.
+                SetNodeRcsOnly(v);
+
+                // (5) AUTO-WARP. §8: the autopilot does not own a warp flag — it NARROWS `Core.Node`'s
+                //     (`Core.Node.Autowarp = Core.Node.Autowarp && Core.Target.Distance > 1000`), so the
+                //     one `Configure` sets is the one it reads. Re-asserted here because that narrowing
+                //     is a WRITE: once inside 1 km the autopilot latches it false, and it must come back
+                //     for the next mission phase that wants a warp.
+                try { if (core.Node != null && rangeM > 1000.0) core.Node.Autowarp = true; } catch { }
+
+                // ---- ⭐ THEN ENGAGE ---------------------------------------------------------------
+                if (!rendezvousEngaged)
+                {
+                    ClearNodes(v);          // §8: `OnModuleEnabled` removes them anyway; do it visibly
+                    ap.Users.Add(Owner);
+                    rendezvousEngaged = true;
+                    Debug.Log("[DragonScreen] conductor: ⭐ RENDEZVOUS AUTOPILOT ENGAGED (owner OVERRIDE "
+                              + "2026-09-07) at " + rangeM.ToString("F0") + " m, rel "
+                              + relSpeedMps.ToString("F1") + " m/s. Stops at "
+                              + RendezvousOps.AutopilotHandoffRangeM.ToString("F0")
+                              + " m (§B11 Keep-Out Sphere) and hands to the Docking Autopilot. "
+                              + "⚠ It does NOT walk §B11's WP0/WP1/WP2 ladder - that is the conductor's own "
+                              + "path, superseded-for-now, not retired. " + a.Reason);
+                }
+
+                // ---- THE HAND-OFF. §8 branch 2: within `desiredDistance` with relvel < 1 is DONE, and
+                // ---- the module clears its own users when it gets there. Either signal ends the leg.
+                bool moduleFinished = !ap.Enabled;
+                bool arrived = rangeM <= RendezvousOps.AutopilotHandoffRangeM
+                               && relSpeedMps < 1.0;
+                if (moduleFinished || arrived)
+                {
+                    ReleaseRendezvous(moduleFinished ? "the autopilot reported done"
+                                                     : "arrived at the Keep-Out Sphere");
+                    ClearNodes(v);
+                    CrewProcedureOps.PhaseComplete();
+                    ResetLeg();
+                    Debug.Log("[DragonScreen] conductor: rendezvous leg complete at "
+                              + rangeM.ToString("F0") + " m, rel " + relSpeedMps.ToString("F2")
+                              + " m/s - plan advanced (" + CrewProcedureOps.PhaseName + "). (S219)");
+                    return;
+                }
+
+                approachNote = "RNDZ " + (rangeM / 1000.0).ToString("F2") + " km, rel "
+                             + relSpeedMps.ToString("F1") + " m/s"
+                             + (string.IsNullOrEmpty(ap.status) ? "" : " - " + ap.status);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: rendezvous autopilot tick failed: " + e.Message);
+            }
+        }
+
+        /// <summary>Take MechJeb's rendezvous autopilot off, for any reason, and say which.</summary>
+        static void ReleaseRendezvous(string why)
+        {
+            try
+            {
+                MuMech.MechJebModuleRendezvousAutopilot ap =
+                    core == null ? null : core.GetComputerModule<MuMech.MechJebModuleRendezvousAutopilot>();
+                if (ap != null) ap.Users.Remove(Owner);
+            }
+            catch { }
+            rendezvousEngaged = false; approachNote = null;
+            Debug.Log("[DragonScreen] conductor: rendezvous autopilot released - " + why);
+        }
+
+        /// <summary>
+        /// ⭐⭐ S219 — `Core.Node.RCSOnly`, decided from the PARTS and re-checked every tick.
+        /// See `RendezvousOps.NodeBurnsOnRcs` for the argument and the craft-file evidence: after Dragon
+        /// separation the only `ModuleEngines` left is the SuperDraco ABORT motor, so a node burn that
+        /// commands `mainThrottle` has no thrust at all and the executor hangs.
+        /// ⚠ It governs BOTH rendezvous drivers and the deorbit burn, because all three go through the
+        /// same `MechJebModuleNodeExecutor`.
+        /// </summary>
+        static void SetNodeRcsOnly(Vessel v)
+        {
+            try
+            {
+                MuMech.MechJebModuleNodeExecutor ne = core == null ? null : core.Node;
+                if (ne == null) return;
+                bool hasMain = Actuator.FindEngine(v, EngineRole.SecondStage) != null;
+                bool want = RendezvousOps.NodeBurnsOnRcs(hasMain);
+                if (ne.RCSOnly == want) return;
+                ne.RCSOnly = want;
+                Debug.Log("[DragonScreen] conductor: Node Executor RCSOnly -> " + want
+                          + (want ? " - no main engine on this vessel; the only ModuleEngines left is the "
+                                  + "SuperDraco abort motor, so a mainThrottle burn would have NO thrust "
+                                  + "and hang (§8). Burning on Dracos."
+                                  : " - a main engine is present; the executor may throttle it.")
+                          + " (S219)");
+            }
+            catch (Exception e)
+            { Debug.LogWarning("[DragonScreen] conductor: could not set Node RCSOnly: " + e.Message); }
+        }
+
         // ============================ THE DOCKING EXECUTOR (T20) ============================
         //
         //  §B9 Phase 4 / §B10.3 / O6. The Docking Autopilot is the DEFAULT from the Keep-Out Sphere
@@ -1462,12 +1914,53 @@ namespace DragonScreen
                               + " m/s at " + rangeM.ToString("F1") + " m (B10.3 ladder)");
                 }
 
+                // ⭐⭐ S219 JOB 2 — **EVERYTHING ELSE §9's MODULE NEEDS, SET BEFORE THE ENGAGE.**
+                // Before this line the conductor set `speedLimit` and `forceRol` and nothing more, and
+                // the brief is precise about why that is not enough: *"§9 says what else the module
+                // needs. Set it, then engage."* Read off `MechJebModuleDockingAutopilot` itself:
+                //
+                // (a) `rol` — the roll ANGLE `forceRol` aligns to (`Drive:227-229` builds
+                //     `AngleAxis(-(float)rol, back)` in `TARGET_ORIENTATION`). It is `Pass.LOCAL`
+                //     PERSISTED, so "its own default of 0" is only true on a vessel that has never been
+                //     docked with before. §B10.3 wants the port's own orientation, which is rol = 0.
+                // (b/c) `overrideSafeDistance` / `overrideTargetSize` — also `Pass.LOCAL` persisted
+                //     booleans, and when either is true the module uses `overridenSafeDistance` /
+                //     `overridenTargetSize` (5 m / 10 m) INSTEAD of the measured bounding boxes
+                //     (`OnFixedUpdate:256-263`). A stale true would fly the corridor against a 5 m safe
+                //     distance next to a station, or back the Dragon away from one forever. T20's
+                //     reasoning for not FORCING them (§B10.3's "safe-distance = the Keep-Out Sphere" is a
+                //     tuning target, and forcing 200 m would pin the module in WRONG_SIDE_BACKING_UP) is
+                //     unchanged and still right — but "leave the module's own default" means WRITE the
+                //     default, not inherit whatever a previous save left behind.
+                // (d) `drawBoundingBox` — the module registers `DrawBoundingBox` on the core's
+                //     post-draw queue in `OnStart` regardless of T15b's GUI suppression; this flag is
+                //     the only thing that stops it drawing over the IVA.
+                ap.rol.Val = 0.0;
+                ap.forceRol = true;
+                ap.overrideSafeDistance = false;
+                ap.overrideTargetSize = false;
+                ap.drawBoundingBox = false;
+
                 if (!dockingEngaged)
                 {
-                    // §B10.3: "Target: enable roll-align to the IDA-2 port." `forceRol` with `rol` at
-                    // its own default of 0 aligns the roll to the target port's orientation
-                    // (`MechJebModuleDockingAutopilot.Drive`: attitudeTo(..., TARGET_ORIENTATION)).
-                    ap.forceRol = true;
+                    // (e) ⛔ THE TARGET MUST BE A DOCKING PORT, NOT MERELY THE STATION. `InitDocking:349-352`
+                    //     reads `acquireRange` off the target only `if (Core.Target.Target is
+                    //     ModuleDockingNode)` and otherwise falls back to 0.25 m, and every alignment in
+                    //     `Drive` is expressed in `AttitudeReference.TARGET_ORIENTATION` — which is the
+                    //     PORT's frame when a port is targeted and the whole vessel's when it is not.
+                    // ⚠ SELECTING WHICH PORT IS NOT THIS FILE'S TO DO. §B10.3 names IDA-2, but nothing in
+                    //     the repo maps a station's ports to that name (§1.4: no invented source), and the
+                    //     crew's own target selection is the authority. So this ANNUNCIATES rather than
+                    //     picks — loudly, once, because a docking flown against a vessel centre instead of
+                    //     a port looks almost right until the last two metres.
+                    bool portTargeted = core.Target != null
+                                        && core.Target.Target is ModuleDockingNode;
+                    if (!portTargeted)
+                        Debug.LogWarning("[DragonScreen] conductor: ⚠ DOCKING AUTOPILOT ENGAGING WITHOUT A "
+                                         + "PORT TARGET - the crew have targeted the vessel, not a docking "
+                                         + "node. MechJeb will align to the vessel's frame and use a 0.25 m "
+                                         + "acquire range instead of the port's own (§9 / InitDocking:349). "
+                                         + "Target the PORT for a nominal approach. (S219)");
 
                     // ⛔ `overrideSafeDistance` IS DELIBERATELY LEFT ALONE, AND THIS IS THE ONE PLACE
                     // T20 DOES NOT FOLLOW §B10.3's WORDING. §B10.3 says "safe-distance = the Keep-Out
@@ -1837,6 +2330,7 @@ namespace DragonScreen
                 // RCS/attitude user pools, and a pool held by a core that is no longer master is a
                 // vehicle nobody is steering and nobody has given back.
                 if (dockingEngaged) ReleaseDocking(why);
+                if (rendezvousEngaged) ReleaseRendezvous(why);   // S219 - it holds the same user pools
                 ReleaseAttitude();
                 if (core.DriveAuthorized) core.AuthorizeDrive(false);
             }

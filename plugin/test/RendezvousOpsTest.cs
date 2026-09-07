@@ -36,6 +36,47 @@ public static class RendezvousOpsTest
         return Path.GetFullPath(Path.Combine(bits.ToArray()));
     }
 
+    // =====================================================================================
+    // ⭐ S219 JOB 2 — THE SELECTABLE RENDEZVOUS DRIVER, AND §8's TWO OPERATIONAL FACTS
+    // =====================================================================================
+    //
+    // Owner, 2026-09-07, verbatim (an `OVERRIDE` of §B1/§B12.4's default):
+    //     "mechjeb rendezvous autopilot just for now to get things moving… Then we move to the more
+    //      complicated, mission accurate fidelity way"
+    //
+    // ⛔ The node-composing path is NOT deleted — it is one enum value away, and these checks are what
+    // stop that value quietly disappearing.
+    static void S219RendezvousDriver()
+    {
+        // Both drivers exist, and the enum's default (0) is the conductor's own path, so a struct that
+        // is never initialised cannot silently hand the vehicle to MechJeb.
+        Check((int)RendezvousDrive.Conductor == 0,
+              "S219: the conductor's own path is RendezvousDrive 0 (the uninitialised value)");
+        Check((int)RendezvousDrive.MechJebAutopilot == 1
+              && RendezvousDrive.MechJebAutopilot != RendezvousDrive.Conductor,
+              "S219: MechJeb's autopilot is a DISTINCT selectable value, not a replacement");
+
+        // ⭐ §8 / §B11 — WHERE THE AUTOPILOT MUST STOP. MechJeb's own default is 100 m, which is INSIDE
+        // the 200 m Keep-Out Sphere; left alone it would fly the Dragon through the KOS on maneuver
+        // nodes, which §B11 forbids and `Conductor.Approach` already refuses to plan.
+        Check(RendezvousOps.AutopilotHandoffRangeM == RendezvousOps.KeepOutSphereM
+              && RendezvousOps.AutopilotHandoffRangeM == 200.0,
+              "S219/§8: the autopilot hands over AT the Keep-Out Sphere, not at MechJeb's 100 m");
+        Check(RendezvousOps.AutopilotHandoffRangeM > 100.0,
+              "S219/§8: ...which is strictly outside MechJeb's own 100 m default");
+        Check(DockingLadder.SpeedLimitFor(RendezvousOps.AutopilotHandoffRangeM)
+              == DockingLadder.CorridorSpeedMps,
+              "S219/§8: ...and that is exactly where the Docking Autopilot's ladder takes over");
+
+        // ⭐⭐ §8's closing note: "a Dragon on Dracos executes on RCS (`RCSOnly`)". On this craft the
+        // only ModuleEngines left after Dragon separation is the SuperDraco ABORT motor, so a node burn
+        // that commands mainThrottle has no thrust at all and the executor hangs.
+        Check(RendezvousOps.NodeBurnsOnRcs(false),
+              "S219/§8: no main engine on the vessel ⇒ the node burn runs on RCS");
+        Check(!RendezvousOps.NodeBurnsOnRcs(true),
+              "S219/§8: a main engine present ⇒ it does NOT (the rule is not a constant)");
+    }
+
     public static int Run()
     {
         Console.WriteLine("RendezvousOpsTest (T19: §B11 approach geometry, §B10.2 op params, §B12.4 numbers)");
@@ -50,6 +91,7 @@ public static class RendezvousOpsTest
         ChainEnds();
         VendoredOperationClasses();
         VendoredTimeReferences();
+        S219RendezvousDriver();   // S219 JOB 2
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
