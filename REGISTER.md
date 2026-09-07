@@ -26418,3 +26418,23 @@ arithmetic and not a measurement) — nothing here draws.
 ⛔ Written by the OVERSEER at the owner's direction (*"run s220 then install and let's fly it"*), which
 crosses the observe-only lock — recorded so the deviation is visible, and so a later reader knows this line
 had no independent assessor.
+
+---
+
+### S222 [O] FALCON EXPERT — read the Falcon User's Guide front to back, structured — **DOING** — [owner directive 2026-09-08]
+🟢 **OWNER, 2026-09-08, verbatim:** *"We are using the most up to date versions of those engines. The users
+guide may be using old engine version statistics. Lets task a chat to systematically learn the manual front
+to back including reading it structured as it is intended to be not converted to pure text. This chat will
+be FALCON EXPERT and we will refer any falcon related questions to it."*
+- **NOT a build chat.** No plugin code, no cfg, no register line but this one. Declared outputs:
+  `docs/reference/FALCON_USERS_GUIDE.md` + this line. Nothing else.
+- ⛔ **Read it as a DOCUMENT.** The overseer's flat-text extraction collapsed p.20's specification table into
+  a run-on. Pages are RENDERED (`pypdfium2`, scale 2, 1224x1584) and read visually; text extraction is a
+  cross-check only. **Where the two disagree the rendered page wins and the digest says so.**
+- ⛔ **Every number carries its provenance and vintage** — document date 2025-05-09, the page, and whatever
+  block/variant the page itself states (and "the page does not say" where it does not).
+- ⛔ **Never silently reconcile a guide number with a game number.** The live example: guide p.20 gives
+  7,686 kN sea level; our octaweb reported 8,227 kN on 2026-09-07 (~7 % higher). Both recorded, marked
+  UNRESOLVED, NOT called a defect in our craft.
+- **DONE when:** every section is covered front to back with page cites, p.20 read off the render, and the
+  p.96 timelines verified against the rendered page.
