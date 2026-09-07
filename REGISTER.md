@@ -26421,7 +26421,7 @@ had no independent assessor.
 
 ---
 
-### S222 [O] FALCON EXPERT — read the Falcon User's Guide front to back, structured — **DOING** — [owner directive 2026-09-08]
+### S222 [O] FALCON EXPERT — read the Falcon User's Guide front to back, structured — **DONE 2026-09-08 — all 128 pages rendered and read; found the guide contradicts ITSELF on S1 thrust (7,605 vs 7,686 kN, one page apart) and that 17 appendix pages extract as blank text** — [owner directive 2026-09-08]
 🟢 **OWNER, 2026-09-08, verbatim:** *"We are using the most up to date versions of those engines. The users
 guide may be using old engine version statistics. Lets task a chat to systematically learn the manual front
 to back including reading it structured as it is intended to be not converted to pure text. This chat will
@@ -26438,3 +26438,96 @@ be FALCON EXPERT and we will refer any falcon related questions to it."*
   UNRESOLVED, NOT called a defect in our craft.
 - **DONE when:** every section is covered front to back with page cites, p.20 read off the render, and the
   p.96 timelines verified against the rendered page.
+
+#### ⭐ DONE 2026-09-08 — read as a DOCUMENT, and that is what found the defects
+
+**Deliverable: [`docs/reference/FALCON_USERS_GUIDE.md`](docs/reference/FALCON_USERS_GUIDE.md)** — a
+section-by-section, page-cited digest of all 128 pages, written for a reader who has not opened the PDF.
+Every page was **rendered** (`pypdfium2`, scale 2, 1224x1584) and read visually; text extraction was run as
+an independent cross-check only; every number-bearing table was **re-cropped at scale 3 and re-read** before
+being written down. **Page-cite convention: `PDF p.N / printed M`, and PDF page = printed page + 11.**
+
+⛔ **THE OWNER'S "READ IT AS A DOCUMENT" INSTRUCTION WAS LOAD-BEARING — TWO PROOFS.**
+1. **PDF pages 99-115 extract as COMPLETELY EMPTY** — footer only. That is **17 pages**: the whole of
+   Appendices A, B and C (PAF drawings, clampband drawings, constellation keep-in volumes), plus p.116
+   (Appendix D). They are landscape CAD sheets. **A text-only reading loses 17 pages and gives no sign that
+   it did.** All of them are now digested from the renders.
+2. **The pre-supplied extraction of p.96 dropped SECO-2 entirely** — T+1696 s (GTO) and T+3090 s (LEO) — and
+   merged the two tables into ranges. Losing SECO-2 loses the second-burn duration, and with it the finding
+   that **the LEO second burn is FOUR SECONDS** against the GTO profile's 60 s.
+
+⭐ **THE GUIDE CONTRADICTS ITSELF ON FIRST-STAGE THRUST, ONE PAGE APART — a NEW finding, and it moves the
+owner's premise.** §2.3 body text (**PDF p.19**) says **"7,605 kN (1,710,000 lbf)"**; Table 2-1
+(**PDF p.20**) says **"7,686 kN (sea level) (1,710,000 lbf)"**. 1,710,000 lbf = **7,606 kN**, and
+9 x 845 kN/engine = 7,605 kN, so **the body text is self-consistent and Table 2-1 is the outlier** (the same
+conversion checks out cleanly for Falcon Heavy and for the second stage). ⛔ **NOT corrected and NOT called a
+typo** (§1.4). Consequence for the brief's comparison: our octaweb's **8,227 kN** is **+8.2 %** over the
+guide's self-consistent figure, not the +7.0 % computed against Table 2-1. **Both recorded, both cited,
+UNRESOLVED — Q1.**
+
+⭐ **AND THE VINTAGE CAVEAT NOW HAS DOCUMENTARY SUPPORT.** The **change log (PDF p.11)** shows the file is
+**Version 8, March 2025**, and lists its major updates: §3.3, §3.6, §4, §5, §6, §7 and Appendices A-I.
+**Section 2 (VEHICLES) and Section 10 (OPERATIONS) are NOT in that list** — so Table 2-1 and the flight
+timelines sit in sections the guide itself did not flag as revised in 2025; the latest release that could
+have touched them silently is **Version 7, September 2021**. ⛔ Stated as bounds, not as a date: "not listed
+as a major update" is not proof of "untouched".
+
+**⭐ p.96 timelines VERIFIED against the rendered page** (and they are **two tables**, not one):
+**GTO** T-3 ignition · T+0 · 74 maxQ · 147 MECO · 151 sep · 158 SES-1 · 222 fairing · 484 SECO-1 ·
+1636 SES-2 · **1696 SECO-2** · 1996 sc sep. **LEO** T-3 · T+0 · 67 maxQ · 145 MECO · 148 sep · 156 SES-1 ·
+195 fairing · 514 SECO-1 · 3086 SES-2 · **3090 SECO-2** · 3390 sc sep.
+Cross-checks that hold: S2 burn 1 = **5 m 26 s / 5 m 58 s**, matching §10.6.1's *"five to six minutes"*;
+fairing sep at 195/222 s sits inside Figure 5-9's **≈230 s max deploy** for F9.
+
+**⭐ S219 IS INDEPENDENTLY CONFIRMED — but say what that is precisely.** **T-3 s engine start** appears in
+**both** timelines (**PDF p.96**), and **§10.5.5 (PDF p.94)** gives the whole chain verbatim: ignition while
+*"held down at the base via hydraulic clamps"*, the **flight computer** evaluating *"engine ignition and
+full-power performance during the prelaunch hold-down"*, *"the hydraulic release system is activated at
+T-0"*, and *"a safe shutdown … should any off-nominal condition be detected"* — corroborated by §2.3
+(p.19) and by §5.3.5 (p.49), which makes hold-down release **flight shock event #1**.
+⛔ **This does NOT promote an existing §B11 [EST]: §B11's Ascent block has NO ignition or T-0 row at all.**
+It is (a) documentary confirmation of S219's own estimate and (b) a **NEW [DOC] row §B11 does not carry**.
+Calling it a promotion would overstate it. **§B11 rows it touches** (read-only comparison, §13.2 of the
+deliverable): Max-Q **[DOC]** ~72 s — guide brackets it at 67/74 ✅ · SECO-1 **[DOC]** ~513 s — guide LEO
+**514 s**, matches to 1 second ✅ · MECO/stage-sep/S2-ignition — guide is **8-10 s later** ⚠ (logged as
+**D6**, NOT reconciled: guide MECO is a velocity-or-propellant cutoff on a *fairing* profile, §B11's is
+Crew-Dragon) · peak axial accel **[EST] ~4 g** — the guide gives a **payload limit of 6.0 g axial** above
+1,800 kg (Table 5-3, p.44), which **bounds the estimate from above but does not confirm it**; stays [EST].
+⛔ **`docs/BUILD_PLAN.md` NOT touched** (guarded, C1.12/G10) — carried here for a later `G`-line, **Q2**.
+
+**Also captured and new to the repo:** documented **pad coordinates** — SLC-40 **28.5620 N / 80.5772 W**
+(p.69), LC-39A **28.6082 N / 80.6041 W** (p.70), SLC-4E **34.6320 N / 120.6107 W** (p.73), tier-1 and worth
+knowing exist after the `LZ1` invented-coordinate incident · the **F9 recovery sequence** (Figure 10-11,
+p.95) with the finding that **F9 shows NO boostback** — boostback appears only in the Falcon Heavy figure for
+side boosters to landing zones · **first-stage cold gas is "recovery only"** (Table 2-1) · the **LV
+coordinate frame** origin **440.69 cm aft of the first-stage radial engine gimbal** (p.26) · the **OPM
+separation-state format** with its **Greenwich-referenced LAN**, not inertial RAAN (p.126).
+
+**And what the guide does NOT say — recorded as complete answers, not gaps:** payload mass to orbit (p.23,
+on request) · separation attitude/rate accuracy (p.25, on request) · any landing-zone coordinate (SLC-4W is
+labelled on a map only; LZ-1/LZ-2 never mentioned) · landing-burn throttling or engine count · Isp,
+propellant masses or burn-time budgets · which block Table 2-1's figures belong to.
+
+⛔ **C7 FLAG — the input is OUTSIDE the repo.** The PDF was read from
+`C:\Users\User\Downloads\falcon-users-guide-2025-05-09.pdf`. This task did **not** copy it (the brief assigns
+that to `S221`) — **and there is no `S221` line in this register**. Until one lands the file in
+`docs/reference/`, the digest is the only in-repo record and no later chat can re-verify a page cite. **Q3.**
+
+**Verified.** Docs-only task, no code change — `build.py test` / `preview` correctly **not run** (C1.3's
+docs/harness exemption). Deliverable written; **all 128 pages opened**; every number in the digest carries a
+page cite. **Declared outputs only** (C1.11): `docs/reference/FALCON_USERS_GUIDE.md` + this line.
+
+**Open questions for the owner** — full form in `docs/reference/FALCON_USERS_GUIDE.md` §14:
+- **Q1 — the thrust discrepancy.** Which figure is "the guide's"? Options: (1) **record both, cite both,
+  reconcile neither — treat it as 7,605-7,686 kN** *(recommended; it is what §1.4 requires of an unverifiable
+  reconciliation, and it keeps the owner's own "the mod may model a later uprate" reading alive)*; (2) adopt
+  7,605 kN on the arithmetic; (3) adopt 7,686 kN as the spec table; (4) seek a second primary source.
+  ⛔ (2) and (3) decide a §1.4 source question and need the owner; (4) is outward-facing and needs a gate.
+  **This chat took none of them.**
+- **Q2 — carry T-3 s + the hold-down chain into §B11 as new [DOC] rows?** Options: (1) **a later
+  owner-authorised `G`-line adds an "Ignition / T-0 [DOC]" row citing p.96 and p.94** *(recommended)*;
+  (2) leave §B11 alone and let it live only here — but the next ascent chat reads §B11, not this file;
+  (3) fold it into a wider §B11 refresh that also addresses D6. ⛔ Guarded file — owner authority either way.
+- **Q3 — the C7 gap.** Options: (1) **open `S221` as a real line: copy the PDF into `docs/reference/` and
+  index it** *(recommended, one small task)*; (2) fold it into a later `G`-line; (3) accept the digest as the
+  only in-repo record. ⛔ Creating that line is outside this task's declared outputs, so it was not created.
