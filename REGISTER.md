@@ -24170,7 +24170,7 @@ ships; `Crew Dragon Flight Control UI.png` (2352×1410) is a UI reference, not v
 - **DONE when:** each of the five is fixed or refused with its reason, `VehicleGeometryTest` is extended,
   and `previewdiff` shows this page's views alone.
 
-### S190 [S] `PropSchematic`'s capsule + trunk line-art exists, in `Downloads`, and is unlanded — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: a build INPUT the owner has already supplied]
+### S190 [S] `PropSchematic`'s capsule + trunk line-art exists, in `Downloads`, and is unlanded — **HALF DISCHARGED 2026-09-08 — the file is already in the library and the owner ruled that is safe; only the DRAWING half remains, and it is unscheduled** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: a build INPUT the owner has already supplied]
 - 🟢 **OWNER, 2026-09-07, verbatim**, excluding the line art from the Vehicle Overview: *"they are for the
   other page with line art like those already on it, so we can show the rcs port locations clearer etc"*.
 - **What exists.** `C:\Users\User\Downloads\crew dragon with trunk.jfif` — **800×1303, white-on-black LINE
@@ -24186,6 +24186,44 @@ ships; `Crew Dragon Flight Control UI.png` (2352×1410) is a UI reference, not v
   `docs/reference/NASA_REFERENCE_ART.md`, and `PropSchematic`'s line records that its art is now in-repo.
   ⚠ **It is white-on-black line art, so [[S184]]'s luminance key IS the right one here** — unlike the
   full-colour render [[S185]] had to matte by connectivity.
+
+#### ⭐ HALF DISCHARGED 2026-09-08 (QC overnight loop, iteration 4) — THE SAFETY HALF IS ANSWERED
+
+**🟢 OWNER RULING, 2026-09-08, verbatim:** *"we have them in library and we know that location is safe now
+so do not worry about git"*.
+
+**And the file is already there. Verified by hash, not by looking for a name:**
+
+| copy | bytes | md5 |
+|---|---|---|
+| `C:\Users\User\Downloads\crew dragon with trunk.jfif` | 442,731 | `8dbdf364800eea15fcb3d70f41fbeb1b` |
+| `X_LIBRARY\vehicle\crew-dragon\crew dragon with trunk.jfif` | 442,731 | **`8dbdf364800eea15fcb3d70f41fbeb1b`** |
+
+**Byte-identical.** The library copy is the same file, not a re-save or a re-encode.
+
+⛔ **SO THIS LINE'S OWN RATIONALE IS SPENT, AND LANDING A THIRD COPY WOULD BE DOING THE THING THE OWNER JUST
+SAID NOT TO DO.** The reason given above is *"`Downloads` is where `assets/` has been lost from twice
+([[S183]]). Landing it with a hashed manifest row … is the cheap half."* That was a good reason on
+2026-09-07. On 2026-09-08 the owner named the library as the safe location and ruled the git question away —
+and the same ruling is why this loop's brief excludes [[S183]] / [[S207]] / [[S218]] tonight. Copying it
+into `assets/reference/nasa/` now would add a fourth copy to protect against a loss the owner has said is
+no longer the concern.
+
+**WHAT REMAINS, AND IT IS THE HALF THAT WAS ALWAYS THE POINT.** The line's other clause — *"`PropSchematic`'s
+line records that its art is now in-repo"* — exists to serve DRAWING the thing, and this line explicitly
+*"commits nobody to drawing it"*. So what is left is:
+
+- ⛔ **the owner's instruction is still unexecuted**, verbatim 2026-09-07: *"they are for the other page with
+  line art like those already on it, so we can show the rcs port locations clearer etc"* — i.e. `PropSchematic`
+  showing RCS port locations against the capsule-and-trunk elevation. **That is a page build, it is not
+  scheduled anywhere, and it is not asset work.**
+- ⚠ **It needs the art in a form the renderer can use.** The library copy is a **`.jfif`** — the build's
+  asset path is PNG (`dl.Asset` keys resolve to `art/**.png`), so drawing it needs a keyed PNG derived with
+  [[S184]]'s luminance key, which this line already identifies as the right one for white-on-black.
+- ⚠ **§14.2a is NOT a bar here**, unlike [[S177]]: this is art the owner supplied and directed to a named
+  page, which is an instruction, not an addition the export is silent about.
+
+⛔ **Nothing was copied, keyed or drawn.** This iteration verified two hashes and wrote this block.
 
 ### S191 [S] `VehicleSubsystemPage`'s big-gauge row is off its OWN page's centreline by the same +132 [[S185]] fixed here — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 3: consistency]
 - **The finding.** `VehicleSubsystemPage.cs:199` draws `float[] gx = { 1170f, 1620f, 2070f, 2520f }` —
