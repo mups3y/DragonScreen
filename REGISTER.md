@@ -25580,3 +25580,42 @@ worse moment, off the clamps.
 **DONE when:** the next flight either (a) shows no `Target unreachable` at all, closing this as
 downstream of the safing — the expected outcome if S214 is right; or (b) shows it again **with the
 vehicle flying**, in which case it is a real convergence defect and gets traced properly.
+
+---
+
+### S215 [O] THE CONDUCTOR CONFIGURES AN ASCENT BUT NEVER TARGETS A LAUNCH WINDOW — **DOING** — [owner directive, 2026-09-07; TIER 1: a perfect ascent that still does not rendezvous]
+
+**Owner, 2026-09-07, verbatim (C1.12's evidentiary standard):**
+> *"Read the mechjeb research and ensure everything is set up correctly to launch tto rendezvous including
+> auto warp to launch window"*
+
+⛔ **THE GAP IS ABSENCE, NOT BREAKAGE.** `plugin/src/MechConductor.cs`'s `Configure()` writes exactly four
+things — `Autostage = false`, `AscentType = PSG`, `LimitQaEnabled = true`, and the apsides + inclination from
+`AscentTargets.For(...)`. **No phase angle, no LAN targeting, no countdown, no warp.**
+
+⭐ **The recipe is already in our own vendored tree, headless and non-GUI** —
+`plugin/mech/MechJebKos/AscentBindingBase.cs:112-133` `LaunchIntoPlane()`, and `AscentPSGBinding.cs:130,
+148-152` for the PSG variant. **Build against it; do not re-derive the maths.**
+
+#### The four decisions this line APPLIES (settled before it started)
+
+- **Q1 (overseer, C1.14) — DO NOT USE `StartCountdown`.** Compute the launch UT from
+  `Astro.MinimumTimeToPlane` (read-only maths), warp with `Core.Warp.WarpToUT`, and let `IgnitionGate` own
+  T-0. `MechJebModuleAscentBaseAutopilot:127` calls `StageManager.ActivateNextStage()` at T-0 gated only on
+  `Enabled && ThrustAvailable < 10E-4` — **not** on `AscentSettings.Autostage` — which §B8/§B12.7 forbid.
+- **Q2 (overseer) — THE COMPUTED INCLINATION WINS AT LAUNCH; A MATERIAL DISAGREEMENT IS AN ERROR.** Use
+  `MinimumTimeToPlane`'s inclination; if it differs from the §B5 mission fact beyond a stated tolerance,
+  SURFACE IT AND HOLD. Settles [[T18]]-Q1 (the inclination sign) for free.
+- **Q3 (OWNER, option selected 2026-09-07) — GO ARMS THE COUNTDOWN, THEN IT WARPS.** Crew gate polled
+  FIRST; a GO commits the launch; the autopilot then warps to the window and counts down.
+- **Q4 (overseer) — G7 IS `NO-GO` WITHOUT A TARGET IN THE SAME SoI.** `LaunchIntoPlane` requires a target.
+
+#### DONE when
+
+The window maths is **mutation-proven against a known target and epoch** (`S167`: a calculation that cannot
+fail on a wrong LAN is not evidence); the computed-vs-fact inclination disagreement holds rather than flies;
+G7 reads NO-GO with no same-SoI target; `build.py test` green; `previewdiff` empty unless 4.100 changes, and
+if it changes, why. The in-flight half is the owner's, behind a fresh `install` + glass gate (C1.12).
+
+⛔ **BLOCKED ON [[S214]] for VERIFICATION ONLY** — nothing here is observable until the vehicle leaves the
+pad. The code half is buildable now.
