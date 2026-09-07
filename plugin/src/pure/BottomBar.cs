@@ -90,7 +90,22 @@ namespace DragonScreen
         /// <summary>Letterboxed: the design frame centred, `ox + x*sc`. The eleven pages that draw a
         /// fit-to-height frame raster (Frame 58/59/66, the reconstructed procedure pages, the plots).
         /// The bar ends where the frame art ends — H-07's fix, and it must stay that way while the art
-        /// letterboxes ([[S173]] owns whether it should).</summary>
+        /// letterboxes ([[S173]] owns whether it should).
+        ///
+        /// ⚠ SUPERSEDED IN PLACE 2026-09-08 (S236) — the sentence above is kept verbatim (C1.16 / G12)
+        /// because it is the record of H-07's fix and of why the bar was letterboxed here for two days.
+        /// **Its last clause is no longer what the code does.** The owner ruled, verbatim: *"fix all the
+        /// pages that the bottom bar has not been fixed to run from the edge to edge of the entire
+        /// screen. Not just to the edge of the letterboxes."* So the bar's GROUND spans the glass under
+        /// this fit too — see `Rect`, where the ruling is quoted at the line that implements it.
+        /// ⭐ WHAT THIS FIT STILL MEANS, AND IT IS NOT NOTHING: `MapX` is unchanged, so the bar's two
+        /// internal rules still take the page's own letterboxed map and keep continuing that page's own
+        /// column divider. The ground is the glass; the rules stay with the page. Only the first of
+        /// those was ruled on.
+        /// ⛔ AND THE COST IS LOGGED, NOT HIDDEN: on the three pages that draw a baked full-height
+        /// raster (`ui_hud`, `ui_cabin`, `frame59`) the art still stops at the letterbox while the bar
+        /// no longer does — QC `H-10`, remedy owned by [[S173]]. The other nine letterboxed pages have
+        /// bare background there and are clean; that was measured, not assumed.</summary>
         Frame = 0,
 
         /// <summary>Spread: `x * w / RefW`. The pages whose own body is drawn with `sx = w/RefW`
