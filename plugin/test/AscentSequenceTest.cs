@@ -411,17 +411,29 @@ public static class AscentSequenceTest
     // ⛔ The two things this must never do: invent an altitude, and pick an inclination SIGN.
     static void TargetOrbit()
     {
-        Check(AscentTargets.IssInsertionAltitudeM == 210000.0,
-              "the standard ISS insertion is 210 km — §B11 [DOC/cfg] '~190-210 km x 51.63' and the "
-              + "shipped cfg's own DesiredOrbitAltitude = 210000");
+        // ⭐⭐ S222b, 2026-09-08 — 215 km, THE OWNER'S OWN NUMBER, verbatim: "we can set the orbit to
+        // 215km". Pinned as a LITERAL here so it cannot drift back: §B11 and the shipped cfg both still
+        // say 210, and they are not wrong — they document the REAL Crew-2 flight. This is what WE fly,
+        // and only the owner may name it (C1.12).
+        Check(AscentTargets.IssInsertionAltitudeM == 215000.0,
+              "the ISS insertion this build flies is 215 km — the owner, 2026-09-08: 'we can set the "
+              + "orbit to 215km' (got " + AscentTargets.IssInsertionAltitudeM + ")");
+        Check(AscentTargets.IssInsertionAltitudeM != 210000.0 && AscentTargets.IssInsertionAltitudeM != 145000.0,
+              "...and it is neither the superseded 210 km nor RO's own 145 km default");
 
         // An ISS-crew row carries no apsides of its own (PeriKm = ApoKm = 0).
         MissionProfile iss = Missions.Resolve("Crew-2");
         Check(iss.Valid && iss.HasRendezvous, "the Crew-2 row resolves and has a rendezvous");
         AscentTarget a = AscentTargets.For(iss, -51.6316);
         Check(!a.FromProfileApsides, "an ISS row does not name its own apsides");
-        Check(a.PeriapsisM == 210000.0 && a.ApoapsisM == 210000.0,
-              "...so it gets the standard circular insertion, not RO's 145 km default");
+        Check(a.PeriapsisM == 215000.0 && a.ApoapsisM == 215000.0,
+              "...so it gets the owner's 215 km CIRCULAR insertion (pe == ap), not RO's 145 km default "
+              + "(got " + a.PeriapsisM + " x " + a.ApoapsisM + ")");
+        // ⭐ S222b: pe == ap is not incidental. `AscentBuilder.Build():146-149` forces periapsis
+        // attachment for a target with ecc < 1e-4, which is what makes RO's 110 km attach altitude
+        // unread and the insertion clean — see pure/AscentProfile.AttachAltFollowsMissionApsis.
+        Check(a.PeriapsisM == a.ApoapsisM,
+              "...and it is exactly circular, which is what routes MechJebLib to force attach = periapsis");
 
         // ⭐ THE SIGN IS THE LOADED ONE, THE MAGNITUDE IS THE MISSION'S. Both directions.
         Check(a.InclinationDeg < 0.0 && Math.Abs(Math.Abs(a.InclinationDeg) - 51.6) < 1e-9,

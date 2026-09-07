@@ -47,6 +47,38 @@ public static class ConductorEngageTest
         return Path.GetFullPath(Path.Combine(bits.ToArray()));
     }
 
+    // ⛔ TEXT ASSERTIONS MATCH COMMENTED-OUT CODE, AND THAT IS NOT A THEORETICAL FLAW. Two of
+    // `AutoTargetTest`'s own mutants SURVIVED on first run for exactly this reason: commenting a
+    // statement out left the text in place and every match still passed. It cuts both ways here —
+    // S222b's checks assert that writes are ABSENT, and `Configure`'s own comment block NAMES every
+    // write it dropped, so an un-stripped search would fail on the explanation of the fix. Strip line
+    // comments before matching, for presence and for absence alike. (Idiom: AutoTargetTest, S220.)
+    static string Live(string src)
+    {
+        string[] lines = src.Replace(((char)13).ToString() + ((char)10).ToString(),
+                                     ((char)10).ToString()).Split(new char[] { (char)10 });
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string t = lines[i].TrimStart();
+            if (t.StartsWith("//")) continue;
+            sb.Append(lines[i]).Append((char)10);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// ⭐ S222b — does this code ASSIGN to a MechJeb setting called <paramref name="field"/>? Matches the
+    /// two shapes a settings write takes — `a.Name = …` and `a.Name.Val = …` — and deliberately NOT a
+    /// read, a comparison, or a mention in a log string. ⛔ The distinction is the point: `MirrorTheMenus`
+    /// READS `MinDeltaV` and `LastStage` because the PSG-settings window's own loop reads them, and S219
+    /// wrote both "because PvgPreflight reads them", which is the confusion this separates.
+    /// </summary>
+    static bool Assigns(string code, string field)
+    {
+        return Regex.IsMatch(code, @"\." + Regex.Escape(field) + @"(\.Val)?\s*=[^=]");
+    }
+
     public static int Run()
     {
         Console.WriteLine("ConductorEngageTest (S219 JOB 3: configured-AND-engaged, the ignition chain, the T-0 staging)");
@@ -55,6 +87,8 @@ public static class ConductorEngageTest
         ConfiguredMeansEngaged();
         TheIgnitionChain();
         TheTZeroStaging();
+        NoTuningWrites();               // S222b
+        EveryPhaseEngagesAndWarps();    // S222b
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures == 0 ? 0 : 1;
@@ -103,9 +137,31 @@ public static class ConductorEngageTest
               engAsc >= 0, "");
         Check("S219: ...and Configure runs before the engage", cfgCall >= 0 && engAsc > cfgCall,
               "configure@" + cfgCall + " engage@" + engAsc);
-        Check("S219: ...and Configure actually writes the ascent settings",
+        Check("S222b: ...and Configure writes the boxes a user WOULD type",
               Body(src, "Configure").Contains("a.AscentType = MuMech.AscentType.PSG")
-              && Body(src, "Configure").Contains("a.LimitQaEnabled = true"), "");
+              && Body(src, "Configure").Contains("a.Autostage = false"), "");
+
+        // ⭐⭐ S222b — **THE TWO MENU-DERIVED BOXES ARE SET BEFORE THE ENGAGE, NOT ONLY AFTER IT.**
+        // "Set the options, THEN engage" applies to these as much as to the module's own settings:
+        // `LimitQaEnabled` and `OptimizeStageFlag` are written by MechJeb's own window draw, which T15b
+        // suppressed, so the conductor has to stand in — and the module's FIRST `Drive` must already
+        // see them, or the first `SetTarget` goes out with `OptimizeStageFlag` false, which is exactly
+        // the state that makes RO's 110 km attach altitude a live terminal constraint.
+        int mirror = ascent.IndexOf("MirrorTheMenus(v)", StringComparison.Ordinal);
+        Check("S222b: the menu-derived settings are mirrored in RunAscent", mirror >= 0, "");
+        Check("S222b: ...BEFORE the engage, so the module's first Drive sees them",
+              mirror >= 0 && engAsc > mirror, "mirror@" + mirror + " engage@" + engAsc);
+        Check("S222b: ...and re-derived every tick, because the menu recomputes it every frame",
+              Count(ascent, "MirrorTheMenus(v)") == 2,
+              "found " + Count(ascent, "MirrorTheMenus(v)") + " call(s); want one pre-engage + one per tick");
+        Check("S222b: ...and it copies the menu's EXPRESSION for LimitQaEnabled, not a chosen value",
+              Body(src, "MirrorTheMenus")
+                  .Contains("a.LimitQaEnabled = a.AscentType == MuMech.AscentType.PSG"), "");
+        Check("S222b: ...and derives OptimizeStageFlag from the live stage table, via the pure loop",
+              Body(src, "MirrorTheMenus").Contains("AscentProfile.OptimizeStageFlagFor")
+              && Body(src, "MirrorTheMenus").Contains("AscentProfile.OptimizeStageFlagApplies"), "");
+        Check("S222b: ⛔ ...and writes NOTHING when the stage table is empty, exactly as the menu does",
+              Body(src, "MirrorTheMenus").Contains("VacStats.Count == 0"), "");
 
         // ⛔ AUTHORITY BEFORE ENGAGEMENT. `MechJebCore.FixedUpdate` only drives the MASTER core, so a
         // module enabled on a core without drive authority has `OnModuleEnabled` run — taking the
@@ -399,4 +455,197 @@ public static class ConductorEngageTest
             @"part = " + Regex.Escape(prefix) + @"\d+\r?\n(?:.*\r?\n)*?\tistg = (-?\d+)");
         return m.Success ? int.Parse(m.Groups[1].Value) : -1;
     }
+    // =====================================================================================
+    // 4. ⭐⭐ S222b — **THE WRITES ARE GONE, AND THEY STAY GONE.**
+    // =====================================================================================
+    //
+    // The owner, 2026-09-08, verbatim: *"return everything back to default settings and using the
+    // methods I described for achieving each stage. No guesses, no invented methods or 'tuning' truely
+    // stock mechjeb methods and settings set for auto accent, auto rendezvous and auto docking!"* and
+    // *"the only change should be the auto stage being our way"*.
+    //
+    // ⛔ WHY IT IS CHECKED AS TEXT AND NOT AS BEHAVIOUR. `src/MechConductor.cs` needs KSP to compile, so
+    // nothing headless can CALL `Configure`. But "this file no longer writes MechJeb's pitch rate" is a
+    // claim about TEXT, and it is exactly the claim that rots: the next task to touch this file will be
+    // fixing something else, and re-adding one line to "make it deterministic" is a two-second edit that
+    // nobody would notice. This suite is what notices.
+    //
+    // ⚠ SCOPED TO `Configure` + `MirrorTheMenus`, not to the file. `RunDocking` legitimately writes
+    // `speedLimit`, the booster host has its own settings, and a file-wide search would fail on both.
+    static void NoTuningWrites()
+    {
+        // ⛔ LIVE CODE ONLY. `Configure`'s own comment block names every write S222b dropped, so an
+        // un-stripped search would fail on the very paragraph that explains the fix — and, the other
+        // way round, a commented-out write would pass the presence checks below (S220's mutants).
+        string src = Live(File.ReadAllText(Repo("plugin", "src", "MechConductor.cs")));
+        string cfg = Body(src, "Configure") + Body(src, "MirrorTheMenus");
+
+        // ⛔ EVERY BOX `ApplyRODefaults()` SEEDS, by the FIELD NAME the write would have to use. This
+        // is the same independent-copy idiom as `AscentProfileTest.RoSeeded`, one level down: that one
+        // proves the TABLE says we do not write them, this one proves the CODE does not.
+        string[] roSeededWrites =
+        {
+            "PitchStartHeight", "PitchRate", "DesiredAttachAlt", "DesiredAttachAltFixed", "DesiredFPA",
+            "AttachAltFlag", "DesiredArgP", "DesiredArgPFlag", "LimitQa", "MinDeltaV", "MaxCoast",
+            "MinCoast", "LaunchLANDifference", "PreStageTime", "OptimizerPauseTime",
+            "SpinupStageFlag", "SpinupStageInternal", "CoastStageFlag", "CoastStageInternal",
+            "UnguidedStagesFlag", "FixedStagesFlag",
+        };
+        for (int i = 0; i < roSeededWrites.Length; i++)
+            Check("S222b: ⛔ Configure no longer ASSIGNS '" + roSeededWrites[i] + "' — RO seeds it",
+                  !Assigns(cfg, roSeededWrites[i]), "an assignment is still present");
+
+        // ⛔ THE WHOLE `Core.Thrust` BLOCK IS GONE — nine fields, RO seeds every one, and Q2's
+        // `LimitDynamicPressure` was one of them. Nothing here reads the thrust controller either, so
+        // a bare mention is enough: if the name is back in live code, the block is back.
+        Check("S222b: ⛔ the entire Core.Thrust baseline block is gone (RO seeds all nine)",
+              !cfg.Contains("Thrust"), "still present");
+
+        // ...and the field defaults we used to re-assert for no gain. ⚠ `MinDeltaV` and `LastStage` are
+        // deliberately NOT in the absence list as bare names: `MirrorTheMenus` READS both, exactly as
+        // the PSG-settings window's own loop does. Reading a field is not writing it — which is the
+        // distinction S219 collapsed when it wrote them "because PvgPreflight reads them".
+        string[] fieldDefaultWrites =
+        {
+            "ForceRoll", "VerticalRoll", "TurnRoll", "RollAltitude", "LastStage", "CoastLocation",
+            "Cd", "Aref", "RelativeLAN", "OverrideWarpToPlane", "LaunchingToMatchLan", "LaunchingToLan",
+        };
+        for (int i = 0; i < fieldDefaultWrites.Length; i++)
+            Check("S222b: ⛔ Configure no longer re-asserts '" + fieldDefaultWrites[i] + "'",
+                  !Assigns(cfg, fieldDefaultWrites[i]), "an assignment is still present");
+
+        // ⛔ AND THE ABSENCE CHECKS ARE NOT VACUOUS. `Assigns` must actually FIND the writes that DO
+        // survive, or every line above would pass against a matcher that never matches anything.
+        Check("S222b: the assignment matcher is not vacuous — it finds the KEEPs it should",
+              Assigns(cfg, "Autostage") && Assigns(cfg, "SkipCircularization")
+              && Assigns(cfg, "AutoDeployAntennas") && Assigns(cfg, "WarpCountDown"), "");
+        Check("S222b: ...and it does not fire on a READ of the same field",
+              !Assigns("x = a.MinDeltaV.Val;", "MinDeltaV")
+              && !Assigns("if (a.LastStage.Val > 0) { }", "LastStage"), "");
+        Check("S222b: ...and it DOES fire on both assignment shapes MechJeb settings take",
+              Assigns("a.PitchRate.Val = 0.75;", "PitchRate")
+              && Assigns("a.AttachAltFlag = true;", "AttachAltFlag"), "");
+
+        // ⭐⭐ THE ONE THE WITHDRAWN PROMPT ASKED FOR. An earlier overseer prompt directed "set PitchRate
+        // to 0.75" and it was WITHDRAWN as invented tuning. 0.75 must appear nowhere near the ascent
+        // configuration, and neither must the rest of the tuned Crew-2 profile's shaping numbers.
+        Check("S222b: ⛔⛔ the withdrawn PitchRate = 0.75 is NOT written anywhere in Configure",
+              !cfg.Contains("0.75"), "the withdrawn tuning value is present");
+
+        // ⭐ AND `OptimizeStageFlag = false` — the write that CREATED the attach-altitude defect S219
+        // then compensated for. It must never be written as a literal again; it is derived.
+        Check("S222b: ⛔⛔ OptimizeStageFlag is never written as a literal false",
+              !cfg.Contains("OptimizeStageFlag = false"), "the S219 write is back");
+        Check("S222b: ...nor as a literal true — it is DERIVED from the stage table, not asserted",
+              !cfg.Contains("OptimizeStageFlag = true"), "hardcoded rather than derived");
+
+        // ⛔ THE INCLINATION. The owner: "DO NOT WRITE THE INCLINATION — LaunchingToPlane overrides it
+        // from the target (§7.5). Writing it fights the feature." It survives on ONE path only: a
+        // free-flyer, which has no plane launch and no button to press, and there it is guarded by
+        // `WindowRequired()`.
+        string configureOnly = Body(src, "Configure");
+        int incWrite = configureOnly.IndexOf("a.DesiredInclination.Val = t.InclinationDeg", StringComparison.Ordinal);
+        int guard = configureOnly.IndexOf("if (!WindowRequired())", StringComparison.Ordinal);
+        Check("S222b: Configure still writes the inclination for a FREE-FLYER (nothing else would)",
+              incWrite >= 0, "");
+        Check("S222b: ⛔ ...but ONLY behind the no-rendezvous guard, so it cannot fight §7.5",
+              guard >= 0 && incWrite > guard, "guard@" + guard + " write@" + incWrite);
+        Check("S222b: ...and the plane launch is still the one that writes it on a rendezvous",
+              src.Contains("a.DesiredInclination.Val = window.InclinationDeg"), "");
+
+        // =================================================================================
+        // ⭐ 215 km REACHES THE MODULE — end to end, and pinned as a number.
+        // =================================================================================
+        // Owner, 2026-09-08: *"we can set the orbit to 215km"*. Three links in the chain, each of which
+        // could break independently: the constant, the resolver, and the write into MechJeb.
+        Check("S222b: the constant is 215 km",
+              AscentTargets.IssInsertionAltitudeM == 215000.0,
+              "got " + AscentTargets.IssInsertionAltitudeM);
+
+        MissionProfile crew = Missions.Resolve("Crew-2");
+        AscentTarget t = AscentTargets.For(crew, -51.6316);
+        Check("S222b: ...and the resolver hands an ISS mission 215 x 215 km",
+              t.PeriapsisM == 215000.0 && t.ApoapsisM == 215000.0,
+              "got " + t.PeriapsisM + " x " + t.ApoapsisM);
+        Check("S222b: ⛔ ...not the superseded 210, and not RO's own 145",
+              t.PeriapsisM != 210000.0 && t.PeriapsisM != 145000.0, "");
+
+        Check("S222b: ...and Configure writes BOTH apsides into MechJeb from that resolver",
+              configureOnly.Contains("a.DesiredOrbitAltitude.Val = t.PeriapsisM")
+              && configureOnly.Contains("a.DesiredApoapsis.Val      = t.ApoapsisM"), "");
+        Check("S222b: ⛔ ...and the destination is never a literal in the glue — it comes from the profile",
+              !configureOnly.Contains("215000") && !configureOnly.Contains("210000"),
+              "a hardcoded altitude in the glue would outlive the mission catalogue");
+
+        // =================================================================================
+        // ⭐ THE EIGHT SURVIVING WRITES ARE ALL PRESENT — the other half of "stays removed".
+        // =================================================================================
+        // Without this, deleting a KEEP would pass every check above. Each is the owner's, by name.
+        string[] mustSurvive =
+        {
+            "a.AscentType = MuMech.AscentType.PSG",
+            "a.Autostage = false",
+            "a.WarpCountDown.Val = AscentProfile.WarpCountDownS",
+            "a.SkipCircularization = true",
+            "a.AutoDeploySolarPanels = false",
+            "a.AutoDeployAntennas = false",
+            "core.Node.Autowarp = true",
+            "core.Warp.activateSASOnWarp = false",
+        };
+        for (int i = 0; i < mustSurvive.Length; i++)
+            Check("S222b: the KEEP '" + mustSurvive[i] + "' is still written",
+                  configureOnly.Contains(mustSurvive[i]), "");
+
+        // ⛔ AND THE AUDIT IS STILL LOGGED, so the flight's own KSP.log answers "what did we fly".
+        Check("S222b: Configure still logs the audit, so the count is on the flight record",
+              configureOnly.Contains("AscentProfile.Render()"), "");
+        Check("S222b: ...and the log names the attach altitude it is NOT writing",
+              configureOnly.Contains("attach altitude LEFT AT RO's 110 km"), "");
+    }
+
+    // =====================================================================================
+    // 5. ⭐ S222b — RENDEZVOUS AND DOCKING: CONFIGURED **AND ENGAGED**, AND AUTOWARP OWNED
+    // =====================================================================================
+    //
+    // The owner's central complaint, verbatim: *"otherwise it will sit there ready to go but do
+    // nothing."* `ConfiguredMeansEngaged` already pins the set-then-engage pairing for all four
+    // modules; this extends it to the two things S222b touched around them — that the §8 and §9
+    // options are still MechJeb's own, and that exactly one thing owns the warp in each phase.
+    static void EveryPhaseEngagesAndWarps()
+    {
+        string src = Live(File.ReadAllText(Repo("plugin", "src", "MechConductor.cs")));
+
+        // ⭐ ONE WARP OWNER PER PHASE, established from the vendored source (§8) rather than assumed:
+        //   ascent      -> the ascent autopilot's countdown, gated on Core.Node.Autowarp
+        //   rendezvous  -> the node executor, gated on the SAME field, which the rendezvous autopilot
+        //                  NARROWS (`Autowarp && Target.Distance > 1000`) rather than replacing
+        //   docking     -> nobody. Pure RCS from the keep-out sphere inward.
+        Check("S222b/warp: ascent — Configure sets the one flag the countdown reads",
+              Body(src, "Configure").Contains("core.Node.Autowarp = true"), "");
+        Check("S222b/warp: rendezvous — the runner RE-ASSERTS it, because the autopilot latches it false",
+              Body(src, "RunRendezvousAutopilot").Contains("core.Node.Autowarp = true"), "");
+        Check("S222b/warp: ...and only outside 1 km, which is where the autopilot's own narrowing bites",
+              Body(src, "RunRendezvousAutopilot").Contains("rangeM > 1000.0"), "");
+        Check("S222b/warp: docking — nothing in RunDocking touches a warp flag, by design",
+              !Body(src, "RunDocking").Contains("Autowarp")
+              && !Body(src, "RunDocking").Contains("WarpToUT"), "");
+
+        // ⛔ AND ALL THREE ARE ENGAGED, not merely configured. Restated here as one block so the
+        // owner's sentence has a single place to fail.
+        Check("S222b: ⭐ the ascent autopilot is ENGAGED",
+              Body(src, "RunAscent").Contains("ap.Users.Add(Owner)"), "");
+        Check("S222b: ⭐ the rendezvous autopilot is ENGAGED",
+              Body(src, "RunRendezvousAutopilot").Contains("ap.Users.Add(Owner)"), "");
+        Check("S222b: ⭐ the docking autopilot is ENGAGED",
+              Body(src, "RunDocking").Contains("ap.Users.Add(Owner)"), "");
+
+        // ⛔ THE NODE-COMPOSING PATH IS SUPERSEDED-FOR-NOW, NOT DELETED (C1.16/G12). The owner is
+        // returning to it: *"mechjeb rendezvous autopilot just for now… Then we move to the more
+        // complicated, mission accurate fidelity way"*.
+        Check("S222b/C1.16: the conductor's own node-composing rendezvous path is still here",
+              src.Contains("static void PlanOperation") && src.Contains("static void Replan"), "");
+        Check("S222b/C1.16: ...and still selectable, so it is superseded-for-now and not orphaned",
+              src.Contains("RendezvousDrive.Conductor"), "");
+    }
+
 }

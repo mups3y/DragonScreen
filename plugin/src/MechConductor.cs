@@ -558,6 +558,12 @@ namespace DragonScreen
                     // so the first call only STARTS it. We hold here, ticking it, until it answers.
                     if (!PumpStageStatsAndCheck()) return;
 
+                    // ⭐⭐ S222b — **SET THE OPTIONS, THEN ENGAGE.** The two menu-derived boxes are
+                    // written HERE, before `Users.Add`, so the module's very first `Drive` reads them.
+                    // The stage table has just been proven non-empty by the pump above, which is
+                    // exactly the guard the PSG-settings window's own outer `if` applies.
+                    MirrorTheMenus(v);
+
                     // ⭐ THE ORDER MATTERS. Authority first, then the module: a module enabled on a core
                     // that is not master would have `OnModuleEnabled` run (grabbing the attitude and
                     // thrust user pools) while `Drive` never fires, so it would hold the vehicle's
@@ -571,6 +577,10 @@ namespace DragonScreen
                     Debug.Log("[DragonScreen] conductor: PVG ascent ENGAGED — MechJeb has the vehicle "
                               + "(ascent step " + ascentStep + ")");
                 }
+
+                // ⭐ S222b — and re-derived EVERY tick thereafter, because the PSG-settings window
+                // recomputes it every frame and the stage table changes as stages burn away.
+                MirrorTheMenus(v);
 
                 TickAscentSequence(v);
             }
@@ -675,69 +685,55 @@ namespace DragonScreen
         /// deviation looks warranted are `OwnerQuestion` rows and are asked at the end of the register
         /// line, never decided here (C1.8 / C1.12).
         /// </summary>
+        // ============================================================================================
+        //  ⭐⭐ S222b, 2026-09-08 — **CONFIGURE WRITES EIGHT BOXES. IT USED TO WRITE 47.**
+        // ============================================================================================
+        //  The owner, verbatim: *"We need to make sure the chat fully understands how to use mechjeb
+        //  correctly and return everything back to default settings … No guesses, no invented methods or
+        //  'tuning' truely stock mechjeb methods and settings set for auto accent, auto rendezvous and
+        //  auto docking!"* and *"the only change should be the auto stage being our way"*.
+        //
+        //  ⛔ THE RULE: **if `ApplyRODefaults()` sets it, we do not.** A write survives only if a user
+        //  would open the MechJeb UI and TYPE it to fly THIS mission, and only for one of three reasons:
+        //     MISSION FACT (where we are going) · UI WORKFLOW (a control this mission needs) ·
+        //     the owner's ONE sanctioned deviation (autostage off + our own part activation).
+        //  The whole table, one row per box with its reason, is `pure/AscentProfile.cs` — and
+        //  `AscentProfileTest` re-derives RO's seed list from the vendored source and FAILS the build if
+        //  a fourth exemption ever appears.
+        //
+        //  ⚠ EVERY DROPPED WRITE WAS RO's OWN NUMBER ALREADY. Nothing here changes what the vehicle
+        //  flies except the three things the owner named; what changes is whose value it is on the
+        //  record, which is the entire point (T22 tunes from a flight, not from a chat's judgement).
+        // ============================================================================================
         static void Configure(Vessel v)
         {
             MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
             if (a == null) { note = "the core has no AscentSettings module"; return; }
 
-            // ---- (1) THE PATH ITSELF ------------------------------------------------------------
-            // ⛔ Set through the PROPERTY, never the `_autostage` field: the property is what removes
-            // the ascent autopilot from `Core.Staging.Users`, and the field alone would leave the
-            // StagingController still holding a user and still able to actuate.
-            a.Autostage = false;                                      // §B8 owner directive
-            a.AscentType = MuMech.AscentType.PSG;                     // §B8
-            a.LimitQaEnabled = true;                                  // "mandatory for PSG" (AscentMenu:374)
-            a.LimitQa.Val = 2000.0;                                   // RO default, asserted: it is always live
-            a.OptimizeStageFlag = false;                              // routes SetTarget to DesiredAttachAltFixed
+            // ---- (1) THE PATH — a UI WORKFLOW write and the OWNER'S ONE DEVIATION -----------------
+            // ⛔ `Autostage` goes through the PROPERTY, never the `_autostage` field: the property is
+            // what removes the ascent autopilot from `Core.Staging.Users`, and the field alone would
+            // leave the StagingController still holding a user and still able to actuate.
+            a.AscentType = MuMech.AscentType.PSG;                      // the ascent-path dropdown
+            a.Autostage = false;                                       // §B8 — the sanctioned deviation
 
-            // ---- (2) §7.5's PLANE LAUNCH — the flags, here; the solve, at the crew's GO ----------
-            a.LaunchLANDifference.Val = AscentProfile.LaunchLanDifferenceDeg;   // "0 for the exact plane"
-            a.LaunchingToMatchLan = false;
-            a.LaunchingToLan = false;
-            a.RelativeLAN = false;                                    // the STATION's absolute LAN
-            // ⛔ LOAD-BEARING: `StartCountdown` branches on this and a stale TRUE means "launch NOW".
-            a.OverrideWarpToPlane = false;
-            a.WarpCountDown.Val = AscentProfile.WarpCountDownS;        // MechJeb's own "Launch countdown"
-
-            // ---- (3) THE PITCH PROGRAM AND THE ROLL ---------------------------------------------
-            // ⚠ RO's own numbers, written rather than inherited. `PitchRate` is an `OwnerQuestion` row
-            // (the owner's own flown cfg says 0.75 °/s against RO's 5.0) — we fly RO's and ask.
-            a.PitchStartHeight.Val = 100.0;
-            a.ForceRoll = true;
-            a.VerticalRoll.Val = 0.0;
-            a.TurnRoll.Val = 0.0;
-            a.RollAltitude.Val = 50.0;
-
-            // ---- (4) THE PSG STAGE MODEL --------------------------------------------------------
-            // `MinDeltaV` and `LastStage` are read by our OWN preflight (`pure/PvgPreflight.cs`, S214)
-            // to decide whether the engage may proceed at all, so they must be known values.
-            a.MinDeltaV.Val = 40.0;
-            a.LastStage.Val = -1;
-            a.MaxCoast.Val = 450.0;
-            a.MinCoast.Val = 0.0;
-            a.CoastStageFlag = false;
-            a.CoastStageInternal.Val = -1;
-            a.CoastLocation = -1;
-            a.SpinupStageFlag = false;
-            a.SpinupStageInternal.Val = -1;
-            a.UnguidedStagesFlag = false;
-            a.FixedStagesFlag = false;
-            a.PreStageTime.Val = 10.0;
-            a.OptimizerPauseTime.Val = 5.0;
-            a.Cd.Val = 0.5;
-            a.Aref.Val = 0.0;
-            a.DesiredArgPFlag = false;
-
-            // ---- (5) ⛔ WHAT MECHJEB WOULD OTHERWISE ACTUATE ON OUR VEHICLE ----------------------
-            // Not tuning — these three are §B12.7 boundary lines. `SkipCircularization` stops
-            // `DriveCircularizationBurn` PLACING A MANEUVER NODE on exit (it would collide with T19's
-            // own node executor); the two auto-deploys stop MechJeb extending real hardware the crew
-            // procedure owns. See `pure/AscentProfile.cs` for the full argument on each.
+            // ---- (2) WHAT MECHJEB WOULD OTHERWISE ACTUATE ON OUR VEHICLE --------------------------
+            // ⛔ NOT TUNING — the second half of the same deviation. §B12.7: direct part control is
+            // ours. `SkipCircularization` stops `DriveCircularizationBurn` PLACING A MANEUVER NODE on
+            // exit (it would collide with T19's own node executor); the two auto-deploys stop MechJeb
+            // extending real hardware the crew procedure owns. RO seeds none of these three.
             a.SkipCircularization = true;
             a.AutoDeploySolarPanels = false;
             a.AutoDeployAntennas = false;
 
-            // ---- (6) ⭐ AUTOWARP — ONE FLAG, AND ALL THREE PHASES READ IT ------------------------
+            // ---- (3) MECHJEB'S OWN "Launch countdown:" BOX ----------------------------------------
+            // A UI box RO does not seed, and 32 rather than stock's 11 for a reason that IS the
+            // deviation: our T-0 is `IgnitionGate`, which refuses to light a stage with no guidance
+            // solution (S214), so PSG must have converged BEFORE our terminal count. It shapes no part
+            // of the trajectory. See `AscentProfile.WarpCountDownS` for the two composed numbers.
+            a.WarpCountDown.Val = AscentProfile.WarpCountDownS;
+
+            // ---- (4) ⭐ AUTOWARP — ONE FLAG, AND ALL THREE PHASES READ IT --------------------------
             // The owner: *"It must also select auto warp for all modes."* Established from the vendored
             // source rather than assumed: the ascent countdown warps only `if (Core.Node.Autowarp)`
             // (`MechJebModuleAscentBaseAutopilot.cs:132`); the node executor gates both of its warps on
@@ -747,6 +743,9 @@ namespace DragonScreen
             // autopilot never warps at all — it is pure RCS from the keep-out sphere inward.
             // ⇒ ONE WARP OWNER PER PHASE: ascent = the ascent autopilot's countdown; rendezvous = the
             //   node executor; docking = nobody, by design.
+            // ⚠ `activateSASOnWarp` is §B12.7 again: left on, `SetTimeWarpRate` calls
+            //   `ActionGroups.SetGroup(SAS, true)` on the way into warp — an action group on our
+            //   vehicle, and SAS fighting MechJeb's own attitude controller besides.
             try
             {
                 if (core.Node != null) core.Node.Autowarp = true;
@@ -755,30 +754,25 @@ namespace DragonScreen
             catch (Exception e)
             { Debug.LogWarning("[DragonScreen] conductor: could not set the autowarp flags: " + e.Message); }
 
-            // ---- (7) THE THRUST CONTROLLER — RO's own baseline, asserted -------------------------
-            // ⛔ `LimitDynamicPressure` (max-Q throttle-down) is the owner's named item and is an
-            // `OwnerQuestion` row: RO turns it OFF deliberately, and turning it on needs a Q magnitude,
-            // which is the §B5/T22 tune the Part-B gate defers. We write RO's default and ask.
-            try
-            {
-                MuMech.MechJebModuleThrustController th = core.Thrust;
-                if (th != null)
-                {
-                    th.LimitToPreventUnstableIgnition = false;
-                    th.AutoRCSUllaging = true;
-                    th.MinThrottle.Val = 0.05;
-                    th.LimiterMinThrottle = true;
-                    th.LimitThrottle = false;
-                    th.LimitAcceleration = false;
-                    th.LimitToPreventOverheats = false;
-                    th.LimitDynamicPressure = false;              // ⛔ OwnerQuestion Q2
-                    th.MaxDynamicPressure.Val = 50000.0;
-                }
-            }
-            catch (Exception e)
-            { Debug.LogWarning("[DragonScreen] conductor: could not set the thrust baseline: " + e.Message); }
+            // ---- (5) ⛔⛔ EVERYTHING THAT USED TO BE HERE IS GONE, AND IT IS ALL RO's ---------------
+            // Dropped by S222b, every one of them a value `ApplyRODefaults()` already seeds to exactly
+            // what we were writing: PitchStartHeight · PitchRate (never written; Q1) · LimitQa ·
+            // LimitQaEnabled (now UI-derived, below) · DesiredFPA · DesiredArgP/Flag · MinDeltaV ·
+            // MaxCoast · MinCoast · CoastStageFlag/Internal · SpinupStageFlag/Internal ·
+            // UnguidedStagesFlag · FixedStagesFlag · PreStageTime · OptimizerPauseTime ·
+            // LaunchLANDifference · AttachAltFlag · DesiredAttachAlt · DesiredAttachAltFixed · and the
+            // whole `Core.Thrust` block (nine fields, including Q2's `LimitDynamicPressure`).
+            // Also dropped: ForceRoll · VerticalRoll · TurnRoll · RollAltitude · LastStage ·
+            // CoastLocation · Cd · Aref · RelativeLAN · OverrideWarpToPlane · LaunchingToMatchLan ·
+            // LaunchingToLan — field defaults identical to what we wrote, or non-persisted flags that
+            // cannot be stale in the first place.
+            // ⛔ AND `OptimizeStageFlag = false` IS GONE, WHICH IS THE ONE THAT MATTERED. It is not a
+            // setting at all — the PSG-settings window recomputes it every frame — and writing `false`
+            // is what made RO's 110 km attach altitude a live terminal constraint on a 215 km orbit.
+            // The full unwind is `pure/AscentProfile.AttachAltFollowsMissionApsis`. It is now derived
+            // from the live stage table by `MirrorTheMenus`, below.
 
-            // ---- (8) THE DESTINATION — §B5's named exception, a MISSION FACT ---------------------
+            // ---- (6) THE DESTINATION — §B5's named exception, a MISSION FACT ----------------------
             AscentTarget t = AscentTargets.For(CrewProcedureOps.Profile, a.DesiredInclination.Val);
 
             // ⛔ S214: **NEVER HAND THE SOLVER AN INCLINATION IT CANNOT TAKE.** The domain is the
@@ -797,31 +791,113 @@ namespace DragonScreen
                 return;
             }
 
-            a.DesiredInclination.Val   = t.InclinationDeg;
             a.DesiredOrbitAltitude.Val = t.PeriapsisM;
             a.DesiredApoapsis.Val      = t.ApoapsisM;
-            a.DesiredFPA.Val           = 0.0;      // a circular terminal state has zero flight-path angle
 
-            // ⭐⭐ THE ATTACH ALTITUDE — the one shaping value that is a MISSION FACT, and the one
-            // §7.2 already records as a BUG FOUND ON THIS CRAFT: *"attach = orbit alt gives a clean
-            // circular insertion; attach < peR = 'periapsis insertion' (elliptical), which is the bug
-            // found in the Crew-2 cfg (110 km attach vs 210 km orbit → fixed to 210)."* RO's default is
-            // 110 km and our orbit is 210 km, so leaving it would fly exactly that elliptical insertion.
-            // Both fields are written together so `OptimizeStageFlag` cannot pick a stale one.
-            a.DesiredAttachAltFixed.Val = t.ApoapsisM;
-            a.DesiredAttachAlt.Val      = t.ApoapsisM;
-            a.AttachAltFlag             = true;
+            // ⭐⭐ THE INCLINATION IS WRITTEN ON EXACTLY ONE OF THE TWO PATHS, AND THE UI IS WHY.
+            // Owner, 2026-09-08: *"⛔ DO NOT WRITE THE INCLINATION. `LaunchingToPlane` overrides it from
+            // the target (§7.5) and did so correctly last flight — −51.6316°, matching the ISS's own
+            // 51.6316°. Writing it fights the feature."* Exactly so — on a RENDEZVOUS mission the box is
+            // filled by pressing "Launch into plane of target", and `UpdateLaunchWindow` reproduces that
+            // press (§7.5, `MechJebModuleAscentMenu.cs:245-258`), writing `DesiredInclination` LAST,
+            // after `StartCountdown`, from `MinimumTimeToPlane`'s own signed answer.
+            // ⚠ A FREE-FLYER HAS NO PLANE TO LAUNCH INTO AND NO BUTTON TO PRESS. `WindowRequired()` is
+            // false for Inspiration4 / Polaris Dawn / Fram2, so nothing downstream would ever write the
+            // box — and RO's own seed leaves `DesiredInclination` at its field default 0.0, i.e. a
+            // 28.6°-pad EQUATORIAL ascent (`pure/AscentSequence.cs`, the AscentTargets block). There the
+            // mission fact IS what a user types into "Orbit inc.", so we type it.
+            if (!WindowRequired())
+            {
+                a.DesiredInclination.Val = t.InclinationDeg;
+                Debug.Log("[DragonScreen] conductor: no rendezvous on this profile — the mission "
+                          + "inclination " + t.InclinationDeg.ToString("F4") + "° is written into the "
+                          + "'Orbit inc.' box, because no plane launch will fill it. (S222b)");
+            }
 
             configured = true;
             Debug.Log("[DragonScreen] conductor: PVG configured — autostage OFF (§B8), AscentType PSG, "
                       + "target " + (t.PeriapsisM / 1000.0).ToString("F0") + " x "
-                      + (t.ApoapsisM / 1000.0).ToString("F0") + " km @ "
-                      + t.InclinationDeg.ToString("F4") + "° "
+                      + (t.ApoapsisM / 1000.0).ToString("F0") + " km "
                       + (t.FromProfileApsides ? "(mission apsides)" : "(standard ISS insertion)")
-                      + ", attach " + (t.ApoapsisM / 1000.0).ToString("F0")
-                      + " km (§7.2: NOT RO's 110 km), countdown " + AscentProfile.WarpCountDownS
+                      + ", inclination "
+                      + (WindowRequired() ? "LEFT TO §7.5's plane launch (S222b)"
+                                          : "written " + t.InclinationDeg.ToString("F4") + "° (no rendezvous)")
+                      + ", attach altitude LEFT AT RO's 110 km — unread, because OptimizeStageFlag is "
+                      + "UI-derived and AttachAltFlag is RO's false, so MechJebLib forces attach = "
+                      + "periapsis for a circular target (S222b). Countdown " + AscentProfile.WarpCountDownS
                       + " s, autowarp ON. " + AscentProfile.Render());
         }
+
+        // ============================================================================================
+        //  ⭐⭐ S222b — **THE TWO BOXES MECHJEB'S OWN MENUS WRITE, AND WE SUPPRESSED THE MENUS.**
+        // ============================================================================================
+        //  T15b stops MechJeb drawing its windows. Two ascent settings are written by those windows'
+        //  DRAW code rather than by a user, so with the windows gone they would sit at an at-rest value
+        //  no user of MechJeb is ever in. This is the conductor standing in for the window — the menus'
+        //  own expressions, re-evaluated every tick exactly as `WindowGUI` does, not values we picked.
+        //
+        //  ⛔ THIS IS THE FIX FOR THE ATTACH-ALTITUDE DEFECT S219 COMPENSATED FOR RATHER THAN FOUND.
+        //  `MechJebModuleAscentPSGSettingsMenu.cs:63,83` recomputes `OptimizeStageFlag` from the live
+        //  stage list, and `ApplyRODefaults()` OPENS that window for RO users — so a real RO user's flag
+        //  is continuously TRUE. Ours read FALSE because S219 wrote FALSE, and false is precisely the
+        //  state in which `SetTarget:101,109` forces `attachAltFlag` on and reads RO's 110 km
+        //  `DesiredAttachAltFixed` as a hard terminal constraint against a 215 km orbit. With the flag
+        //  derived, `AttachAltFlag` stays RO's false and `AscentBuilder.Build():146-149` sets the attach
+        //  radius to the periapsis itself for a near-circular target. Full argument:
+        //  `pure/AscentProfile.AttachAltFollowsMissionApsis`.
+        //
+        //  ⚠ CALLED TWICE ON PURPOSE — once BEFORE the engage (so the module's very first `Drive` sees
+        //  the derived values, "set the options, THEN engage") and once per tick thereafter (because
+        //  the stage table changes as stages burn away, and so does the menu's answer).
+        // ============================================================================================
+        static void MirrorTheMenus(Vessel v)
+        {
+            try
+            {
+                MuMech.MechJebModuleAscentSettings a = core == null ? null : core.AscentSettings;
+                if (a == null) return;
+
+                // (a) `MechJebModuleAscentMenu.cs:374`, asserted every frame the ascent window draws:
+                //     `_ascentSettings.LimitQaEnabled = _ascentSettings.AscentType == AscentType.PSG;`
+                //     with the source's own comment `// this is mandatory for PSG`. The EXPRESSION is
+                //     copied, not its current answer.
+                a.LimitQaEnabled = a.AscentType == MuMech.AscentType.PSG;
+
+                // (b) `MechJebModuleAscentPSGSettingsMenu.cs:57-85`. The loop is pure and lives in
+                //     `AscentProfile.OptimizeStageFlagFor`; this only projects MechJeb's `FuelStats`
+                //     onto it. ⛔ When the menu's own outer guard does not hold — an empty stage table —
+                //     the menu writes NOTHING, and neither do we: a momentarily-empty `VacStats` must
+                //     not clear a flag the last good frame derived.
+                MuMech.MechJebModuleStageStats st = core.StageStats;
+                if (st == null || st.VacStats == null || st.VacStats.Count == 0) return;
+
+                var stages = new AscentProfile.PsgStage[st.VacStats.Count];
+                for (int i = 0; i < st.VacStats.Count; i++)
+                {
+                    stages[i].KspStage  = st.VacStats[i].KSPStage;
+                    stages[i].DeltaVMps = st.VacStats[i].DeltaV;
+                    stages[i].Fixed     = a.FixedStages != null
+                                          && a.FixedStages.Contains(st.VacStats[i].KSPStage);
+                }
+
+                if (!AscentProfile.OptimizeStageFlagApplies(stages, a.LastStage.Val)) return;
+
+                bool want = AscentProfile.OptimizeStageFlagFor(stages, a.LastStage.Val, a.MinDeltaV.Val);
+                if (a.OptimizeStageFlag == want) return;
+
+                a.OptimizeStageFlag = want;
+                Debug.Log("[DragonScreen] conductor: OptimizeStageFlag -> " + want
+                          + " — derived from " + stages.Length + " stage(s) exactly as the PSG settings "
+                          + "window does (MechJebModuleAscentPSGSettingsMenu.cs:63,83), because T15b "
+                          + "suppressed the window that would otherwise write it. (S222b)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: could not mirror the ascent menus' own "
+                                 + "derived settings: " + e.Message);
+            }
+        }
+
 
         // ============================ S215 — THE LAUNCH WINDOW ============================
 

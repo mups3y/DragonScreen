@@ -379,11 +379,24 @@ namespace DragonScreen
         /// The standard ISS-crew insertion altitude, used when a profile carries no apsides of its own
         /// (every `Iss(...)` row in `Missions.Catalog` ships `PeriKm = ApoKm = 0`, whose comment reads
         /// "0/0 = the standard ~200 km circular ISS insertion").
-        /// ⭐ SOURCE, not a choice: §B11 "Insertion orbit **[DOC/cfg]**: **~190–210 km × 51.63°**
-        /// (Crew-2 = 210/-51.6316)", and the shipped `mechjeb_settings_type_Crew-Dragon.cfg` carries
-        /// `DesiredOrbitAltitude = 210000`. Taking the cfg's own value keeps the two in agreement.
+        ///
+        /// ⭐⭐ **215 km — THE OWNER'S OWN NUMBER, 2026-09-08, verbatim:** *"no you miss understand, we
+        /// can set the orbit to 215km. Just do not mess with the tuning etc, let native mechjeb do it AND
+        /// THEN WE TUNE FROM TRUSTED CAPTURED VALUES!!!"* That sentence is doing two jobs at once and both
+        /// are recorded here: the DESTINATION is ours to name (§B5's one exception — a destination is data,
+        /// not a knob), and everything that SHAPES the trajectory toward it is native MechJeb's. This
+        /// constant is the whole of the first half.
+        ///
+        /// ⚠ **SUPERSEDED IN PLACE (C1.16/G12) — WHAT IT USED TO BE AND WHY.** Until S222b this read
+        /// **210000.0**, and its reason was sound at the time: §B11 "Insertion orbit **[DOC/cfg]**:
+        /// **~190–210 km × 51.63°** (Crew-2 = 210/-51.6316)", and the shipped
+        /// `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg` carries `DesiredOrbitAltitude = 210000`,
+        /// so taking the cfg's own value kept the two in agreement. ⛔ **Both of those sources still say
+        /// 210, and they are NOT wrong** — the owner has simply named a different destination for the
+        /// flights from here, which is his to name and no one else's (C1.12). Recorded rather than
+        /// reconciled: §B11 documents the REAL Crew-2 flight; this constant is what WE fly.
         /// </summary>
-        public const double IssInsertionAltitudeM = 210000.0;
+        public const double IssInsertionAltitudeM = 215000.0;
 
         /// <summary>
         /// The destination for one mission. <paramref name="loadedInclinationDeg"/> is what the core
