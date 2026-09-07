@@ -27611,3 +27611,44 @@ adds to the repo is this register entry. The artefact in `GameData` corresponds 
 nothing layered on top — which was the entire point of deploying rather than building.
 
 **Commit:** this one. **No `git push` — the owner pushes from GitHub Desktop.**
+
+---
+
+### S235 [O] NTSB-2026-003 F-308 — the recorder observed the agent and threw the observation away — **DOING** — [owner ruling 2026-09-08 (*"option 1"*); TIER 0: an unresolved root cause, and the evidence that would have closed it was in the handler's own parameter list]
+- **Marker committed before any code (C1.1).** Tree clean at `ee8a122`.
+- ⛔ **F-308 IS MY OWN DEFECT, FROM [[S227]].** Three handlers were written to observe and discard. The
+  file's own comment says it as though it were a virtue: *"Nothing below writes an event."* It was not a
+  virtue; it was the defect. At MET 139.28 the 16 launch-vehicle parts **did not die — they became a new
+  vessel**, so `onPartWillDie` never fired, `part.lost` was silent **by construction**, and every
+  observation that would have named the agent had already been made and thrown away.
+- ⭐ **The decisive one is one `int`.** `OnStageActivate(int stage)` is handed the stage number and keeps
+  only a timestamp. Emitting it distinguishes *"something called `ActivateNextStage()`"* from *"the parts
+  left without a stage command"* — which is the entire question, and the owner has already eliminated
+  himself from it, verbatim: *"i did not press space"*.
+- ⚠ **The overseer assessed S227 as clean and missed this**; 8 `.Add` / 8 `.Remove` were checked,
+  **emission was not**. Recorded because it is why JOB 1's done-criterion is *prove the event EMITS*,
+  not *prove the handler is registered*.
+- ⚠ **ONE CORRECTION TO THE BRIEF, VERIFIED BEFORE ANY CODE.** The brief lists three handlers that emit
+  nothing, citing `:216 — emits nothing` for `OnPartJointBreak`. **That one is not accurate.** `:216` is
+  the signature; the body at `:221-227` already calls `Emit(BlackBoxEvents.PartJointBreak, …)` carrying
+  **`break_force`**, `joint_parent` and `joint_parent_id`. So the F-308 population is **two handlers, not
+  three**: `OnStageActivate` (discards the `int`) and `OnPartDeCouple`/`OnPartUndock` (timestamp only).
+  ⛔ The joint-break handler is left alone rather than "fixed", because it is not broken.
+- 🟢 **OWNER, 2026-09-08: "option 1".** The `PitchRate` deferral **HOLDS** — RO's 5.0 stays, unwritten.
+  ⛔ **No flight parameter is changed by this task.**
+- **JOB 1 (F-308):** emit from what is already observed — the `stage` int; the part identity on
+  decouple/undock (`part_idx`, `part_name`, `persistent_id`, `stage`, parent — `craftdump.csv`'s own key
+  names). ⛔ Classification stays as it is; a rung that cannot tell `commanded` from `uncommanded` still
+  refuses to say `commanded`. Arrival order, no dedupe, and the `truncated_after=N` marker stay honest.
+- **JOB 2 ([[S233]] / NTSB-7):** name the hot part beside `skin_temp_frac`. Peak **0.9961** on flight 002
+  and **0.9970** on 003, 0.5 s and 0.7 s before each unexplained separation, still climbing. ⛔ **That is
+  a signal, not a finding — this task fits the identity and builds to no conclusion.**
+- **JOB 3:** 3 of [[S228]]'s 5 re-assert attempts were spent on `LimitingAoA`, which **is not a setting**
+  — the autopilot assigns it every tick (`MechJebModuleAscentBaseAutopilot.cs:386,400`) and it carries no
+  `[Persistent]` attribute (`MechJebModuleAscentSettings.cs:148`). Audit the rest for the same shape.
+- **JOB 4:** `AutostageLimit` — R-03's own setting — is **not among the audited boxes**, so the wipe
+  detector is blind to it. Add it with its declared source.
+- **DONE when:** `test` green · `harnesscheck` green · `previewdiff` every page unchanged and the register
+  says so plainly · ⭐⭐ **a test that proves each new event ACTUALLY EMITS**, and that the test can fail
+  without it · mutation-tested · coverage clean · ⛔ what is NOT proven headless stated explicitly ·
+  ⛔ **plainly: was any flight parameter changed? The answer must be NO** · local commit, **no push**.
