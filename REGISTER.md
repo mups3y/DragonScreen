@@ -26048,7 +26048,7 @@ and using the UI. Stock can afford 11 s because stock's T-0 does not wait on a s
 
 `plugin/src/pure/AscentProfile.cs`. **Every box the four vendored ascent menus put on screen**, enumerated
 from the menus themselves, one row each, carrying our decision, the value it flies at, and the reason.
-**76 rows**: **48 written**, **7 written at runtime** (mission facts), **13 left at RO's default**, **8
+**77 rows**: **47 written**, **6 written at runtime** (mission facts), **14 left at RO's default**, **8
 CLASSIC-only** (never read under PSG), **2 ⛔ awaiting the owner**.
 
 ⭐ It is **pure and headless-tested**, because a table in a comment cannot fail. `AscentProfileTest` holds an
