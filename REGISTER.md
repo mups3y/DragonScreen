@@ -26750,3 +26750,25 @@ the window was solved for. The vehicle launches at once, into the wrong RAAN, wh
 - **DONE when:** a headless test reproduces the 20,025 s case and FAILS before the fix; the terminal count
   demonstrably fires at T-10 s and not before; mutation-proven; and [[S222b]]'s flight can actually reach
   the plane crossing.
+
+---
+
+### S223 [O] FIT THE GUIDANCE INSTRUMENT, and make the ascent audit READ BACK what MechJeb actually holds — **DOING** — [owner directive 2026-09-08 (NTSB-2026-001 R-03/R-04); TIER 1: the audit's "8 written, 53 at the RO default" is computed from our own intent and nothing in it was ever read out of MechJeb]
+⛔ **THIS CHANGES NOTHING THE VEHICLE DOES.** No ascent setting, no gate, no steering law, no throttle.
+It adds READING and RECORDING. The owner's standing order is *"let native mechjeb do it AND THEN WE TUNE
+FROM TRUSTED CAPTURED VALUES!!!"* (2026-09-08) and an instrument is not a tune. ⛔ NTSB-2026-001's R-01,
+R-02, R-05, R-06 are NOT acted on — owner, verbatim: *"do not act on it's advice until we have completed
+the stock mechjeb style mission before tuning etc."* `PitchRate` and `LimitDynamicPressure` stay
+`OwnerQuestion`, unwritten, exactly as [[S222b]] left them.
+- **JOB 1 — the audit must READ BACK, not restate.** A live read of `MechJebModuleAscentSettings` +
+  `Core.Thrust` + `Core.Guidance`, printed at TWO points (after `Configure`, and at the terminal count)
+  with the DELTA between them, and a headline that goes RED when a row disagrees with its declared source.
+- **JOB 2 — fit the guidance columns (R-03).** `gnc_module` · `gnc_status` · `cmd_pitch_deg` ·
+  `cmd_heading_deg` · `cmd_throttle` (+ `pvg_vgo_mps` · `pvg_tgo_s` · `tgt_ap_km` · `tgt_pe_km` ·
+  `tgt_inc_deg`), declaration and writer in the SAME commit. Plus MechJeb's ascent `Status` to `KSP.log`
+  on CHANGE only.
+- **JOB 3 — the manifest says what we flew (R-04).** `mechjeb_cfg_sha` filled from the tune file actually
+  loaded; the audited ascent settings recorded live, in a collection separate from our own `[Tunable]`s.
+- **DONE when:** `test` green · `harnesscheck` green · mutation-tested · a headless assertion that the
+  read-back goes RED on a seeded divergence · coverage clean · the register states plainly that the
+  vehicle's behaviour did not change.
