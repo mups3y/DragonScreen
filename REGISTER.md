@@ -24923,7 +24923,7 @@ with Waves C/D."* **T18 and T21 are those callers**: `OpenNoseShroud` at the end
 
 ---
 
-### S213 [O] ⛔⛔ THE CONDUCTOR CANNOT BE ENGAGED FROM THE GLASS — AUTO SEQUENCE AND THE CREW GATES ARE BOTH BEHIND `FigmaMode` AND UNREACHABLE — **TODO — BLOCKS THE FIRST FLIGHT** — [found by the owner in the capsule, 2026-09-07; TIER 1: the whole of T18–T21 has no entry point]
+### S213 [O] ⛔⛔ THE CONDUCTOR CANNOT BE ENGAGED FROM THE GLASS — AUTO SEQUENCE AND THE CREW GATES ARE BOTH BEHIND `FigmaMode` AND UNREACHABLE — **DOING** — [found by the owner in the capsule, 2026-09-07; TIER 1: the whole of T18–T21 has no entry point]
 
 **How it was found: the owner installed the build, went to fly it, and reported — verbatim —**
 > *"I saw no such button to start the launch sequence etc."*
