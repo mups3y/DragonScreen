@@ -27042,3 +27042,40 @@ from GitHub Desktop.**
   in one line **only** if the batch is declared and both are proven separately.
 - **DONE when:** a `Stable Guidance` line carries no unstable-guidance explanation, an unstable one still
   carries it in full, and a mutant that inverts the condition dies.
+
+---
+
+### S227 [O] Part loss is not recorded at all — a separator that vanishes uncommanded leaves no trace — **DOING** — [owner question 2026-09-08; TIER 1: the first failure in a cascade is the finding, and nothing in this recorder can name it]
+- **Marker committed before any code (C1.1).** Tree clean at `2ccfccc`.
+- **The owner's question, verbatim (C1.12), which is the whole authority for this line:** *"are we
+  tracking the individual parts state with our recordings? as in we need to know exactly if or when a
+  part failed and which failed first. For instance if a separator suddenly disappears and was not
+  commanded to do anything it is probably because it exploded or failed. This would lead to a cascade of
+  failures that could be confusing without analysing the very first failure point that lead to a instant
+  RUD."*
+- **The answer is no, three ways** (the overseer's check, restated so this line stands alone):
+  `grep -rn "GameEvents\." plugin/src/` returns **nothing** — KSP announces part death and we subscribe to
+  none of it; of **206** schema columns the only part-aware pair is `skin_temp_frac`/`hull_temp_c`, the
+  hottest part's temperature **without naming the part**; and the 1,091 events of `034133` across 19 kinds
+  contain **no part event** — `stage.staged`, `stage.engine_ignite`, `stage.engine_shutdown` are all
+  **commanded** actions. ⚠ `034133` also produced a third stream, `New_Crew-2_Probe_Debris`, that the
+  previous flight did not: **something came apart and there is no record of what went first.**
+- **Build:** (1) part-loss **event kinds** in `pure/blackbox/BlackBoxEvents.cs`, each carrying UT · MET ·
+  `persistent_id` · `part_name` · `part_idx` · parent · stage · reason, using `craftdump.csv`'s **exact**
+  key names so an event joins to a named part with no lookup table; (2) a per-row **`part_count`** column
+  — ⛔ **declaration and writer in the SAME commit** (the S223 trap, which `BlackBoxCoverage` fires on
+  either way round); (3) **joint/structural break** if the API exposes it.
+- **The five hazards are the task:** (A) establish the real `GameEvents` surface from the assembly and
+  record what was taken and rejected — ⛔ no handler for an unconfirmed event; (B) ⭐ **commanded vs
+  uncommanded is the whole point** — `onPartDie` fires on normal staging, so the discriminator must be
+  **stated in the event**, and an honest *cannot classify* beats a confident wrong label (§1.4);
+  (C) every `.Add` gets its `.Remove` — an orphaned handler fires on dead objects (the `GetPotentialTorque`
+  day); (D) GameEvents are global, the recorder is per-stream — route by vessel and **survive a null
+  vessel**; (E) at RUD hundreds die in one frame and **order is the entire value** — preserve arrival
+  order, never reorder or dedupe, and guard the flood with an explicit **`truncated_after=N`** marker.
+- **DONE when:** `test` green · `harnesscheck` green · ⭐ `previewdiff` reports **every page unchanged**
+  (this touches no render input) and the register **states plainly** that no rendered pixel changed ·
+  mutation-tested (`Live()` for any text assertion over source) · coverage clean, no `never_written`,
+  no `unexpected_writer` · ⛔ **what CANNOT be proven headless is stated explicitly**, with what a flight
+  would have to show · local commit, **no push**.
+- ⚠ **Not folded in (C1.1):** [[S225]] and [[S226]], already TODO.
