@@ -92,6 +92,11 @@ namespace DragonScreen
         /// <summary>UT of the window's T-0. 0 = none solved.</summary>
         static double launchWindowUT;
         /// <summary>Latches the window-hold log so a per-tick refusal cannot flood `KSP.log` (S214's rule).</summary>
+        // S220: one attempt per flight scene to put the station on the target, on the pad only.
+        // Set when the attempt has been MADE, not when it succeeded - a refusal must not retry every
+        // frame and re-log. Cleared by Reset() with everything else.
+        static bool stationTargetTried;
+
         static bool windowHoldLogged;
         /// <summary>
         /// The warp has been commanded once. ⛔ ONCE IS CORRECT, not a shortcut:
@@ -233,6 +238,7 @@ namespace DragonScreen
             launchLatched = false; configured = false; ascentEngaged = false; stageStatsWaitLogged = false;
             window = new WindowPlan(); launchWindowUT = 0.0;
             windowHoldLogged = false; warpArmed = false;
+            stationTargetTried = false;
             countdownArmed = false; terminalCountTaken = false;   // S219
             rendezvousEngaged = false; rendezvousMode = RendezvousDrive.Conductor;   // S219
             note = "idle";
@@ -257,6 +263,8 @@ namespace DragonScreen
             if (v == null) return;
             Bind(v);
             if (core == null) { note = "no embedded MechJeb core on this vessel"; return; }
+
+            AutoTargetStation(v);
 
             // The crew's LAUNCH GO (gate G7). ⭐ CONSUMED HERE NOW, NOT IN THE HOST. W10's FlightDriver
             // consumed it and logged that nothing could act on it (§14.4(a), correct at the time); T18
@@ -2469,6 +2477,72 @@ namespace DragonScreen
         /// the phase boundary into a named table; never re-search per frame"). A handover to a
         /// different vessel re-resolves and, finding no core, simply stops flying.
         /// </summary>
+        // ================== S220: AUTO-TARGET THE STATION ON THE PAD ==================
+        //
+        //  Owner, 2026-09-07: "we also need to auto target the iss as soon as the vehicle is on the pad".
+        //
+        //  ⭐ WHY THIS IS NOT A CONVENIENCE. Three things already require a target and all three currently
+        //  require the crew to remember: G7 goes NO-GO without a target in the same SoI (S215 Q4);
+        //  `LaunchWindow` reads `Core.Target.TargetOrbit.LAN` and `.inclination`; and MECHJEB_MASTER_MAP
+        //  §7.5's launch-to-plane reads the same orbit. No target, no window, no launch.
+        //
+        //  ⛔ SELECTS ON `VesselType.Station`, NEVER ON A NAME. §1.4 forbids inventing a mapping, and a
+        //  name match ("ISS") breaks the moment the station is renamed. The vessel type is KSP's own
+        //  classification. Verified in saves/test/persistent.sfs on 2026-09-07: exactly ONE Station
+        //  ("ISS USOS Real Size") against 37 Crew, 13 Debris, 8 SpaceObject and 3 ServiceModule.
+        //
+        //  ⛔ REFUSES RATHER THAN GUESSES ON 0 OR 2+. This is S219 job 1's finding, one day old: a
+        //  classifier that accepted any `.S1.` part picked up the SPENT UPPER STAGE, and "Select refuses to
+        //  pick between two candidates, so a qualifying spent upper stage standing beside the real booster
+        //  binds NEITHER". A silent wrong pick is worse than a refusal - and a refusal is already handled
+        //  gracefully here, because G7 then goes NO-GO with a reason the crew can read.
+        //
+        //  ⛔ NEVER STOMPS A MANUAL SELECTION. If the crew has already chosen a target, that is the
+        //  authority (§1.4) and this leaves it alone. It sets a target that is UNSET; it does not fight.
+        //
+        //  ⚠ PAD ONLY, AND ONCE. After separation the scene carries debris and a spent upper stage, and
+        //  re-running a vessel scan mid-mission is exactly the shape of the defect S219 just fixed.
+        static void AutoTargetStation(Vessel v)
+        {
+            if (stationTargetTried) return;
+            if (v == null || core == null || core.Target == null) return;
+            if (!FlightGlobals.ready) return;                       // a hold, not a release (S219)
+            if (v.situation != Vessel.Situations.PRELAUNCH) return; // the pad, and nowhere else
+
+            stationTargetTried = true;
+
+            if (core.Target.NormalTargetExists)
+            {
+                Debug.Log("[DragonScreen] auto-target: a target is already set — leaving the crew's "
+                        + "selection alone (S220).");
+                return;
+            }
+
+            Vessel found = null;
+            int n = 0;
+            List<Vessel> all = FlightGlobals.Vessels;
+            for (int i = 0; all != null && i < all.Count; i++)
+            {
+                Vessel o = all[i];
+                if (o == null || o == v) continue;
+                if (o.vesselType != VesselType.Station) continue;
+                n++;
+                found = o;
+            }
+
+            if (n == 1)
+            {
+                core.Target.Set(found);
+                Debug.Log("[DragonScreen] auto-target: station \"" + found.vesselName
+                        + "\" targeted on the pad — the one VesselType.Station in the scene. (S220)");
+                return;
+            }
+
+            Debug.LogWarning("[DragonScreen] auto-target REFUSED: " + n + " vessel(s) of "
+                    + "VesselType.Station in the scene, and this picks only when there is exactly one. "
+                    + "Target by hand — G7 will read NO-GO until you do. (S220)");
+        }
+
         static void Bind(Vessel v)
         {
             if (core != null && boundVesselId == v.persistentId && core.vessel == v) return;

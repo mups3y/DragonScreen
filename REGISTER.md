@@ -26378,7 +26378,7 @@ same flight*; (2) fly a subset; (3) hold.
 
 ---
 
-### S220 [S] Auto-target the station on the pad — **DOING** — [owner directive 2026-09-07; TIER 2: three things already depend on a target and all three depend on the crew remembering]
+### S220 [S] Auto-target the station on the pad — **DONE 2026-09-07 — VesselType.Station, refuses on 0 or 2+, never stomps a manual target; 14 checks, 5 of 5 mutants killed** — [owner directive 2026-09-07; TIER 2: three things already depend on a target and all three depend on the crew remembering]
 🟢 **OWNER, 2026-09-07, verbatim:** *"we also need to auto target the iss as soon as the vehicle is on the pad"*
 - **Why it matters beyond convenience.** `G7` goes **NO-GO without a target in the same SoI** ([[S215]] Q4);
   `LaunchWindow` needs `Core.Target.TargetOrbit.LAN` and `.inclination`; §7.5's launch-to-plane reads the
@@ -26393,3 +26393,28 @@ same flight*; (2) fly a subset; (3) hold.
 - ⛔ **Never stomps a manual selection.** Sets the target only when it is UNSET.
 - **DONE when:** the station is targeted on the pad without crew action, the 0/2+/already-set/off-pad cases
   are each mutation-proved, and `previewdiff` is empty.
+
+#### ⭐ DONE 2026-09-07 — and the mutation run found a defect in the TEST, not the code
+
+`MechConductor.AutoTargetStation` (new, called from `Tick` once the core is bound). Selects on KSP's own
+`VesselType.Station`, excludes our own vessel, holds until `FlightGlobals.ready` (S219's idiom — *a hold,
+not a release*), runs on `PRELAUNCH` only, and tries **once per flight scene** with the flag cleared by
+`Reset()`. Sets the target only when `NormalTargetExists` is false — **the crew's selection is the
+authority (§1.4) and this never fights it.** On 0 or 2+ candidates it **refuses and logs a warning naming
+the count**; `G7` then reads NO-GO with a reason (S215 Q4), which is the graceful path that already exists.
+
+⛔ **TWO OF THE FIVE MUTANTS SURVIVED ON THE FIRST RUN, AND THEY WERE RIGHT TO.** The checks for *"cleared
+by Reset()"* and *"called from Tick"* both matched **COMMENTED-OUT CODE** — `// stationTargetTried = false;`
+satisfied the regex. **A text assertion that passes on a statement that has been switched off proves
+nothing**, and this suite is built entirely on text assertions because the glue cannot be compiled
+headlessly (S219's idiom). Closed with a `Live()` helper that strips line comments before matching; both
+mutants then died. ⚠ **The other text-based suites (`ConductorEngageTest`, `MechHostTest`,
+`RendezvousOpsTest`) have the same exposure and were NOT audited here** — logged, not done (C1.1).
+
+**Verified.** `build.py test` **ALL SUITES PASSED**; `AutoTargetTest` **14 checks, 0 failed**; **5 of 5
+mutants killed**, each by its own named check — off-pad, already-set, count-not-exactly-one, reset-flag,
+not-called. `previewdiff` **REFUSED by design** (S168: no render input differs, so "0 changed" would be
+arithmetic and not a measurement) — nothing here draws.
+⛔ Written by the OVERSEER at the owner's direction (*"run s220 then install and let's fly it"*), which
+crosses the observe-only lock — recorded so the deviation is visible, and so a later reader knows this line
+had no independent assessor.
