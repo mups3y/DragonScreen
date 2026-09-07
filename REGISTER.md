@@ -24923,6 +24923,93 @@ with Waves C/D."* **T18 and T21 are those callers**: `OpenNoseShroud` at the end
 
 ---
 
+### S213 [O] ⛔⛔ THE CONDUCTOR CANNOT BE ENGAGED FROM THE GLASS — AUTO SEQUENCE AND THE CREW GATES ARE BOTH BEHIND `FigmaMode` AND UNREACHABLE — **TODO — BLOCKS THE FIRST FLIGHT** — [found by the owner in the capsule, 2026-09-07; TIER 1: the whole of T18–T21 has no entry point]
+
+**How it was found: the owner installed the build, went to fly it, and reported — verbatim —**
+> *"I saw no such button to start the launch sequence etc."*
+
+He was right, and the sixteen screens he sent are the proof: the shipped UI is the **Figma** UI (Cover ·
+NAV · DOCKING · VEHICLE · PROCEDURES · SETTINGS, navigated by the icon row), and **no AUTO SEQUENCE
+button and no crew-gate card appear anywhere in it.**
+
+#### The mechanism, from the source and from the compiler
+
+`ScreenPainter.cs:56` — **`private const bool FigmaMode = true;`**
+`ScreenPainter.TouchDown` opens with `if (FigmaMode) { … FigmaTouch(px, py, ref rec); … return; }`.
+**Everything after that return is dead code**, and the compiler says so on every build:
+```
+plugin\src\ScreenPainter.cs(439,13): warning CS0162: Unreachable code detected
+plugin\src\ScreenPainter.cs(458,45): warning CS0162: Unreachable code detected
+plugin\src\ScreenPainter.cs(459,45): warning CS0162: Unreachable code detected
+plugin\src\ScreenPainter.cs(460,45): warning CS0162: Unreachable code detected
+plugin\src\ScreenPainter.cs(461,45): warning CS0162: Unreachable code detected
+```
+`:458–461` are, in order, **`ToggleItem` · `PressGo` · `PressNoGo` · `PressAbort`** — the entire crew-gate
+input surface. `:439` is the chrome-bar hit test that would have reached `Pages.FlightHitTest`, the only
+producer of `PageAct.ToggleAuto`, which is the only caller of **`CrewProcedureOps.Toggle()`**
+(`ScreenPainter.cs:1183`). `GateCard.Draw` is called from inside `Pages.Flight()` (`Pages.cs:923`) —
+also unreachable, so the card cannot even be SEEN.
+
+**Swept across the tree:** outside `CrewProcedureOps` / `FlightDriver` / `MechConductor` themselves, the
+only consumer of `CrewProcedureOps` anywhere is `BlackBoxRecorder`, and it **only reads**. Nothing in the
+Figma UI calls a single mutating member.
+
+⇒ **There is no way, from any screen, to engage the conductor, tick a gate item, or press GO.**
+T18, T19, T20 and T21 are all correct and all unreachable. The autopilot cannot be flown.
+
+#### ⛔ THE HONEST ATTRIBUTION, BOTH HALVES
+
+**This predates the T18–T21 batch.** [[W10]] (2026-09-05) flipped `AutoPilot.Engaged` live and recorded
+that *"the AUTO SEQUENCE button (`ScreenPainter.cs:967`) engages"* the conductor and that the gates were
+*"interactive rather than decorative"*. **That claim was already false when it was written** — the button
+was already behind `FigmaMode` on that date. `_AutopilotStub.cs` still carries the same claim.
+
+**And the batch made it worse, which is the part that is this session's.** T18–T21 built four phases of
+flight software on `CrewProcedureOps.Engaged` **without once checking that a crew can set it**, and then
+wrote a flight checklist whose item 1 is *"Press AUTO SEQUENCE"* — an instruction to press a button that
+does not exist. The five `CS0162` warnings above were **on screen during that batch** and were read as
+pre-existing noise instead of as the finding they are. Every §14.4(a) claim the batch made about lamps and
+no-ops is still true; the claim that the crew could START any of it was never checked.
+
+#### What this does NOT break
+
+- Nothing is mis-wired and nothing is dangerous: an autopilot that cannot be engaged commands nothing,
+  which is §14.4(a)'s position anyway. The vehicle is exactly as safe as before.
+- The pure layers (`AscentSequence`, `RendezvousOps`, `DockingLadder`, `ReturnSequence`, `Conductor`) and
+  their 51 mutation-proven suites are unaffected — they were never reachable-by-UI in the first place.
+- `MechHost`, the tune load and the BlackBox recorder all still run; the recorder will simply log a
+  conductor that is never engaged.
+
+#### DONE when
+
+A crew can engage the conductor and work a gate from the shipped Figma UI, and the first flight's
+checklist item 1 names a control that exists.
+
+#### Open questions for the owner (C1.14) — **HELD**
+
+⛔ **A build chat cannot choose the answer, for a reason with a rule behind it.** §14.2a (owner-authorised,
+G13) says an element **ABSENT from the Figma export STAYS EXACTLY AS IT IS — its absence is NEVER grounds
+for changing or removing it**. Inventing an AUTO SEQUENCE button and placing it on one of his pages is
+precisely what that forbids. **Where the engage lives is the owner's design call.**
+
+**Q1 — where does ENGAGE live?  Category: OWNER / TASTE + §14.2a.**
+1. **Bind it to an export element that already exists and currently commands nothing** — the strongest
+   candidate is **`FAR FIELD POSITIONING`**, drawn under **FLIGHT COMMANDS** on the Docking page
+   (`DockingPageCentral.cs:50-53`) as a usable button with no action behind it. *(Recommended: it is in
+   the export, it is already a "flight command", and it needs no new element.)*
+2. **A keybind**, no screen element at all — flyable immediately, touches no page, but adds a surface the
+   design does not have and tends to become permanent.
+3. **Build the gate card properly into the Figma UI** — the real answer, and the largest.
+
+**Q2 — how are the GATES worked?  Category: OWNER GATE.** Engage alone is not enough: the plan holds at
+G1 and the crew must be able to tick items and press GO, and that card is unreachable too. Options:
+1. **Turn on the hands-off gate mode for flight 1** — `CrewProcedureOps.AutoAdvanceGates`, as an
+   **EXPLICIT NAMED OPTION**, which is exactly the shape W10 said it must return in if ever wanted
+   (*"never as a default"*). Flight 1 then flies end-to-end and proves the autopilot; the crew-gate UI
+   becomes its own line. *(Recommended for the first flight only.)*
+2. Build the gate card into the Figma UI first, and fly after — correct, slower, and it is (Q1) option 3.
+⛔ **(1) turns a W10 decision back on and needs the owner to say so** (C1.8).
+
 ## 🟢 GATE OPENED — the OWNER, 2026-09-07, IN THIS CHAT, verbatim: **"install and let's fly it"**
 
 ⭐ **`install` + glass time are GRANTED for this flight, by the owner's own words quoted above** — the
@@ -24981,7 +25068,7 @@ reported in one line rather than diagnosed in the seat · and which register lin
 
 | # | Do this | Success | **Failure looks like** | Routes to |
 |---|---|---|---|---|
-| **1** | Press **AUTO SEQUENCE**. Work gates **G1–G7**: tap the crew items, press **GO** on each. | Each gate clears on one GO. Log: `LAUNCH GO latched (G7)`. | A gate will not clear with every item ticked → the gate machine. A GO clearing two gates → the consume rule. | [[W10]] |
+| **1** | ⛔ **BLOCKED BY [[S213]] — THE BUTTON DOES NOT EXIST IN THE SHIPPED UI.** Press **AUTO SEQUENCE**. Work gates **G1–G7**: tap the crew items, press **GO** on each. | Each gate clears on one GO. Log: `LAUNCH GO latched (G7)`. | A gate will not clear with every item ticked → the gate machine. A GO clearing two gates → the consume rule. | [[W10]] |
 | **2** | Watch the pad at G7. | Log: `octaweb liftoff ignition — 9 all-engines module(s) lit`, then `thrust good — hold-downs released`, and it flies. | ⛔ **`PAD SAFED — ignition did not reach 99% thrust inside 2 s. Engines shut, HOLD-DOWNS STILL HELD.`** That is the gate working; report the thrust it reached. ⛔ **Clamps releasing on a cold or half-lit stage is the one unrecoverable failure** — report immediately. | [[T18]] |
 | **3** | ⚠ **THE ONE THAT MOST NEEDS WATCHING — the exception storm.** Check KSP.log for `ArgumentOutOfRangeException` / `GetPotentialTorque`. | None, or a handful. Frame rate normal. | **Thousands of them**, frame rate on the floor. That is the failure T15d fixed by never being master, and T18 has to be master. The mitigation (`RefreshGimbalEngineLists`) is a **HYPOTHESIS, not a proven fix**. **Report the COUNT.** | [[T18]] |
 | **4** | Watch the ascent. | PVG steers; AoA sane through max-Q. Log: `ASCENT Liftoff -> Meco`, `Meco -> Separation`, `Separation -> Ses1`. | ⛔ **MECO never fires** and the stage runs dry still throttled → the propellant reader. ⛔ **The booster separates while still thrusting** and rams the S2 → the thrust-dead test (flight 194334's failure returning). | [[T18]] |
