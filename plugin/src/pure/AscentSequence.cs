@@ -74,6 +74,21 @@
 // Both arrive on `AscentInputs` from the caller, the same shape `pure/Conductor.cs` uses for §B12.4's
 // tolerances, so a T22 tune moves a number and never touches this rule.
 //
+// ---- ⭐ S215 (2026-09-07) — THE LAUNCH WINDOW, AND WHY IT LANDS IN **THIS** FILE ----
+// The conductor now solves a launch window (`pure/LaunchWindow.cs`) and warps to it. The only part of
+// that which belongs here is the ONE decision this file already owns: **when the octaweb is lit.**
+//   • `Idle` gains a third hold, after `LaunchCommanded` and after S214's `GuidanceReady`: while a
+//     window is armed and T-0 is further away than `IgnitionLeadS`, the pad stays quiet.
+//   • `IgnitionLeadSeconds` = **3.0**, off `CREW_MISSION_TELEMETRY.md`'s countdown row
+//     `−0:00:03 Engine controller commands ignition sequence start`. A documented interval before a
+//     computed instant — the same shape as every other interval in this file, and NOT a stopwatch from
+//     T0 (`pure/BarEvent.cs`'s standing rule survives intact: nothing here reads MET).
+// ⛔ AND NO COUNTDOWN IS **ARMED IN MECHJEB**. `MechJebModuleAscentBaseAutopilot.StartCountdown` sets
+// `TimedLaunch`, and `:127` then calls `StageManager.ActivateNextStage()` at T-0 gated only on
+// `Enabled && ThrustAvailable < 10E-4` — **not** on `AscentSettings.Autostage`. §B8 and §B12.7 give every
+// ignition to the conductor, so the countdown is OURS: the UT is computed read-only, the warp is
+// commanded by the glue, and T-0 is `IgnitionGate`'s exactly as it was.
+//
 // PURE: no Unity, no KSP, no MechJeb reference. `Step` is a function of its inputs and holds no clock —
 // the caller measures the time in the current step and passes it in.
 // ============================================================================================
@@ -167,6 +182,40 @@ namespace DragonScreen
         public bool   OrbitClosed;
         public double PeriapsisM;
 
+        // ── the launch window (S215) ────────────────────────────────────────────────────
+        /// <summary>
+        /// **The conductor holds a solved launch window and is counting down to it.** Set by the caller
+        /// from `LaunchWindow.Solve(...).Armed`.
+        /// ⛔ **SHIPS FALSE, AND THAT IS THE HONEST DEFAULT, NOT A CONVENIENCE.** False means "no window
+        /// is being counted" — a GO then lights the stage as soon as guidance is ready, which is exactly
+        /// what the free-flyer profiles (`HasRendezvous == false`) want and what every flight before
+        /// S215 did. It is the RENDEZVOUS case that has a window to wait for.
+        /// </summary>
+        public bool WindowArmed;
+        /// <summary>
+        /// **This mission HAS a plane to launch into** — `MissionProfile.HasRendezvous`. Set with, and
+        /// independently of, <see cref="WindowArmed"/>, and the pairing is the whole point:
+        ///   • required + armed  → count down to it;
+        ///   • required + NOT armed → ⛔ **HOLD.** The window did not solve — no target, a plane that
+        ///     disagrees with the mission fact, or a mirror that has drifted — and a rendezvous launch
+        ///     with no window is the failure this whole file exists to prevent;
+        ///   • not required → launch on the GO, which is every free-flyer profile and is what the pad
+        ///     did before S215.
+        /// ⛔ Collapsing these two into one flag would make "no window solved" indistinguishable from
+        /// "no window needed", and the pad would light on the more dangerous reading.
+        /// </summary>
+        public bool WindowRequired;
+        /// <summary>
+        /// Seconds from now to the window's T-0. ⚠ Meaningless unless <see cref="WindowArmed"/>; the
+        /// caller measures it, this file never differences a clock (the same rule as `SinceStepS`).
+        /// </summary>
+        public double SecondsToWindowS;
+        /// <summary>
+        /// Light the octaweb this long BEFORE T-0. Documented, not chosen — see
+        /// <see cref="IgnitionLeadSeconds"/>.
+        /// </summary>
+        public double IgnitionLeadS;
+
         // ── time in the CURRENT step, measured by the caller ────────────────────────────
         public double SinceStepS;
 
@@ -208,6 +257,14 @@ namespace DragonScreen
             s.Seco1ToDragonSepS      = Seco1ToDragonSepSeconds;
             s.DragonSepToNoseS       = DragonSepToNoseSeconds;
             s.SecoBackstopPeriapsisM = SecoBackstopDisabled;
+            s.IgnitionLeadS          = IgnitionLeadSeconds;
+            // ⭐ NO WINDOW BY DEFAULT. `Nominal()` means "nothing is wrong", and a mission with no
+            // rendezvous has nothing to wait for. Every S215 countdown test sets `WindowArmed` TRUE
+            // explicitly, so a hold can never pass by accident of the default — the mirror image of the
+            // rule S214 wrote for `GuidanceReady` two fields above.
+            s.WindowArmed            = false;
+            s.WindowRequired         = false;
+            s.SecondsToWindowS       = 0.0;
             // ⭐ A NOMINAL flight is one where MechJeb has converged before the crew's GO. Defaulting
             // this true keeps `Nominal()` meaning "nothing is wrong"; every S214 hold-test sets it
             // false EXPLICITLY, so the hold can never pass by accident of the default.
@@ -236,6 +293,19 @@ namespace DragonScreen
         public const double MecoPropellantFracDefault = 0.0;
         /// <summary>⚠ SHIPS DISABLED. See the SECO note in <see cref="AscentSequence.Step"/>.</summary>
         public const double SecoBackstopDisabled = double.MaxValue;
+        /// <summary>
+        /// S215. Ignition lead: the octaweb is commanded alight this long before the window's T-0.
+        /// ⭐ **DOCUMENTED, NOT CHOSEN.** `docs/CREW_MISSION_TELEMETRY.md` §"countdown" carries the real
+        /// Crew-Dragon row **`−0:00:03 | Engine controller commands ignition sequence start`**, and the
+        /// same table's `−0:00:45` row is G7 (`GO/NO-GO FOR LAUNCH`) — so the real vehicle's GO and its
+        /// engine start are 42 s apart, in that order, which is Q3's ordering read off the source rather
+        /// than asserted.
+        /// ⚠ It is a LEAD, not the clamp rule: `IgnitionGate` still owns the 2 s / 99 % decision from
+        /// the moment of ignition, unchanged (`pure/IgnitionGate.cs`). At a 3 s lead a nominal light
+        /// releases the hold-downs at about T-1 s; a stage that never makes thrust safes the pad at
+        /// about T+1 s with the clamps still held. Neither number is tuned here and neither may be.
+        /// </summary>
+        public const double IgnitionLeadSeconds = 3.0;
     }
 
     /// <summary>One ascent decision: where to go next, and what (if anything) to actuate to get there.</summary>
@@ -377,6 +447,30 @@ namespace DragonScreen
                     if (!s.GuidanceReady)
                         return AscentDecision.Stay(AscentStep.Idle,
                             "launch GO held — no guidance solution, so nothing would raise the throttle");
+                    // ⭐ S215 (2026-09-07): **THE LAUNCH WINDOW. Q3 — GO ARMS THE COUNTDOWN, THEN IT
+                    // WARPS.** The crew's GO is polled FIRST and COMMITS the launch; everything after it
+                    // is execution. That is the real procedure, and it is in this repo's own countdown
+                    // table (`CREW_MISSION_TELEMETRY.md`: G7 at −0:00:45, engine start at −0:00:03), not
+                    // an arrangement chosen here.
+                    // ⛔ THE OCTAWEB IS NOT LIT UNTIL T-0 MINUS THE DOCUMENTED LEAD. Lighting early
+                    // would burn propellant on the clamps and — worse — start `IgnitionGate`'s 2 s
+                    // clock against a T-0 that has not arrived, so a perfectly good stage would be
+                    // SAFED for being early. The gate's rule is untouched; this decides when its clock
+                    // is allowed to start, exactly as S214's guidance hold does one line above.
+                    // ⚠ A NEGATIVE `SecondsToWindowS` IS A PASSED WINDOW, NOT A FAULT — the comparison
+                    // is `>`, so a window already gone falls straight through to ignition rather than
+                    // holding the pad forever waiting for a moment in the past.
+                    // ⛔ A MISSION THAT NEEDS A WINDOW AND HAS NONE **HOLDS**, and it holds BEFORE the
+                    // countdown branch, because the two failures look nothing alike and must not be
+                    // confused: "not yet" is a count, "there is no window" is a fault. Solving it is the
+                    // caller's job (`MechConductor.UpdateLaunchWindow` says which of the three reasons
+                    // it was, in the log); all this file can honestly do is refuse to light the stage.
+                    if (s.WindowRequired && !s.WindowArmed)
+                        return AscentDecision.Stay(AscentStep.Idle,
+                            "launch GO held — no launch window solved for a rendezvous mission");
+                    if (s.WindowArmed && s.SecondsToWindowS > s.IgnitionLeadS)
+                        return AscentDecision.Stay(AscentStep.Idle,
+                            "launch GO latched — counting down to the launch window");
                     return AscentDecision.Of(AscentStep.Ignition, AscentAct.IgniteStageOne,
                                              "launch GO — octaweb ignition (all-engines mode only)");
 

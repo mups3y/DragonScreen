@@ -255,7 +255,17 @@ namespace DragonScreen
 
                 // GO / NO-GO. GO is live only on a fully satisfied checklist — `CrewGate.Step` refuses
                 // it otherwise, so painting it live would promise something the machine declines.
-                bool ready = AllTicked(s, n);
+                // ⛔ S215 ADDS THE SECOND HALF OF THAT SAME SENTENCE. A SYSTEM NO-GO
+                // (`CrewGateInputs.SystemNoGo` — today only "G7 with no target in this SoI", Q4) also
+                // makes `Step` decline a GO, and it does so with the checklist FULLY TICKED. Reading
+                // only `AllTicked` here would paint a green GO over a gate that cannot clear, which is
+                // §14.4(a)'s prohibition word for word: no light for something that will not happen.
+                // ⚠ AND IT IS NOT `GateStage == NoGo`, WHICH WOULD BE WRONG. A CREW no-go puts the gate
+                // in the same phase and IS cleared by the crew's next GO ("also resumes from a NO-GO
+                // hold", `CrewGate.Step`) — so keying off the phase would deaden the one control that
+                // gets them out of their own hold. The two are different things and stay different.
+                bool blocked = !string.IsNullOrEmpty(s.GateBlockReason);
+                bool ready = AllTicked(s, n) && !blocked;
                 float gx, gy, gw, gh; GoRect(n, out gx, out gy, out gw, out gh);
                 Plate(gx, gy, gw, gh, ready ? DragonPalette.Go : DragonPalette.Inset2);
                 dl.Text("GO", PX(gx + gw * 0.5f), PY(gy + gh * 0.5f - 22f), SZ(40f), TextAlign.Centre,
@@ -266,9 +276,14 @@ namespace DragonScreen
                 dl.Text("NO-GO", PX(nx + nw * 0.5f), PY(ny + nh * 0.5f - 22f), SZ(40f), TextAlign.Centre,
                         DragonPalette.Caution);
 
-                L(ready ? "Checklist complete - crew GO releases the next phase."
-                        : "Complete the checklist. GO is refused on an unsatisfied list.",
-                  ColC, FootY(n) - 40f, 28f, ready ? DragonPalette.Text3 : DragonPalette.Text6);
+                // The footer says WHICH of the three states the crew are in — and a system block names
+                // its own cause, because "the button does nothing" with no reason is the failure this
+                // whole line exists to remove.
+                L(blocked ? ("HOLD - " + s.GateBlockReason)
+                          : ready ? "Checklist complete - crew GO releases the next phase."
+                                  : "Complete the checklist. GO is refused on an unsatisfied list.",
+                  ColC, FootY(n) - 40f, 28f,
+                  blocked ? DragonPalette.Caution : ready ? DragonPalette.Text3 : DragonPalette.Text6);
             }
 
             // ---- right column: the caution card, the auto-gates choice, and HALT ----

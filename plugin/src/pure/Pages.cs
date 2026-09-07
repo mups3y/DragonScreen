@@ -398,6 +398,14 @@ namespace DragonScreen
         public string GateTitle;
         public GatePhase GateStage;
         public GateItemView[] GateItems;
+        /// <summary>
+        /// ⛔ S215: WHY THE SYSTEM IS HOLDING THIS GATE, or null when it is not — `CrewProcedureOps.
+        /// GateBlockReason`. It is deliberately NOT the same signal as `GateStage == NoGo`: a CREW
+        /// no-go is cleared by the crew's own next GO, while a system block is a CONDITION that a GO
+        /// cannot lift. "4.100 Mission Sequence" paints GO live off the CHECKLIST, so without this it
+        /// would offer a live GO over a gate the machine refuses — §14.4(a)'s exact prohibition.
+        /// </summary>
+        public string GateBlockReason;
 
         /// <summary>Mission-phase buttons: lit when that phase is the one running.</summary>
         public bool RendezvousEngaged, DockEngaged, UndockEngaged, DeorbitEngaged;

@@ -35,6 +35,7 @@ public static class CrewGatePageTest
         AutoRowsCannotBeFaked();
         InitiateAndHalt();
         Retitling();
+        SystemBlockIsVisible();
 
         Console.WriteLine("  " + checks + " checks, " + failures + " failed");
         return failures;
@@ -183,6 +184,44 @@ public static class CrewGatePageTest
             }
         Check(!idleHalt, "⛔ HALT cannot be pressed when nothing is running");
         Check(!runInitiate, "⛔ INITIATE cannot be pressed when the sequence already is");
+    }
+
+    // ---- 7. S215: A SYSTEM NO-GO IS VISIBLE, AND GO IS NOT PAINTED LIVE OVER IT ------------------
+    // ⛔ THE FAILURE THIS PREVENTS IS A GREEN BUTTON THAT DOES NOTHING. 4.100 paints GO live off the
+    // CHECKLIST, and a system block (Q4: G7 with no target in this SoI) holds a gate whose checklist is
+    // FULLY TICKED. Without this the crew would see a green GO, press it, and watch nothing happen —
+    // §14.4(a)'s prohibition, on the one page the whole conductor is reached through.
+    static void SystemBlockIsVisible()
+    {
+        // A fully-ticked G7 with nothing wrong: GO is live and the page says so.
+        PageState open = AtGate(true, true, true);
+        for (int i = 0; i < open.GateItems.Length; i++) open.GateItems[i].Checked = true;
+        open.GateStage = GatePhase.GoReady;
+        DisplayList a = new DisplayList(4096);
+        CrewGatePage.Build(a, W, H, open, 7, false);
+        Check(Has(a, "Checklist complete - crew GO releases the next phase."),
+              "an unblocked, fully-ticked gate offers the GO");
+
+        // ...the same gate, blocked by the system. ⭐ The REASON is printed, not just a refusal.
+        PageState blocked = open;
+        blocked.GateBlockReason = "NO TARGET - select the station before launch";
+        DisplayList b = new DisplayList(4096);
+        CrewGatePage.Build(b, W, H, blocked, 7, false);
+        Check(Has(b, "HOLD - NO TARGET - select the station before launch"),
+              "⭐ a system block prints its own cause on the page");
+        Check(!Has(b, "Checklist complete - crew GO releases the next phase."),
+              "⛔ ...and the page no longer offers a GO it cannot honour");
+
+        // ⚠ AND A CREW NO-GO IS NOT THE SAME THING. The crew's own GO is what lifts their own hold
+        // ("also resumes from a NO-GO hold", `CrewGate.Step`), so the page must keep offering it —
+        // keying the paint off `GateStage == NoGo` would deaden the one control that gets them out.
+        PageState crewNoGo = open;
+        crewNoGo.GateBlockReason = null;
+        crewNoGo.GateStage = GatePhase.NoGo;
+        DisplayList c = new DisplayList(4096);
+        CrewGatePage.Build(c, W, H, crewNoGo, 7, false);
+        Check(Has(c, "Checklist complete - crew GO releases the next phase."),
+              "⚠ a CREW no-go still offers the GO that resumes it — it is not a system block");
     }
 
     // ---- 6. ONE PAGE, RE-TITLING ITSELF (the owner's own choice) ----------------------------------

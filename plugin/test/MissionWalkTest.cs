@@ -164,7 +164,7 @@ public static class MissionWalkTest
                 bool[] none = new bool[g.Items.Length];
                 CrewGateInputs bad;
                 bad.Gate = g; bad.Satisfied = none;
-                bad.GoPressed = true; bad.NoGoPressed = false; bad.AbortPressed = false;
+                bad.GoPressed = true; bad.NoGoPressed = false; bad.AbortPressed = false; bad.SystemNoGo = false;
                 Check(!CrewGate.Step(bad, GatePhase.Holding).Cleared,
                       "⛔ a GO on an unsatisfied checklist does not clear the gate");
             }
@@ -173,7 +173,7 @@ public static class MissionWalkTest
             for (int i = 0; i < sat.Length; i++) sat[i] = true;   // auto-items + the crew's taps
             CrewGateInputs gi;
             gi.Gate = g; gi.Satisfied = sat;
-            gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+            gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false; gi.SystemNoGo = false;
             CrewGateStep st = CrewGate.Step(gi, GatePhase.Holding);
             Check(st.Cleared, "gate " + id + " clears on a GO over a satisfied checklist");
 
@@ -314,7 +314,7 @@ public static class MissionWalkTest
                 for (int i = 0; i < sat.Length; i++) sat[i] = true;
                 CrewGateInputs gi;
                 gi.Gate = g; gi.Satisfied = sat;
-                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false; gi.SystemNoGo = false;
                 if (!CrewGate.Step(gi, GatePhase.Holding).Cleared)
                 { Check(false, "gate " + g.Id + " would not clear"); break; }
                 if (g.Id == GateId.DeorbitGoG15) go15 = true;
@@ -512,7 +512,7 @@ public static class MissionWalkTest
                 for (int i = 0; i < sat.Length; i++) sat[i] = true;
                 CrewGateInputs gi;
                 gi.Gate = g; gi.Satisfied = sat;
-                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false; gi.SystemNoGo = false;
                 if (!CrewGate.Step(gi, GatePhase.Holding).Cleared)
                 { Check(false, "gate " + g.Id + " would not clear"); break; }
                 index = ModeManager.Advance(plan, index, new ModeInputs { GateGo = true }).Index;
@@ -685,7 +685,7 @@ public static class MissionWalkTest
                 for (int i = 0; i < sat.Length; i++) sat[i] = true;
                 CrewGateInputs gi;
                 gi.Gate = g; gi.Satisfied = sat;
-                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false;
+                gi.GoPressed = true; gi.NoGoPressed = false; gi.AbortPressed = false; gi.SystemNoGo = false;
                 if (!CrewGate.Step(gi, GatePhase.Holding).Cleared) { Check(false, "gate " + g.Id + " would not clear"); break; }
                 index = ModeManager.Advance(plan, index, new ModeInputs { GateGo = true }).Index;
                 gatesCleared++;

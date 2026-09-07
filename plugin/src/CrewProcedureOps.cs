@@ -74,6 +74,10 @@ namespace DragonScreen
         // latched crew button events, consumed on the next Tick
         static bool goPressed, noGoPressed;
 
+        // ⛔ S215: WHY the current gate is held by the SYSTEM, or null when it is not. Recomputed every
+        // tick from live state — it is a condition, not a latch, so fixing the cause clears it.
+        static string gateBlock;
+
         // one-shot actuation intents FlightDriver consumes
         static bool launchPending;
         static bool abortLatched;
@@ -119,6 +123,13 @@ namespace DragonScreen
             return engaged && CurrentIsGate() && phase != GatePhase.Go;
         }
         public static Gate CurrentGate() { return gate; }
+        /// <summary>
+        /// ⛔ S215: WHY the system is holding this gate, or null. The screens render it so a crew looking
+        /// at a fully-ticked checklist and a GO that will not clear can see the reason — see
+        /// <see cref="BlockReason"/>. Silence here means the gate is the crew's alone, as every gate
+        /// before S215 was.
+        /// </summary>
+        public static string GateBlockReason { get { return gateBlock; } }
         public static ProcState Proc { get { ProcState p; p.Phase = phase; p.Satisfied = satisfied; return p; } }
 
         public static void Toggle() { if (engaged) Disengage(); else Engage(); }
@@ -384,6 +395,7 @@ namespace DragonScreen
                 phase = GatePhase.Holding;
             }
             else { gate = new Gate(); satisfied = null; phase = GatePhase.Holding; }
+            gateBlock = null;   // S215: a condition on the gate we just left cannot hold the next one.
         }
 
         // Advanced each physics frame by FlightDriver with the live vessel. READS the vessel; commands nothing.
@@ -396,7 +408,7 @@ namespace DragonScreen
 
             // At a Fly step the plan HOLDS: only a flying controller's PhaseComplete() advances it, and this
             // build has none. Drop any stale press so it cannot fire at the next gate.
-            if (!CurrentIsGate()) { goPressed = noGoPressed = false; return; }
+            if (!CurrentIsGate()) { goPressed = noGoPressed = false; gateBlock = null; return; }
 
             // satisfy the AUTO items from live vessel state; CrewAck items keep their tapped value.
             if (gate.Items != null)
@@ -418,6 +430,9 @@ namespace DragonScreen
             gi.Gate = gate; gi.Satisfied = satisfied;
             gi.GoPressed = goPressed; gi.NoGoPressed = noGoPressed;
             gi.AbortPressed = false;   // W10 change (4): PressAbort is a no-op until W19 — never latch a red ABORT.
+            // ⛔ S215's Q4. The one system-side NO-GO in this build. See `GateBlockReason`.
+            gateBlock = BlockReason(gate.Id, v);
+            gi.SystemNoGo = gateBlock != null;
             CrewGateStep step = CrewGate.Step(gi, phase);
             phase = step.Phase;
             // ⭐ CONSUMED ON THE FRAME IT WAS PRESSED: cleared unconditionally, after exactly one Step call, so a
@@ -451,6 +466,61 @@ namespace DragonScreen
             }
             catch { }
             return true;   // nominal-on-a-healthy-pad confirmation
+        }
+
+        /// <summary>
+        /// ⛔ **S215 / Q4 — WHY THE SYSTEM IS HOLDING THIS GATE, or null when it is not.**
+        ///
+        /// The only case in this build is **G7 without a target in the same sphere of influence.** The
+        /// launch window is a PLANE problem (`pure/LaunchWindow.cs`): with no target orbit there is no
+        /// plane, `Astro.MinimumTimeToPlane` has nothing to solve, and the conductor would fly whatever
+        /// inclination was last loaded into the ascent settings — arriving in a correct-looking orbit
+        /// that the station is not in. `docs/MECHJEB_MASTER_MAP.md` §7.5 names that outcome exactly:
+        /// *"right inclination, wrong RAAN, and the rendezvous autopilot then needs an unaffordable
+        /// plane change."* §14.4(a)'s premise is that a control which silently does the wrong thing is
+        /// worse than a dead one, so the launch is REFUSED and says why.
+        ///
+        /// ⭐ **IT IS SCOPED TO MISSIONS THAT ACTUALLY RENDEZVOUS, AND THAT SCOPING IS NOT A SOFTENING.**
+        /// `MissionProfile.HasRendezvous` is false for the three free-flyers in the catalog
+        /// (Inspiration4, Polaris Dawn, Fram2) — they carry their own named apsides, they have no
+        /// station to chase, and `CrewGates.Return(false)` already omits G9–G14 for them. Requiring a
+        /// target there would refuse a launch that is completely correct. **The rule is "do not launch
+        /// blind at a plane you cannot see", not "never launch without a target".**
+        ///
+        /// ⚠ The target is read off the VESSEL, not off `MechJebModuleTargetController` — the same
+        /// reasoning `MechConductor.Measure` records: MechJeb's controller only syncs its target inside
+        /// `OnFixedUpdate`, which the core skips whenever it is not master, so on the pad it can be
+        /// stale precisely when this answer matters most.
+        /// </summary>
+        static string BlockReason(GateId id, Vessel v)
+        {
+            try
+            {
+                if (id != GateId.LaunchGoG7) return null;
+                if (!mission.HasRendezvous) return null;
+                if (SameSoiTargetOrbit(v) != null) return null;
+                return "NO TARGET — select the station before launch (the window is a plane solve)";
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// The targeted vessel's orbit, but ONLY if it is around the body we are on — the precondition
+        /// `MechJebKos/AscentBindingBase.cs:114-115` enforces before `LaunchIntoPlane` will run at all
+        /// (*"Launch into plane requires a target in the same sphere of influence."*). Null otherwise.
+        /// </summary>
+        public static Orbit SameSoiTargetOrbit(Vessel v)
+        {
+            try
+            {
+                if (v == null) return null;
+                ITargetable tgt = v.targetObject;
+                if (tgt == null) return null;
+                Orbit o = tgt.GetOrbit();
+                if (o == null || o.referenceBody == null) return null;
+                return o.referenceBody == v.mainBody ? o : null;
+            }
+            catch { return null; }
         }
 
         static bool HasCharge(Vessel v)

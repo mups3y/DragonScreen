@@ -62,6 +62,7 @@ public static class ConductorWalkTest
         gi.Gate = gate; gi.Satisfied = satisfied;
         gi.GoPressed = goPressed; gi.NoGoPressed = noGoPressed;
         gi.AbortPressed = false;   // W10: PressAbort is an honest no-op until W19 — never latch a red ABORT
+        gi.SystemNoGo = false;   // S215: no system NO-GO in this walk.
         CrewGateStep step = CrewGate.Step(gi, phase);
         phase = step.Phase;
         // the press is consumed here, unconditionally, after exactly one Step call — the caller's `goPressed`

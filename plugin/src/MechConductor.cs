@@ -51,6 +51,10 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MuMech = DragonScreen.Mech.MuMech;
+// S215: the vendored plane-crossing maths. ⭐ THE VALUE THIS FILE WARPS TO IS **THIS** ONE — the
+// pure `LaunchWindow` mirror is computed alongside it and only ever used to CHECK it (see
+// `SolveWindow`). One source of truth in flight; a tested one on the bench.
+using MechAstro = DragonScreen.Mech.MechJebLib.Functions.Astro;
 
 namespace DragonScreen
 {
@@ -81,6 +85,21 @@ namespace DragonScreen
         static bool ascentEngaged;
         /// <summary>S214: latches the PVG engage-hold log so a per-tick wait cannot flood `KSP.log`.</summary>
         static bool stageStatsWaitLogged;
+
+        // ── S215: the launch window (§B9 Phase 0/1, docs/MECHJEB_MASTER_MAP.md §7.5) ─────────────
+        /// <summary>The solved window. `Verdict != Armed` while there is nothing to count down to.</summary>
+        static WindowPlan window;
+        /// <summary>UT of the window's T-0. 0 = none solved.</summary>
+        static double launchWindowUT;
+        /// <summary>Latches the window-hold log so a per-tick refusal cannot flood `KSP.log` (S214's rule).</summary>
+        static bool windowHoldLogged;
+        /// <summary>
+        /// The warp has been commanded once. ⛔ ONCE IS CORRECT, not a shortcut:
+        /// `MechJebModuleWarpController.OnFixedUpdate` re-issues its own `warpToUT` every frame until
+        /// the UT passes, so it re-establishes the warp by itself even if the player cancels it.
+        /// Re-commanding here each tick would fight that module rather than help it.
+        /// </summary>
+        static bool warpArmed;
 
         // ── T19: the on-orbit leg (§B9 P2/P3, §B10.2, §B12.4) ────────────────────────────────────
         static RendezvousLeg leg;            // which leg, from the gate it walks to
@@ -180,6 +199,8 @@ namespace DragonScreen
             core = null; boundVesselId = 0;
             ascentStep = AscentStep.Idle; stepStartUT = 0.0;
             launchLatched = false; configured = false; ascentEngaged = false; stageStatsWaitLogged = false;
+            window = new WindowPlan(); launchWindowUT = 0.0;
+            windowHoldLogged = false; warpArmed = false;
             note = "idle";
             ResetLeg();
             leg = RendezvousLeg.None;
@@ -647,13 +668,322 @@ namespace DragonScreen
                       + "(register S195 — which profile flight 1 flies is a §B5/T22 question).");
         }
 
+        // ============================ S215 — THE LAUNCH WINDOW ============================
+
+        /// <summary>
+        /// ⭐ How early to leave time warp, seconds before T-0. **COMPOSED FROM TWO IN-REPO NUMBERS,
+        /// not chosen:**
+        ///   • **20 s** — `plugin/mech/MechJebKos/AscentPSGBinding.cs:113-115`, the vendored tree's own
+        ///     note: *"PSG can take ~20s to converge an initial solution from a cold start. Staging
+        ///     before there is a solution drops the rocket on the pad, so a launch script should wait on
+        ///     HASSOLUTION … before releasing the clamps."* That is precisely S214's `GuidanceReady`
+        ///     hold, which sits between the crew's GO and ignition — so the countdown must LEAVE ROOM
+        ///     for it, or the solver would still be converging when the window arrived.
+        ///   • **12 s** — `pure/WarpPlan.BurnLeadS`, this repo's existing "be at 1× this long before an
+        ///     event" margin, which exists for the warp-exit transition itself.
+        /// ⚠ Both halves are MARGINS, not physics, and neither is converged (`WarpPlan`'s own header
+        /// says so of its four). Safe in one direction only: larger = more real-time seconds on the pad.
+        /// ⛔ It is deliberately NOT MechJeb's `AscentSettings.WarpCountDown` (11 s). Stock can afford
+        /// that because stock starts guidance DURING its countdown — `MechJebModuleAscentPSGAutopilot.cs:47-52`
+        /// calls `SetTarget` + `AssertStart(false)` once `TMinus &lt;= WarpCountDown` — and we do not arm
+        /// MechJeb's countdown at all (Q1), so nothing would ever trigger that for us.
+        /// </summary>
+        const double WarpLeadSeconds = 20.0 + 12.0;
+
+        /// <summary>
+        /// Solve the launch window from live state, and CHECK the answer against the pure mirror.
+        ///
+        /// ⭐ **THE FLOWN NUMBER IS THE VENDORED ONE.** `MechAstro.MinimumTimeToPlane` is what
+        /// `MechJebKos/AscentBindingBase.cs:120-126` calls, and it is what this returns. `LaunchWindow`
+        /// — the pure, headless-tested, mutation-proven mirror — is computed from the SAME inputs and
+        /// compared. They are the same double arithmetic, so they must agree to `MirrorToleranceS`;
+        /// **if they do not, the mirror has drifted from the pin and the launch HOLDS with both numbers
+        /// printed**, rather than the mirror being quietly right on the bench and wrong in flight.
+        ///
+        /// ⛔ **THE NAV LAYER MUST BE CURRENT, AND ON THIS VEHICLE IT IS NOT ALWAYS.** `VesselState` is
+        /// refreshed inside `MechJebCore.FixedUpdate`, which returns early unless this core is
+        /// `GetMasterMechJeb()` — and that resolves by `p.running`, which `MechHost.HoldDriveAuthority`
+        /// pins to `DriveAuthorized`. So before the conductor grants drive authority the latitude and
+        /// celestial longitude below are STALE (zero on a fresh scene), and a window solved from them
+        /// would be confident nonsense. The `VesselState.Time` check is that staleness MEASURED, rather
+        /// than assumed away by an ordering argument that a later edit could quietly invalidate.
+        /// </summary>
+        static WindowPlan SolveWindow(Vessel v)
+        {
+            WindowPlan bad = new WindowPlan();
+            bad.Verdict = WindowVerdict.NotComputable;
+
+            MuMech.VesselState vs = core.VesselState;
+            if (vs == null) { bad.Reason = "no VesselState on the core"; return bad; }
+
+            double now = Now();
+            double age = vs.Time - now; if (age < 0.0) age = -age;
+            if (vs.Time <= 0.0 || age > 1.0)
+            {
+                bad.Reason = "MechJeb's nav state is not current (VesselState.Time is "
+                           + age.ToString("F1") + " s off) — no drive authority yet";
+                return bad;
+            }
+
+            Orbit to = CrewProcedureOps.SameSoiTargetOrbit(v);
+            CelestialBody b = v.mainBody;
+
+            WindowInputs wi = new WindowInputs();
+            wi.TargetInSameSoi        = to != null && b != null;
+            wi.BodyRotationPeriodS    = b != null ? b.rotationPeriod : 0.0;
+            wi.LatitudeDeg            = vs.Latitude;
+            wi.CelestialLongitudeDeg  = vs.CelestialLongitude;
+            wi.TargetLanDeg           = to != null ? to.LAN : 0.0;
+            wi.TargetInclinationDeg   = to != null ? to.inclination : 0.0;
+            wi.LanDifferenceDeg       = core.AscentSettings != null
+                                      ? core.AscentSettings.LaunchLANDifference.Val : 0.0;
+            wi.NowUT                  = now;
+            wi.MissionInclinationDeg  = AscentTargets.For(CrewProcedureOps.Profile, 0.0).InclinationDeg;
+
+            WindowPlan p = LaunchWindow.Solve(wi);
+            if (!p.Armed) return p;   // NoTarget / disagreement / not computable — it already said why.
+
+            // ⭐ THE CROSS-CHECK. Same inputs, vendored implementation, and the answer we actually fly.
+            var vendored = MechAstro.MinimumTimeToPlane(wi.BodyRotationPeriodS, wi.LatitudeDeg,
+                                                        wi.CelestialLongitudeDeg,
+                                                        wi.TargetLanDeg - wi.LanDifferenceDeg,
+                                                        wi.TargetInclinationDeg);
+            double vTime = vendored.time, vInc = vendored.inclination;
+
+            if (!LaunchWindow.MirrorAgrees(p.TimeToWindowS, vTime, LaunchWindow.MirrorToleranceS))
+            {
+                WindowPlan drift = new WindowPlan();
+                drift.Verdict = WindowVerdict.NotComputable;
+                drift.Reason = "the pure launch-window mirror DISAGREES with the vendored Astro — mirror "
+                             + p.TimeToWindowS.ToString("F6") + " s vs vendored " + vTime.ToString("F6")
+                             + " s. `pure/LaunchWindow.cs` has drifted from the pin (S215)";
+                return drift;
+            }
+
+            // Fly the VENDORED numbers, now that the mirror has vouched for them.
+            p.TimeToWindowS = vTime;
+            p.InclinationDeg = vInc;
+            p.LaunchUT = now + vTime;
+            return p;
+        }
+
+        /// <summary>
+        /// S215. Keep the window solution fresh before the crew's GO, and LATCH it at the GO.
+        ///
+        /// ⭐ **Q3 — "GO ARMS THE COUNTDOWN, THEN IT WARPS", and the latch is what makes that true.**
+        /// Before the GO this re-solves every tick: the planet is turning, the target is moving, and the
+        /// crew may still change either. At the GO the answer is FROZEN, the plane is written into
+        /// MechJeb, and everything after it is execution — which is the owner's own words for what a
+        /// crew GO must mean.
+        /// ⛔ **AND THE LATCH IS NOT MERELY TIDY — RE-SOLVING PAST T-0 WOULD JUMP A WHOLE REVOLUTION.**
+        /// `TimeToPlaneS` ends in `Clamp2Pi`, so the instant the site passes the plane the answer wraps
+        /// to the NEXT crossing, hours away. A conductor that re-solved during the final seconds would
+        /// watch its own countdown leap from T-1 s to T+11 h on a single overshoot.
+        /// </summary>
+        static void UpdateLaunchWindow(Vessel v)
+        {
+            if (launchWindowUT > 0.0) return;   // committed; it is a fixed UT now. `Reset` clears it.
+
+            // ⛔ A FREE-FLYER SOLVES NO WINDOW AT ALL — not even a valid one. Inspiration4, Polaris Dawn
+            // and Fram2 carry their own apsides and chase nothing, and a target may still be selected on
+            // one for a hundred incidental reasons. Without this line such a mission would arm, commit
+            // and then WARP HOURS to a plane crossing it has no interest in — a launch delayed by a
+            // feature that was not asked for, which is worse than the feature being absent.
+            if (!WindowRequired()) return;
+
+            window = SolveWindow(v);
+
+            if (!launchLatched)
+            {
+                // Pre-GO: keep it fresh, say so ONCE if it is unflyable, and command nothing.
+                if (window.Armed) windowHoldLogged = false;
+                else if (!windowHoldLogged && WindowRequired())
+                {
+                    windowHoldLogged = true;
+                    Debug.LogWarning("[DragonScreen] conductor: NO LAUNCH WINDOW — " + window.Reason
+                                     + ". The pad holds; nothing is committed. (S215)");
+                }
+                return;
+            }
+
+            if (!window.Armed)
+            {
+                // ⛔ The GO is latched and the window is NOT flyable. HOLD. `AscentSequence` is told the
+                // window is REQUIRED and not armed, and holds at Idle without lighting anything.
+                if (!windowHoldLogged)
+                {
+                    windowHoldLogged = true;
+                    Debug.LogError("[DragonScreen] conductor: LAUNCH GO is latched but there is NO FLYABLE "
+                                   + "WINDOW — " + window.Reason + ". Holding on the pad: nothing is lit "
+                                   + "and no clamp is released. (S215)");
+                }
+                return;
+            }
+
+            // ---- THE COMMIT. One-shot, at the GO. ----
+            launchWindowUT = window.LaunchUT;
+
+            MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
+            if (a != null)
+            {
+                // ⭐ Q2: THE COMPUTED INCLINATION WINS AT LAUNCH — and by here it has already been proven
+                // to agree with the §B5 mission fact inside `LaunchWindow.Solve`, or we would not be
+                // holding an `Armed` plan. ⭐ THIS ALSO SETTLES T18's Q1 (the inclination SIGN): the sign
+                // is the northgoing/southgoing choice `MinimumTimeToPlane` just made on TIMING grounds,
+                // not a value inherited from whichever cfg happened to be loaded.
+                a.DesiredInclination.Val = window.InclinationDeg;
+
+                // ⭐ THE ONE FLAG THAT MAKES THE ASCENT REACH THE TARGET'S **PLANE** AND NOT MERELY ITS
+                // INCLINATION. `MechJebModuleAscentPSGAutopilot.SetTarget` (`:103-116`) reads it: with
+                // `LaunchingToPlane` set it passes `lanflag = true` and `Core.Target.TargetOrbit.LAN`
+                // into the glue ball, so PVG targets the RAAN as well as the inclination. Without it,
+                // `docs/MECHJEB_MASTER_MAP.md` §7.5's exact failure — "right inclination, wrong RAAN,
+                // and the rendezvous autopilot then needs an unaffordable plane change."
+                // ⛔ IT IS **NOT** `StartCountdown`, WHICH IS THE THING WE MUST NOT ARM (Q1).
+                // `LaunchingToPlane` is a TARGETING flag; `TimedLaunch` — the field that lets
+                // `MechJebModuleAscentBaseAutopilot:127` call `StageManager.ActivateNextStage()` — is set
+                // ONLY by `StartCountdown`, which nothing in this build calls. It stays false, so that
+                // whole branch is dead code for us and `IgnitionGate` keeps T-0.
+                a.LaunchingToPlane = true;
+            }
+
+            // MechJeb's own target controller only syncs inside `OnFixedUpdate`, so set it explicitly
+            // rather than race it: `SetTarget` above is about to read `Core.Target.TargetOrbit`.
+            try
+            {
+                if (core.Target != null && v.targetObject != null) core.Target.Set(v.targetObject);
+            }
+            catch (Exception e)
+            { Debug.LogWarning("[DragonScreen] conductor: could not sync MechJeb's target: " + e.Message); }
+
+            Debug.Log("[DragonScreen] conductor: LAUNCH WINDOW COMMITTED — T-0 in "
+                      + window.TimeToWindowS.ToString("F1") + " s, plane "
+                      + window.InclinationDeg.ToString("F4") + "° (LAN-targeted: LaunchingToPlane ON). "
+                      + "Warping to T-" + WarpLeadSeconds.ToString("F0") + " s. ⛔ MechJeb's own countdown "
+                      + "is NOT armed — IgnitionGate keeps T-0 (§B8/§B12.7). (S215)");
+        }
+
+        /// <summary>
+        /// ⭐ S215 — **THE COUNTDOWN, ON THE GLASS.** Null except while a launch window is committed and
+        /// T-0 has not arrived; the screens prefer it over the mission plan's step label
+        /// (`src/VesselData.cs`, `state.AutoPhase`).
+        ///
+        /// ⛔ IT EXISTS BECAUSE THE ALTERNATIVE IS A LIE OF EXACTLY THE KIND W10 REMOVED. Once G7
+        /// clears, the plan is standing on its Ascent step, so `CrewProcedureOps.PhaseName` says
+        /// "Ascent to orbit" — over a vehicle still bolted to the pad, possibly for hours of warp.
+        /// W10's own change (3) rejected precisely that sentence ("'AUTO  Ascent to orbit' on the pad
+        /// is the same lie"), and the owner's report on the S213 flight — *"You can hear something
+        /// activate but we sit on the pad doing nothing"* — is what an unexplained pad hold reads like
+        /// from the seat. A counting clock is the difference between waiting and being stuck.
+        /// </summary>
+        public static string CountdownNote
+        {
+            get
+            {
+                if (launchWindowUT <= 0.0) return null;
+                double t = SecondsToWindow();
+                if (t <= 0.0) return null;                    // T-0 has passed; the ascent speaks for itself
+                int total = (int)(t + 0.5);
+                int hh = total / 3600, mm = (total / 60) % 60, ss = total % 60;
+                string clock = (hh > 0 ? hh.ToString() + ":" : "")
+                             + (hh > 0 ? mm.ToString("00") : mm.ToString()) + ":" + ss.ToString("00");
+                return "T-" + clock + " to launch window";
+            }
+        }
+
+        /// <summary>Does this mission have a plane to launch into at all? A free-flyer does not (Q4).</summary>
+        static bool WindowRequired() { return CrewProcedureOps.Profile.HasRendezvous; }
+
+        /// <summary>Seconds to the committed T-0. Meaningless unless <see cref="launchWindowUT"/> is set.</summary>
+        static double SecondsToWindow() { return launchWindowUT - Now(); }
+
+        /// <summary>
+        /// S215. Warp to the committed window, and stop warping in time to fly it.
+        ///
+        /// ⛔ **`WarpToUT` IS ISSUED ONCE, NOT EVERY TICK.** `MechJebModuleWarpController.OnFixedUpdate`
+        /// re-issues its own `warpToUT` each frame and clears it once the UT passes
+        /// (`MechJebModuleWarpController.cs:76-78, 122-127`), so the module sustains and ends the warp
+        /// itself. Commanding it again every tick would fight that.
+        /// ⚠ `activateSASOnWarp` is turned OFF first. Left on, `SetTimeWarpRate` calls
+        /// `Part.vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, true)` on the way into warp — an
+        /// ACTION GROUP on our vehicle, which §B12.7 rules out, and SAS fighting the attitude controller
+        /// besides. It is a settings FIELD, not vendored logic: writing it is allowed exactly as writing
+        /// `Autostage` is; patching the module would not be (§B12.1).
+        /// </summary>
+        static void TickLaunchWarp()
+        {
+            if (launchWindowUT <= 0.0 || warpArmed) return;
+            double toGo = SecondsToWindow();
+            if (toGo <= WarpLeadSeconds) { warpArmed = true; return; }   // already too close to warp
+
+            try
+            {
+                MuMech.MechJebModuleWarpController w = core.Warp;
+                if (w == null) { warpArmed = true; return; }
+                w.activateSASOnWarp = false;
+                w.WarpToUT(launchWindowUT - WarpLeadSeconds);
+                warpArmed = true;
+                Debug.Log("[DragonScreen] conductor: AUTO-WARP armed to T-" + WarpLeadSeconds.ToString("F0")
+                          + " s (" + (toGo / 60.0).ToString("F1") + " min of warp). The warp controller "
+                          + "sustains and ends it itself. (S215)");
+            }
+            catch (Exception e)
+            {
+                warpArmed = true;
+                Debug.LogWarning("[DragonScreen] conductor: auto-warp to the launch window failed: "
+                                 + e.Message + " — the countdown still runs, at 1x.");
+            }
+        }
+
+        /// <summary>
+        /// ⛔ S215. If the crew deselect the target after the plane was committed, CLEAR
+        /// `LaunchingToPlane` — because `MechJebModuleAscentPSGAutopilot.SetTarget:104-105` dereferences
+        /// `Core.Target.TargetOrbit.LAN` unconditionally when that flag is set, and a null there is a
+        /// `NullReferenceException` inside `Drive`, on every frame of the ascent. The already-written
+        /// `DesiredInclination` is KEPT: it is the plane we committed to and it is still the best answer
+        /// available; only the live LAN lookup goes away.
+        /// </summary>
+        static void HoldPlaneTargetOrClear()
+        {
+            try
+            {
+                MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
+                if (a == null || !a.LaunchingToPlane) return;
+                if (core.Target != null && core.Target.NormalTargetExists
+                    && core.Target.TargetOrbit != null) return;
+
+                a.LaunchingToPlane = false;
+                Debug.LogWarning("[DragonScreen] conductor: the target was LOST after the plane was "
+                                 + "committed — LaunchingToPlane cleared so PVG does not dereference a "
+                                 + "null target orbit every frame. The committed inclination "
+                                 + a.DesiredInclination.Val.ToString("F4") + "° still stands, but the "
+                                 + "RAAN is no longer being targeted. (S215)");
+            }
+            catch { }
+        }
+
         static void TickAscentSequence(Vessel v)
         {
             double now = Now();
 
+            // ⭐ S215, IN THIS ORDER AND FOR A REASON. The window is solved/committed FIRST, because the
+            // commit is what writes the plane into MechJeb and fixes T-0; the warp is armed off that
+            // commit; and the plane target is re-checked every tick because losing it would fault PVG's
+            // own `SetTarget` on the next frame.
+            UpdateLaunchWindow(v);
+            TickLaunchWarp();
+            HoldPlaneTargetOrClear();
+
             AscentInputs s = AscentInputs.Nominal();
             s.LaunchCommanded = launchLatched;
             s.SinceStepS = now - stepStartUT;
+
+            // S215: the countdown. ⛔ `WindowRequired` WITHOUT `WindowArmed` is a HOLD, not a launch —
+            // that pairing is what stops a rendezvous mission whose window failed to solve from simply
+            // lighting the stage as though no window had ever been wanted.
+            s.WindowRequired    = WindowRequired();
+            s.WindowArmed       = launchWindowUT > 0.0;
+            s.SecondsToWindowS  = s.WindowArmed ? SecondsToWindow() : 0.0;
 
             double thrust, max; int lit;
             Actuator.EngineThrust(v, EngineRole.OctawebAll, out thrust, out max, out lit);

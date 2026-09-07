@@ -25583,39 +25583,259 @@ vehicle flying**, in which case it is a real convergence defect and gets traced 
 
 ---
 
-### S215 [O] THE CONDUCTOR CONFIGURES AN ASCENT BUT NEVER TARGETS A LAUNCH WINDOW — **DOING** — [owner directive, 2026-09-07; TIER 1: a perfect ascent that still does not rendezvous]
+### S215 [O] THE CONDUCTOR CONFIGURED AN ASCENT BUT NEVER TARGETED A LAUNCH WINDOW — **NEEDS-WORK — BUILT AND MUTATION-PROVEN HEADLESS (23 of 23 mutants killed); awaiting the in-flight half behind a fresh `install` + glass gate** — [owner directive, 2026-09-07; TIER 1: a perfect ascent that still does not rendezvous]
 
 **Owner, 2026-09-07, verbatim (C1.12's evidentiary standard):**
 > *"Read the mechjeb research and ensure everything is set up correctly to launch tto rendezvous including
 > auto warp to launch window"*
 
-⛔ **THE GAP IS ABSENCE, NOT BREAKAGE.** `plugin/src/MechConductor.cs`'s `Configure()` writes exactly four
-things — `Autostage = false`, `AscentType = PSG`, `LimitQaEnabled = true`, and the apsides + inclination from
-`AscentTargets.For(...)`. **No phase angle, no LAN targeting, no countdown, no warp.**
+⛔ **THE GAP WAS ABSENCE, NOT BREAKAGE.** `Configure()` wrote exactly four things — `Autostage = false`,
+`AscentType = PSG`, `LimitQaEnabled = true`, and the apsides + inclination from `AscentTargets.For(...)`.
+**No phase angle, no LAN targeting, no countdown, no warp.** Nothing was wrong with any of it; a flawless
+ascent would simply have reached the right-SHAPED orbit in the WRONG PLANE.
+`docs/MECHJEB_MASTER_MAP.md` §7.5 names the outcome exactly: *"This is why 'set inclination by hand +
+engage' fails rendezvous: right inclination, wrong RAAN, and the rendezvous autopilot then needs an
+unaffordable plane change."* `docs/MECHJEB_MISSION_TUNING.md:216` had parked it as a forward note (*"⚠ If
+Part B ever wants a real ISS launch window it lives here"*) and `docs/REAL_CREW_DRAGON_MISSION.md` §2/§3
+listed it as MISSING outright (*"We need it back, in C#"*).
 
-⭐ **The recipe is already in our own vendored tree, headless and non-GUI** —
-`plugin/mech/MechJebKos/AscentBindingBase.cs:112-133` `LaunchIntoPlane()`, and `AscentPSGBinding.cs:130,
-148-152` for the PSG variant. **Build against it; do not re-derive the maths.**
+---
 
-#### The four decisions this line APPLIES (settled before it started)
+## ⭐ WHAT WAS BUILT
 
-- **Q1 (overseer, C1.14) — DO NOT USE `StartCountdown`.** Compute the launch UT from
-  `Astro.MinimumTimeToPlane` (read-only maths), warp with `Core.Warp.WarpToUT`, and let `IgnitionGate` own
-  T-0. `MechJebModuleAscentBaseAutopilot:127` calls `StageManager.ActivateNextStage()` at T-0 gated only on
-  `Enabled && ThrustAvailable < 10E-4` — **not** on `AscentSettings.Autostage` — which §B8/§B12.7 forbid.
-- **Q2 (overseer) — THE COMPUTED INCLINATION WINS AT LAUNCH; A MATERIAL DISAGREEMENT IS AN ERROR.** Use
-  `MinimumTimeToPlane`'s inclination; if it differs from the §B5 mission fact beyond a stated tolerance,
-  SURFACE IT AND HOLD. Settles [[T18]]-Q1 (the inclination sign) for free.
-- **Q3 (OWNER, option selected 2026-09-07) — GO ARMS THE COUNTDOWN, THEN IT WARPS.** Crew gate polled
-  FIRST; a GO commits the launch; the autopilot then warps to the window and counts down.
-- **Q4 (overseer) — G7 IS `NO-GO` WITHOUT A TARGET IN THE SAME SoI.** `LaunchIntoPlane` requires a target.
+**One new pure file, one new suite, and five surgical edits.** No file was deleted; nothing under `docs/`
+was touched; `plugin/mech/` is byte-for-byte unchanged.
 
-#### DONE when
+| File | What |
+|---|---|
+| **`pure/LaunchWindow.cs`** *(new)* | The plane-crossing geometry, **MIRRORED line-for-line from `MechJebLib/Functions/Astro.cs:453-505`** (the brief: *"Build against it; do not re-derive the maths"*), plus `Solve` — Q2's inclination-agreement check and Q4's no-target refusal. |
+| **`test/LaunchWindowTest.cs`** *(new)* | 107 checks against a **known target and epoch**. |
+| `pure/AscentSequence.cs` | `Idle` gains two holds; `IgnitionLeadSeconds = 3.0`. |
+| `pure/CrewGate.cs` | `CrewGateInputs.SystemNoGo` — the one input that beats a crew GO. |
+| `src/CrewProcedureOps.cs` | `BlockReason` / `SameSoiTargetOrbit` — Q4's condition, live. |
+| `src/MechConductor.cs` | `SolveWindow` · `UpdateLaunchWindow` · `TickLaunchWarp` · `HoldPlaneTargetOrClear` · `CountdownNote`. |
+| `pure/CrewGatePage.cs` + `pure/Pages.cs` + `src/VesselData.cs` | 4.100 shows the block and the countdown. |
 
-The window maths is **mutation-proven against a known target and epoch** (`S167`: a calculation that cannot
-fail on a wrong LAN is not evidence); the computed-vs-fact inclination disagreement holds rather than flies;
-G7 reads NO-GO with no same-SoI target; `build.py test` green; `previewdiff` empty unless 4.100 changes, and
-if it changes, why. The in-flight half is the owner's, behind a fresh `install` + glass gate (C1.12).
+### ⭐ THE MIRROR IS **SELF-POLICING**, WHICH IS THE ONE THING A MIRROR NORMALLY IS NOT
 
-⛔ **BLOCKED ON [[S214]] for VERIFICATION ONLY** — nothing here is observable until the vehicle leaves the
-pad. The code half is buildable now.
+The pure layer cannot reference MechJeb (`pure/AscentSequence.cs`'s header), so a quantity that cannot be
+computed headlessly cannot be TESTED headlessly — hence a mirror, the same pattern `pure/PvgPreflight.cs`
+§4 uses for the PSG phase table. **A mirror nobody checks is a second implementation waiting to be wrong**,
+so this one is checked on every launch by the only party that can see both:
+
+- the **flown** number is the **vendored** `Astro.MinimumTimeToPlane` — one source of truth in flight;
+- the **mirror** is what the suite mutation-proves — one source of evidence on the bench;
+- `SolveWindow` computes both from the same inputs and **HOLDS THE LAUNCH if they differ by > 1 ms**,
+  printing both. A re-pin of `plugin/mech/` that changed the maths surfaces as a named hold on the pad,
+  not as a plane error discovered in orbit.
+
+---
+
+## THE FOUR DECISIONS, AS APPLIED
+
+**Q1 — `StartCountdown` IS NOT CALLED, AND `TimedLaunch` IS NEVER SET.** Confirmed against the source: the
+`StageManager.ActivateNextStage()` at `MechJebModuleAscentBaseAutopilot.cs:127` sits inside
+`if (TimedLaunch)`, and `TimedLaunch` is set **only** by `StartCountdown`. Nothing in this build calls it,
+so that whole branch is dead code for us — we never rely on winning the `ThrustAvailable < 10E-4` race the
+brief warned about. The UT is computed read-only, the warp is ours, and `IgnitionGate` keeps T-0 untouched.
+⭐ **What we DO set is `AscentSettings.LaunchingToPlane`, which is a different field doing a different
+job** — `MechJebModuleAscentPSGAutopilot.SetTarget:103-116` reads it to pass `lanflag = true` and the
+target's LAN into the glue ball. **That flag is the entire feature**; the countdown is what we had to avoid.
+
+**Q2 — THE COMPUTED INCLINATION WINS, AND A MATERIAL DISAGREEMENT HOLDS.** `LaunchWindow.Solve` refuses to
+arm when the computed plane and the §B5 mission fact differ by more than **1.0°**, and says which two
+numbers disagreed. ⭐ **The tolerance has both bounds sourced in this repo, not chosen:** its FLOOR is the
+**0.0316°** spread between the two agreed-correct ISS values the tree already carries
+(`MissionProfile.cs:64` `51.6`; the shipped cfg's `-51.6316`) — a tighter tolerance would hold a correct
+launch; its CEILING is the real error it must catch, `REAL_CREW_DRAGON_MISSION.md` §3's station at
+**0.133°** against a mission fact of 51.6°. ⚠ Stated in code as a MARGIN, not physics, un-converged — the
+same class as `WarpPlan`'s four `[Tunable]`s and flagged the same way.
+⭐ **THIS SETTLES [[T18]]-Q1 (the inclination SIGN) FOR FREE, and settles it by REMOVAL.** The sign is no
+longer inherited from whichever cfg happened to load: `MinimumTimeToPlane` returns the northgoing or
+southgoing solution on **timing** grounds, and that sign is written to `DesiredInclination`. The old
+"keep the magnitude from the mission, the sign from whatever is loaded" resolver still exists for the
+free-flyer path, where there is no plane and therefore no such choice to make.
+
+**Q3 — GO ARMS THE COUNTDOWN, THEN IT WARPS.** The crew gate is polled first (the plan reaches `Fly(Ascent)`
+only after G7 clears — structural, not a new check); the GO **latches** the window; the warp follows.
+⭐ **THE LATCH IS LOAD-BEARING, NOT TIDINESS.** `TimeToPlaneS` ends in `Clamp2Pi`, so the instant the site
+passes the plane the answer wraps to the NEXT crossing hours away — a conductor that kept re-solving would
+watch its own countdown leap from T-1 s to T+11 h on a single overshoot.
+⭐ **AND THE ORDERING IS THE REAL VEHICLE'S, READ OFF OUR OWN SOURCE, not adopted from the brief's
+recollection.** `docs/CREW_MISSION_TELEMETRY.md`'s countdown table has **`−0:00:45` = G7 GO/NO-GO FOR
+LAUNCH** and **`−0:00:03` = "Engine controller commands ignition sequence start"** — 42 seconds apart, GO
+first. ⚠ **A CORRECTION TO THE BRIEF, stated rather than absorbed:** the brief said the GO/NO-GO is *"~45
+min before an instantaneous window"*; our own table puts G7 at **45 SECONDS**. Real Crew Dragon polls
+both — a launch-readiness poll around T-45 min and a final GO at T-45 s — and **G7 is the second one**
+(`CrewGates.cs`'s G4 at `−0:45:00` is the earlier poll, for propellant load). The design is unaffected:
+GO first, then execution. `IgnitionLeadSeconds = 3.0` is that table's own row.
+
+**Q4 — G7 IS NO-GO WITHOUT A TARGET IN THE SAME SoI.** `CrewGateInputs.SystemNoGo`, checked **before** the
+crew-GO branch so it beats a GO on a fully-ticked checklist.
+⛔ **IT IS A MACHINE CHANGE, NOT A CATALOG CHANGE, AND DELIBERATELY SO.** `pure/CrewGates.cs` is §1.4
+source-of-truth material — R1 §5.1's verdict is *"do NOT edit without a real-source confirmation"* — so
+adding a G7 row reading "target selected" would have put words in the launch director's mouth. **The
+condition lives in the machine; the callouts stay as flown.**
+⚠ **SCOPED TO `HasRendezvous`, AND THAT IS A CORRECTION TO Q4 AS WRITTEN, NOT A SOFTENING.** The three
+free-flyers (Inspiration4, Polaris Dawn, Fram2) carry their own apsides and chase nothing;
+`CrewGates.Return(false)` already omits G9–G14 for them. Requiring a target there would refuse a launch
+that is entirely correct. **The rule is "do not launch blind at a plane you cannot see", not "never launch
+without a target".** The same scoping stops a free-flyer that happens to have something targeted from
+warping hours to a plane crossing it does not care about — a bug this line found in its own review and
+fixed before commit.
+
+---
+
+## ⭐ THE MUTATION RUN — 23 mutants, **23 KILLED**, none survived
+
+The brief: *"mutation-prove the window maths against a known target and epoch — a launch-time calculation
+that cannot fail on a wrong LAN is not evidence."* So it was **run, not asserted**, and every kill is
+**attributed to the suite that owns it** — S167's rule, because a harness that reads only the exit code
+cannot tell a genuine kill from a crash in an unrelated suite above it.
+
+| # | Mutation | Killed by |
+|---|---|---|
+| **M1** | `TimeToPlaneS => 0` (a constant window) | `LaunchWindowTest` |
+| **M2** | drop the SOUTHGOING quadrant fix | `LaunchWindowTest` |
+| **M3** | ⭐ **IGNORE THE LAN — the central defect the brief names** | `LaunchWindowTest` |
+| **M4** | drop the retrograde-body negation | `LaunchWindowTest` |
+| **M5** | drop the `Clamp2Pi` wrap (a NEGATIVE wait reaching `WarpToUT`) | `LaunchWindowTest` |
+| **M6** | `MinimumTimeToPlane` => always northgoing | `LaunchWindowTest` |
+| **M7** | `MinimumTimeToPlane` => always southgoing | `LaunchWindowTest` |
+| **M8** | `InclinationAgrees => true` | `LaunchWindowTest` |
+| **M9** | `InclinationAgrees => false` | `LaunchWindowTest` |
+| **M10** | `InclinationAgrees` drops the magnitude (signed compare) | `LaunchWindowTest` |
+| **M11** | Q4 removed — no-target no longer refuses | `LaunchWindowTest` |
+| **M12** | Q2 removed — a disagreeing plane is flown | `LaunchWindowTest` |
+| **M13** | the Q2 tolerance widened 1° → 180° | `LaunchWindowTest` |
+| **M14** | drop the POLE guard | `LaunchWindowTest` |
+| **M15** | drop the EQUATORIAL guard | `LaunchWindowTest` |
+| **M16** | `SafeAsin` loses its clamp (NaN below the launch latitude) | `LaunchWindowTest` |
+| **M17** | `MirrorAgrees => true` — the drift guard disabled | `LaunchWindowTest` |
+| **M18** | the COUNTDOWN HOLD removed (light the stage on the GO) | `LaunchWindowTest` |
+| **M19** | the NO-WINDOW hold removed (launch a rendezvous blind) | `LaunchWindowTest` |
+| **M20** | the ignition lead zeroed | `LaunchWindowTest` |
+| **M21** | `Nominal()` requires a window (strands every free-flyer) | `AscentSequenceTest`, `PvgPreflightTest`, `LaunchWindowTest`, `MissionWalkTest` |
+| **M22** | the SYSTEM NO-GO removed entirely | `CrewGateTest` |
+| **M23** | ⭐ **`SystemNoGo` checked AFTER the crew GO — the ORDERING** | `CrewGateTest` |
+
+⭐ **M3 IS THE ONE THAT MATTERS** and it is why the suite is shaped the way it is. A test that fed one
+plausible orbit in and asserted the answer looked right would pass against a function that ignored the LAN
+entirely — and the LAN is the ONLY input separating "the right inclination" from "the right ORBIT".
+`LanIsLoadBearing` instead walks eight LANs and asserts each 45° step moves the window by **exactly** 45° of
+body rotation, so a LAN-blind implementation collapses every case at once.
+
+---
+
+## ⚠ WHICH PROFILE THIS BUILDS AGAINST — [[S195]], ANSWERED, NOT DECIDED
+
+**Same answer T18 gave, and for the same reason: WHATEVER PROFILE THE CORE HAS LOADED.** S215 writes no
+ascent-SHAPING value at all. What it writes into MechJeb is:
+- `DesiredInclination` — already T18's, already §B5's named MISSION-FACT exception; S215 only changes
+  **where the value comes from** (computed plane, not loaded sign);
+- `LaunchingToPlane` — a runtime TARGETING flag, non-persisted, not in either profile
+  (`MECHJEB_MASTER_MAP.md` §7.5: *"a runtime action, not a saved cfg"*);
+- `WarpController.activateSASOnWarp = false` — an ACTUATION-AUTHORITY setting, the same class as
+  `Autostage = false`, and set for the same §B12.7 reason: left on, `SetTimeWarpRate` calls
+  `Part.vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, true)` on the way into warp, which is an action
+  group on our vehicle.
+Pitch rate, pitch-start velocity, `LimitQa`, `MaxAoA` and the attitude PID are untouched. **S195 stands
+exactly where it stood; nothing here moves flight 1 toward either profile.**
+
+---
+
+## ⛔ WHAT THIS LINE DID **NOT** DO
+
+- **Did not weaken `IgnitionGate`.** `pure/IgnitionGate.cs` is byte-for-byte unchanged. The countdown
+  decides when its 2 s clock may START — the same shape as S214's guidance hold, one line above it — and
+  the two holds COMPOSE: at T-0 with no guidance solution, S214's hold still refuses the light (asserted).
+- **Did not arm MechJeb's countdown.** `TimedLaunch` stays false; `StageManager.ActivateNextStage()` is
+  unreachable for us (Q1).
+- **Did not patch the vendored tree.** `plugin/mech/` untouched (§B12.1). Everything written is a settings
+  FIELD or a public method MechJeb's own GUI calls.
+- **Did not edit `pure/CrewGates.cs`** — the transcribed callouts (§1.4 / R1 §5.1).
+- **Did not touch `docs/BUILD_PLAN.md`** (guarded, G10) **or `docs/QC_FINDINGS.md`**.
+- **Did not install, did not fly, did not open a gate** (C1.12).
+- **Did not `git push`.**
+
+**Verification:** `build.py test` green (all suites; `LaunchWindowTest` 107 checks, 0 failures).
+**`previewdiff` EMPTY — 130 pages compared, 130 unchanged, 0 changed.** ⚠ **And 4.100 DID change, so that
+deserves saying rather than passing over:** `CrewGatePage.cs` is a render input and the diff still shows
+nothing, because both additions are **conditional on state the preview fixture does not create** — the
+`HOLD - <reason>` footer only draws when `GateBlockReason` is non-null, and the countdown only reaches the
+page through `AutoPhase`. Unblocked, the page is pixel-identical, which is the correct result. The blocked
+path is covered by `CrewGatePageTest.SystemBlockIsVisible` instead, including the case that must NOT change
+(a CREW no-go still offers the GO that resumes it).
+
+---
+
+#### What 4.100 shows now (Q3: *"This changes what 4.100 shows; say what"*)
+
+1. **The countdown, where it used to claim a phase.** Once G7 clears, the plan stands on its Ascent step,
+   so `CrewProcedureOps.PhaseName` says *"Ascent to orbit"* — over a vehicle still bolted to the pad,
+   possibly for hours of warp. That is the sentence **W10's own change (3) already rejected once**
+   (*"'AUTO Ascent to orbit' on the pad is the same lie"*), and the owner's S213 flight report —
+   *"You can hear something activate but we sit on the pad doing nothing"* — is what an unexplained pad
+   hold reads like from the seat. `MechConductor.CountdownNote` now supplies **`T-4:32:10 to launch
+   window`** instead, and is null at every other instant, so the rest of the mission reads unchanged.
+2. **A system block names its own cause.** 4.100 paints GO live off the CHECKLIST, and a Q4 block holds a
+   gate whose checklist is FULLY TICKED — so without this the crew would get a green GO, press it, and
+   watch nothing happen. The footer now reads **`HOLD - NO TARGET — select the station before launch (the
+   window is a plane solve)`** and GO paints inert. ⚠ Keyed off the BLOCK, never off `GateStage == NoGo`:
+   a CREW no-go is lifted by the crew's own next GO, so deadening GO there would remove the one control
+   that gets them out of their own hold.
+3. **`pure/GateCard.cs` needed no change** — it already paints GO live off `phase == GoReady`, so a system
+   NO-GO deadens it and the status line reads `NO-GO - HOLDING`. It does not name the cause; 4.100 does.
+
+---
+
+## 🟠 GATE REQUEST — `install` + glass, ONE flight (C1.13, paste-ready for the overseer)
+
+⛔ **A BUILD CHAT DOES NOT OPEN THIS GATE AND HAS NOT (C1.12).**
+
+**The situation.** The conductor now solves a launch window, refuses G7 without a target, commits the
+plane at the crew's GO, warps to T-32 s, and lights the octaweb at the documented T-3 s. Everything
+decidable without the game is closed: `test` green, `previewdiff` empty, **23 of 23 mutants killed**.
+⛔ **Nothing here is observable until the vehicle leaves the pad — which is [[S214]]'s criterion.** The two
+lines want the same flight.
+
+**The decision needed:** open `install` + glass for **one flight covering S214 and S215 together**.
+
+**The numbered in-flight checklist** (the brief's own order):
+
+| # | Watch for | Pass | Fail means |
+|---|---|---|---|
+| **1** | **GO polled first.** Work G1–G6, then G7 **with no target selected**. | G7 shows `HOLD - NO TARGET…` and **GO does nothing**. | GO clears with no target → Q4's ordering in `CrewGate.Step`. |
+| **2** | Select the station, re-poll G7, press **GO**. | `LAUNCH GO latched (G7)`, then `LAUNCH WINDOW COMMITTED — T-0 in … s, plane …°`. | `NO LAUNCH WINDOW — <reason>`: read the reason, it names which of the four it was. |
+| **3** | **Countdown armed.** 4.100 reads `T-h:mm:ss to launch window`. | The clock counts DOWN. | It reads "Ascent to orbit" → `CountdownNote` / `VesselData`. |
+| **4** | **Warp.** `AUTO-WARP armed to T-32 s (… min of warp)`. | Time warp runs and **stops on its own** near T-32 s. | Warp overshoots T-0 → the drop-out lead; warp never starts → `core.Warp` null or `WarpPaused`. |
+| **5** | **T-0.** `ASCENT Idle -> Ignition` at **T-3 s**, not before. | Ignition ~3 s before the committed UT. | Early → the countdown hold; late → PSG had not converged, raise the 20 s allowance. |
+| **6** | **Ignition.** ⭐ `thrust good — hold-downs released` — **the line that was ABSENT on 2026-09-07** (S214's pass criterion). | Present. | `PAD SAFED` **with a non-zero thrust number** is a *different* failure from last time — report the number. |
+| **7** | **Release + insertion.** The vehicle flies the S214 chain to SECO. | Insertion ~210 km. | S214's checklist items 1–3 apply unchanged. |
+| **8** | ⭐ **PLANE MATCH — the whole point.** After insertion, check the orbit against the station. | Inclination **and RAAN** both match; relative inclination ≈ 0. | Right inclination + wrong RAAN ⇒ `LaunchingToPlane` did not reach `SetTarget`. |
+
+⚠ **Also worth a glance, and cheap:** any `mirror DISAGREES with the vendored Astro` line (the mirror has
+drifted — should never appear), and any `the target was LOST after the plane was committed`.
+
+**Options:** (1) open the gate for **one flight covering S214 + S215** — *recommended*, they are the same
+flight; (2) fly S214 alone first; (3) hold.
+⛔ **All three need an owner gate-open** (C1.12). This chat proceeds past none of them.
+
+---
+
+### S218 [S] `assets/kenney_ui_scifi/` is EMPTY and `previewdiff` warns about it every run — **TODO** — [logged by [[S215]] per C1.1, 2026-09-07; TIER 3: a reference asset, not a build input]
+
+⛔ **NOT CAUSED BY S215, AND CHECKED BEFORE IT WAS LOGGED.** `python plugin/build.py previewdiff` ends with
+`!! WARNING: …\assets\kenney_ui_scifi is now EMPTY - check it against your backups`. It is:
+- **gitignored** (`.gitignore:79 assets/kenney_ui_scifi/`) and has **never been tracked**
+  (`git ls-files` returns nothing), so nothing was lost from the repo;
+- **mtime 2026-09-06 12:49** — it was already empty when this session started;
+- **reference only, and already demoted** — `assets/ASSET_PROVENANCE.md` §2 calls it *"CC0 fallback.
+  DOWNGRADED: the visual language is WRONG for this"*, and C7.1 puts all of `assets/` in the look-don't-ship
+  class. It is CC0, re-downloadable from kenney.nl, and **no shipped art depends on it**
+  (`plugin/GameData/DragonScreen/art/` is the only shippable source).
+
+**DONE when:** either the pack is restored from the owner's backups, or the provenance doc and the
+previewdiff mirror list record that it is deliberately gone so the warning stops crying wolf on every run.
+⚠ The second is likely the right answer given §2's own verdict, **but it is not a build chat's call** —
+`assets/` is the owner's material and C1.1 says log it, do not do it.

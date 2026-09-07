@@ -369,7 +369,12 @@ namespace DragonScreen
             state.BackupPyrosArmed = FlightCommands.BackupPyros;
 
             state.AutoEngaged = CrewProcedureOps.Engaged;
-            state.AutoPhase = CrewProcedureOps.Engaged ? CrewProcedureOps.PhaseName : null;
+            // S215: while the conductor is counting down to a launch window, the COUNTDOWN is what the
+            // vehicle is actually doing — the plan's "Ascent to orbit" label is true of the phase and
+            // false of the moment. `CountdownNote` is null at every other instant, so this reads exactly
+            // as it did before S215 for the whole rest of the mission.
+            state.AutoPhase = CrewProcedureOps.Engaged
+                            ? (MechConductor.CountdownNote ?? CrewProcedureOps.PhaseName) : null;
 
             // ⛔ C6 (automation must be visible): the crew-facing control authority, straight from the single
             // AuthorityManager (Phase 2) — AUTO while the autopilot flies, MANUAL/ABORT/RECOVERY/IDLE otherwise.
@@ -407,6 +412,7 @@ namespace DragonScreen
                 ProcState pr = CrewProcedureOps.Proc;
                 state.GateTitle = g.Title;
                 state.GateStage = pr.Phase;
+                state.GateBlockReason = CrewProcedureOps.GateBlockReason;   // S215 — null unless blocked
                 int n = (g.Items == null) ? 0 : g.Items.Length;
                 GateItemView[] views = new GateItemView[n];
                 for (int i = 0; i < n; i++)

@@ -15,10 +15,13 @@ public static class CrewGateTest
         g.Items = new[] { ChecklistItem.Crew("a"), ChecklistItem.Sys("b") };
         return g;
     }
-    static CrewGateInputs In(Gate g, bool[] sat, bool go = false, bool nogo = false, bool abort = false)
+    static CrewGateInputs In(Gate g, bool[] sat, bool go = false, bool nogo = false, bool abort = false,
+                            bool sysNoGo = false)
     {
         CrewGateInputs s; s.Gate = g; s.Satisfied = sat;
-        s.GoPressed = go; s.NoGoPressed = nogo; s.AbortPressed = abort; return s;
+        s.GoPressed = go; s.NoGoPressed = nogo; s.AbortPressed = abort;
+        s.SystemNoGo = sysNoGo;   // S215: defaults FALSE, so every pre-S215 case below is unchanged.
+        return s;
     }
 
     public static int Run()
@@ -38,6 +41,36 @@ public static class CrewGateTest
 
         CrewGateStep cleared = CrewGate.Step(In(g, new[] { true, true }, go: true), GatePhase.GoReady);
         Check("crew GO on a ready gate clears it", cleared.Phase == GatePhase.Go && cleared.Cleared, "");
+
+        // ============================ S215: THE SYSTEM NO-GO (Q4) ============================
+        // ⛔ THE PROPERTY THAT MATTERS IS THE **ORDERING**: a system NO-GO must beat a crew GO on a
+        // fully-satisfied checklist. Placed after the GO branch it would be unreachable on exactly the
+        // frame it exists for, and the launch would clear with no target selected — which is
+        // §14.4(a)'s "a control that silently does the wrong thing is worse than a dead one".
+        CrewGateStep blocked = CrewGate.Step(In(g, new[] { true, true }, go: true, sysNoGo: true),
+                                             GatePhase.GoReady);
+        Check("S215 a SYSTEM NO-GO beats a crew GO on a fully-satisfied checklist",
+              blocked.Phase == GatePhase.NoGo && blocked.Holding && !blocked.Cleared, "");
+        Check("S215 a system NO-GO on an INCOMPLETE checklist holds too",
+              CrewGate.Step(In(g, new[] { true, false }, sysNoGo: true), GatePhase.Holding).Phase
+                  == GatePhase.NoGo, "");
+
+        // ...and it does NOT latch by itself: clear the cause and the gate is workable again. It falls
+        // back to the ordinary crew-NO-GO latch, which a fresh GO resumes — a real hold, worked off.
+        Check("S215 clearing the cause returns the gate to GoReady (the block is a CONDITION, not a latch)",
+              CrewGate.Step(In(g, new[] { true, true }), GatePhase.GoReady).Phase == GatePhase.GoReady, "");
+        CrewGateStep resumed = CrewGate.Step(In(g, new[] { true, true }, go: true), GatePhase.NoGo);
+        Check("S215 ...and a fresh GO then clears the NO-GO the block left behind",
+              resumed.Phase == GatePhase.Go && resumed.Cleared, "");
+
+        // ⛔ ABORT STILL WINS OVER EVERYTHING, INCLUDING THIS. The absorbing state stays absorbing.
+        Check("S215 ABORT still beats a system NO-GO",
+              CrewGate.Step(In(g, new[] { true, true }, abort: true, sysNoGo: true), GatePhase.Holding)
+                  .Phase == GatePhase.Abort, "");
+        // ...and an ALREADY-CLEARED gate is not re-held: the conductor has moved on and is flying.
+        Check("S215 a gate already cleared is not dragged back by a later system NO-GO",
+              CrewGate.Step(In(g, new[] { true, true }, sysNoGo: true), GatePhase.Go).Phase
+                  == GatePhase.Go, "");
         Check("crew GO on an INCOMPLETE checklist does NOT clear",
               CrewGate.Step(In(g, new[] { true, false }, go: true), GatePhase.Holding).Phase != GatePhase.Go, "");
 

@@ -339,6 +339,12 @@ public static class TestMain
         // `pure/BarEvent.cs`'s standing rule and is pinned by a 100000-second check in the suite.
         bad += Suite(AscentSequenceTest.Run);
         bad += Suite(PvgPreflightTest.Run);
+        // S215: the LAUNCH WINDOW. The plane-crossing geometry mirrored from the vendored `Astro`, the
+        // Q2 inclination-agreement check, the Q4 no-target refusal, and the countdown hold that keeps
+        // the octaweb dark until T-0 minus the documented 3 s lead. ⛔ Its cases are built so that a
+        // window calculation which IGNORED THE LAN — the failure that produces a perfect ascent into
+        // the wrong plane — fails them; see the suite's own header for why that shape was necessary.
+        bad += Suite(LaunchWindowTest.Run);
 
         // T18-T21: ONE MISSION, WALKED END TO END, CLOSED-LOOP. The gates advance the plan, the plan hands
         // a phase to `Conductor.Decide`, the decision hands work to that phase's sequencer, the sequencer

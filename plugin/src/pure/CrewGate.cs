@@ -63,6 +63,25 @@ namespace DragonScreen
         public bool GoPressed;
         public bool NoGoPressed;
         public bool AbortPressed;
+        /// <summary>
+        /// ⭐ S215 (2026-09-07): **A STATION IN THE POLL CALLING NO-GO — and it is not the crew.** A real
+        /// GO/NO-GO poll is not only the crew's; any station with a reason can call NO-GO, and the count
+        /// does not proceed. This is that, and it is the ONLY input that beats a crew GO.
+        ///
+        /// ⛔ WHY IT MUST BEAT ONE, rather than merely un-tick a checklist row: the gate CATALOG is
+        /// §1.4 source-of-truth material — `pure/CrewGates.cs`'s titles and items are transcribed
+        /// NASA/SpaceX callouts and R1 §5.1's verdict on that file is *"do NOT edit without a real-source
+        /// confirmation"*. Inventing a G7 row saying "target selected" would put words in the launch
+        /// director's mouth. So the CONDITION lives in the machine and the CALLOUTS stay as flown.
+        ///
+        /// S215's Q4 is its first and only user: `LaunchIntoPlane` requires a target in the same SoI,
+        /// and without one the conductor would launch into whatever plane it last held. **A control that
+        /// silently does the wrong thing is worse than a dead one** (§14.4(a)).
+        /// ⚠ It does not LATCH by itself — while it is true the gate reads NO-GO, and when it clears the
+        /// gate falls back to the ordinary crew-NO-GO latch below, which a fresh GO resumes. So fixing
+        /// the cause and re-polling is the way out, which is what a real hold is.
+        /// </summary>
+        public bool SystemNoGo;
     }
 
     public struct CrewGateStep
@@ -100,6 +119,12 @@ namespace DragonScreen
             { r.Phase = GatePhase.Go; r.Cleared = true; return r; }
 
             bool allSat = AllSatisfied(s.Gate, s.Satisfied);
+
+            // ⛔ S215: A SYSTEM NO-GO HOLDS, AND IT IS CHECKED **BEFORE** THE CREW'S GO — that ordering is
+            // the whole of it. Below the GO branch it would be unreachable on the one frame that matters,
+            // because a GO on a satisfied checklist returns first. See `CrewGateInputs.SystemNoGo`.
+            if (s.SystemNoGo)
+            { r.Phase = GatePhase.NoGo; r.Holding = true; return r; }
 
             // crew GO on a fully-satisfied checklist clears the gate (also resumes from a NO-GO hold).
             if (s.GoPressed && allSat)
