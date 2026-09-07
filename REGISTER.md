@@ -23351,7 +23351,7 @@ them.
 - **DONE when:** every vertical-centring site in `plugin/src/pure/` reads `Typography.CapCentreOfTop`, the
   render change is bounded and reported, and no second figure survives anywhere (grep-proven).
 
-### S177 [S] The page frame's white border exists only where the bottom bar draws it — **TODO** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: fidelity]
+### S177 [S] The page frame's white border exists only where the bottom bar draws it — **BLOCKED 2026-09-08 by §14.2a — the border is Frame 67's own, not page chrome, and the pages this line targets have no export that carries one** — [logged by [[S176]] per C1.1, 2026-09-06; TIER 3: fidelity]
 - **The finding.** `assets/figma/frames/Frame 67.png` draws the design frame's 2 px white border around the
   WHOLE page — up both sides, across the top, and curving into the bottom bar through the two rounded
   corners. In our build the **only** part of it that is drawn is the part `component_48` carried, i.e. the
@@ -23366,6 +23366,50 @@ them.
 - **DONE when:** the spread pages draw the design frame's border at their own edges, at the same 2 px
   through `Strokes.Px`, joining the bar's corner arcs; the letterboxed pages are untouched; and no page
   ends up with two borders.
+
+#### ⛔ BLOCKED 2026-09-08 (QC overnight loop, iteration 3) — §14.2a BARS THE DONE-WHEN AS WRITTEN
+
+**Researched, not guessed. Here is exactly what was looked at and what it showed.**
+
+| looked at | found |
+|---|---|
+| `assets/figma/frames/` | **only three frame exports exist** — `Frame 59`, `Frame 66`, `Frame 67` |
+| `Frame 67.png`, measured | 3427×2112; border **2 px, uniform on all four sides**; ⚠ **corners are SQUARE**, not rounded as this line's text says |
+| `assets/figma/dashboard_ui/` | 9 SVGs — `Frame 58/59/66/67` and the five `A-Settings-*` |
+| `A-Settings-Cabin.svg`, `A-Settings-Seat1.svg` | viewBox `0 0 3427 2112`; first rect is a **full-frame FILL** (`fill="#020738"`) with **no stroke**; 33 rects; **no page border** |
+| all three SVGs, for a stroked full-frame element | `A-Settings-Cabin` 2 full-frame elements, **0 stroked**; `A-Settings-Seat1` 2, **0 stroked**; ⭐ **`Frame 67.svg` itself 2, 0 stroked** |
+
+**⛔ THE FINDING THAT BLOCKS THIS LINE.** The pages this line targets are the **spread** pages — Menu, the
+settings pages, the Vehicle family, SuitCheck, VRIO. Of those, the settings pages are the **only** ones with
+an export at all, and **their export has no page border**. The rest have no export whatever.
+
+**§14.2a:** *"an element ABSENT from the export stays exactly as it is. Absence in the export bounds what
+may be ADDED. It says nothing whatever about what must be REMOVED."* Adding a border to a page whose export
+does not have one — or which has no export — is precisely what that bounds. ⭐ **And the border is not
+shared page chrome that could be argued across:** even `Frame 67.svg` carries no stroked full-frame element,
+so the 2 px border measured in `Frame 67.png` belongs to that raster, not to the design's page construction.
+
+⚠ **The premise in the finding above is half right and is left standing (C1.16 / G12).** *"`Frame 67.png`
+draws the design frame's 2 px white border around the WHOLE page"* — **true, measured.** *"…and curving into
+the bottom bar through the two rounded corners"* — **not true of the export**: Frame 67's own corners are
+square. The rounded corners on the glass come from `bar_cap_left`/`bar_cap_right`, which are the bar's, not
+the frame's.
+
+**Confirmed on the glass first, so this is not a theoretical block:** the spread pages genuinely have no
+border — `ui_menu`, `ui_vehicle`, `ui_suitcheck`, `ui_vriotest`, `ui_audiovideo` all measure **0 ink on the
+top row and 0 on both side columns** at 2560×1406. The finding is real; it is the REMEDY that §14.2a bars.
+
+**What this line could become, for the overseer to choose — no option taken here.**
+1. **Close it as not-a-defect.** It already says *"NOT A DEFECT ON THE GLASS TODAY"*, and §14.2a says the
+   absence stays. Cheapest and consistent with the rule.
+2. **Re-scope to the Cover alone**, the one page whose own export demonstrably carries the border. That is
+   inside §14.2a because the element is present in *that* page's export. ⚠ Would need checking that the
+   Cover does not already get it from somewhere.
+3. **Owner ruling that the border is page chrome** and applies everywhere — like the bottom-bar ruling of
+   2026-09-08, which outranked the export explicitly. That is his to give, not this loop's to assume.
+
+⛔ **Nothing was changed.** No page draws a new border; `git status` for this iteration is this register
+line and nothing else.
 
 ### S180 [S] `assets/figma` holds 74 files against a 340-row manifest, and `component_48_variants/` is gone — **DONE 2026-09-07 — restored in full from the seven source zips and verified 319/319 against the manifest's own hashes; and the loss was BIGGER than this line recorded** — [logged by [[S176]] edit 3 per C1.1, 2026-09-06; TIER 2: a missing build INPUT]
 - **The finding.** `docs/reference/FIGMA_ELEMENT_EXPORTS.md` is the in-repo manifest for the Figma
