@@ -27196,7 +27196,7 @@ immediately after `harnesscheck`, after 23 mutation rebuilds — reported **`53 
 77 unchanged`**. Every one of the **six** runs after it reported `0 changed`, and two deliberate
 `harnesscheck`-then-`previewdiff` attempts **failed to reproduce it**. ⛔ **I cannot explain that
 reading and I am not going to pretend the later six outvote it** — this project has been lied to by its
-own instruments three times. Logged as [[S228]]. The pixel claim above rests on six agreeing runs **and**
+own instruments three times. Logged as [[S230]] (⚠ opened as S228; renumbered when the NTSB-2026-002 brief claimed that number). The pixel claim above rests on six agreeing runs **and**
 on the fact that no render input was touched at all; it does not rest on the instrument alone.
 
 #### ⛔ WHAT CANNOT BE PROVEN HEADLESS — AND WHAT A FLIGHT HAS TO SHOW
@@ -27223,7 +27223,7 @@ vessel, and guarded. **⛔ Do not read any of that as "part-loss recording works
 
 #### ⛔ STRAYS LOGGED, NOT ACTED ON (C1.1)
 
-[[S228]] (the unreproduced `previewdiff` reading) and [[S229]] (the four `EventReport` channels not
+[[S230]] (the unreproduced `previewdiff` reading — ⚠ opened as S228, renumbered) and [[S229]] (the four `EventReport` channels not
 taken this pass) are opened below. ⚠ [[S225]] and [[S226]] were **not** folded in — the brief says so and
 C1.1 forbids it. The `kenney_ui_scifi is now EMPTY` warning is the standing [[S207]]/[[S218]] line.
 
@@ -27232,7 +27232,7 @@ from GitHub Desktop.**
 
 ---
 
-### S228 [S] `previewdiff` reported 53 changed pages once, then 0 on six consecutive re-runs, and it was never reproduced — **TODO** — [logged by [[S227]] per C1.1, 2026-09-08; TIER 1: an instrument that disagrees with itself is the one defect class this project has already been burned by three times]
+### S230 [S] `previewdiff` reported 53 changed pages once, then 0 on six consecutive re-runs, and it was never reproduced — **TODO** — [logged by [[S227]] per C1.1, 2026-09-08 **as S228**; ⚠ **RENUMBERED to S230 by [[S228]]** (NTSB-2026-002), whose task brief was issued naming S228 before this line existed — the text below is UNCHANGED and nothing was deleted (C1.16); only the number moved; TIER 1: an instrument that disagrees with itself is the one defect class this project has already been burned by three times]
 - **What was observed, exactly.** During [[S227]] — a change touching **no render input** — the FIRST
   `python plugin/build.py previewdiff` reported **`53 existing page(s) changed, 0 new, 0 removed (of 130
   compared)`**, `77 unchanged`, naming `ui_vriotest.png`, `ui_vehiclemech.png`,
@@ -27279,3 +27279,49 @@ from GitHub Desktop.**
   the [[S225]] flood defect waiting to happen. Budget it before subscribing it.
 - **DONE when:** the channels that name a part are recorded with the same payload contract as
   `part.lost`, rate-guarded, mutation-tested, and the register says which of the six were taken and why.
+
+---
+
+### S228 [O] NTSB-2026-002 — MechJeb wipes our configuration 68 ms after `Configure()` and nothing re-asserts it — **DOING** — [owner ruling 2026-09-08 (*"option 2"*); TIER 0: this killed the vehicle and the crew]
+- **Marker committed before any code (C1.1).** Tree clean at `867ea20`.
+- ⚠ **S228 was previously used by [[S227]] for a `previewdiff` anomaly.** That line is renumbered
+  **[[S230]]** in this commit — C1.16: nothing is deleted, the text is moved intact and both numbers are
+  cross-referenced. This line takes S228 because the task brief names it.
+- **Root cause, verified in the vendored source.** `MechJebCore.FixedUpdate:552-566`, on its FIRST frame
+  as master-and-focus: `if (!_wasMasterAndFocus && (… || vessel.isActiveVessel)) { ClearModulesCache();
+  OnLoad(null); _wasMasterAndFocus = true; }`. It throws away every module, rebuilds from field
+  initialisers, re-runs `ApplyRODefaults()`, then lays `mechjeb_settings_global.cfg` and
+  `mechjeb_settings_type_New Crew-2.cfg` over the top. **17 boxes reverted, including
+  `_autostage → True`** — §B8's one sanctioned deviation, whose entire purpose is to prevent what
+  followed. `MechConductor.cs:530` is `if (!configured) Configure(v);` and `:825` sets `configured =
+  true`; **nothing re-checks, so the wipe is permanent.**
+- **What it cost, from the recording:** `MET 124.08  stage.staged  from: 6 → to: 1`, mass 572,285 kg →
+  7,470 kg — **five stages in one frame** at 33.9 km and Mach 5.6 with 11,456 m/s of Δv still owed; then
+  `MET 411.50  flight.splashdown  ~134 m/s, no parachutes`. ⭐ **The ascent itself was excellent** —
+  guidance converged and held, attitude tracked to ~0.1°. Nothing about the flying failed.
+- 🟢 **OWNER, 2026-09-08: "option 2"** — do NOT quarantine `mechjeb_settings_type_New Crew-2.cfg`; fix it
+  in code so the next flight tests the real fix and not a fix plus a hand-edit. ⛔ **No file in the KSP
+  install is touched — that cfg stays live, it is the test case.**
+- **JOB 1 (R-01) — re-assert AFTER the reload.** ⚠ The NTSB/`MechConductor.cs:721` contradiction is
+  already resolved and must not be reintroduced: `_autostage` is the `[Persistent]` FIELD and `Autostage`
+  is a property whose setter has side effects on `Core.Staging.Users`; a cfg reload writes the field and
+  never invokes the property. ⛔ **Keep writing the PROPERTY** (the existing comment stands, unedited) and
+  re-invoke it after the reload. Establish the detection method; say which was taken and why the other
+  was rejected.
+- **JOB 2 (R-02) — a remaining delta SCRUBS the count.** ⛔ The conductor printed *"17 box(es)
+  CHANGED"* at the terminal count **and lit the engines 69 s later.** After Job 1 re-asserts, take the
+  read-back again; if a delta remains, nothing lights and no clamp releases. ⭐ **An instrument that
+  observes a fatal condition and proceeds is not an instrument — it is a witness.**
+- **JOB 3 (R-03) — floor the staging, independent of `Autostage`.** F-102: `LastStage` reset 0 → −1 and
+  `AutostageLimit` at its default 0, so nothing bounded the cascade. Defence in depth: Jobs 1 and 2 must
+  not be trusted to be correct.
+- **DONE when:** `test` green · `harnesscheck` green · `previewdiff` every page unchanged and the
+  register says so plainly · **three headless proofs, each able to FAIL** (J1 empty delta after a forced
+  `OnLoad(null)`; J2 no ignition and no clamp release on an injected delta; J3 staging stops at the
+  S1/S2 boundary with `Autostage = true`) · mutation-tested · ⛔ **what is NOT proven headless stated
+  explicitly** · local commit, **no push**.
+- ⚠ **Logged, not acted on (C1.1):** [[S225]] · [[S226]] · **R-05** (the S223 manifest block is fitted
+  but empty — all 77 entries read `MechJeb.<name> = ?`) · **R-07** (recorder artefacts: `launch_ut`
+  20,093 s wrong; 527 `rec.warp_change` carrying fractional non-warp values; a pre-liftoff mass sample of
+  1,572,717 kg) · **the thermal channel carries no part identity** (`BlackBoxSchema.cs:546`), which is
+  why NTSB could not name the part at `skin_temp_frac = 0.996`.
