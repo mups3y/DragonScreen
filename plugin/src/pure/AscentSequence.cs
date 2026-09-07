@@ -122,7 +122,19 @@ namespace DragonScreen
         /// <summary>Ascent done — the conductor may advance the mission plan.</summary>
         Complete,
         /// <summary>⛔ The pad ignition did not make thrust. Engines safed, clamps NEVER released.</summary>
-        Safed
+        Safed,
+        /// <summary>
+        /// ⛔⛔ S228 (NTSB-2026-002 R-02). **THE COUNT SCRUBBED — the configuration MechJeb holds is not
+        /// the one the conductor wrote, and nothing has been lit.** Terminal: no act is ever emitted
+        /// from here, so the octaweb is never commanded and the hold-downs never release.
+        ///
+        /// ⚠ **A DIFFERENT FACT FROM `Safed`, AND THEY ARE NOT MERGED.** `Safed` means the stage WAS lit
+        /// and failed to make thrust — a pad abort with engines to shut down. `Scrubbed` means nothing
+        /// was ever commanded, because the vehicle was found misconfigured BEFORE ignition. Folding the
+        /// two into one step would put a fired-and-failed pad and a never-started count in the same
+        /// bucket, and the recording would no longer say which happened.
+        /// </summary>
+        Scrubbed
     }
 
     /// <summary>What the glue must actuate this tick. One per tick; `None` most ticks.</summary>
@@ -153,6 +165,26 @@ namespace DragonScreen
         // ── intent ──────────────────────────────────────────────────────────────────────
         /// <summary>The crew's LAUNCH GO (gate G7) has been given. Latched by the caller.</summary>
         public bool LaunchCommanded;
+
+        /// <summary>
+        /// ⛔⛔ S228 (NTSB-2026-002 R-02). **THE ASCENT READ-BACK STILL DISAGREES AFTER THE CONDUCTOR
+        /// RE-ASSERTED ITS CONFIGURATION.** Set by the caller from
+        /// `AscentReadback.CountMoved(...) &gt; 0` at the terminal count, AFTER Job 1's re-assert has had
+        /// its chance. True means: MechJeb is holding boxes we did not write, we tried to put them back,
+        /// and they did not stay.
+        ///
+        /// ⛔ **THIS IS THE INPUT THAT WAS MISSING ON 2026-09-08.** The conductor logged *"17 box(es)
+        /// CHANGED"* at the terminal count and lit the engines 69 seconds later, because knowing was not
+        /// wired to anything that could refuse. ⭐ An instrument that observes a fatal condition and
+        /// proceeds is not an instrument — it is a witness.
+        ///
+        /// ⚠ **IT ONLY BITES BEFORE IGNITION, AND THAT IS DELIBERATE.** `Step` consults it from `Idle`
+        /// alone. Once the octaweb is lit and the clamps are gone there is no scrub to perform — a
+        /// flying vehicle is flown, not scrubbed — and a late-arriving delta must not throw the state
+        /// machine out of a live ascent. After liftoff the delta is still LOGGED; it just no longer has
+        /// a decision to make.
+        /// </summary>
+        public bool ConfigScrub;
 
         // ── stage one, measured ─────────────────────────────────────────────────────────
         public double S1ThrustN;      // summed live thrust of the octaweb
@@ -446,6 +478,18 @@ namespace DragonScreen
             {
                 // ── the pad ────────────────────────────────────────────────────────────
                 case AscentStep.Idle:
+                    // ⛔⛔ S228 (NTSB-2026-002 R-02) — **THE SCRUB IS CHECKED FIRST, AHEAD OF THE CREW'S
+                    // GO, AND THE ORDER IS THE POINT.** A vehicle whose guidance module is holding boxes
+                    // the conductor did not write is not a vehicle a GO can make safe, so the GO must
+                    // not even be reached. On 2026-09-08 this check did not exist: the conductor had the
+                    // measurement, printed it, and lit the engines 69 s later. The launch vehicle was
+                    // discarded at 33.9 km and the drogues (istg 2) went with it.
+                    // ⚠ Ahead of the S214 guidance hold and the S215 window hold too — all three refuse
+                    // to light the stage, and this one refuses for the reason that cannot be waited out.
+                    if (s.ConfigScrub)
+                        return AscentDecision.Of(AscentStep.Scrubbed, AscentAct.None,
+                            "⛔ SCRUB — the ascent read-back still disagrees after the conductor "
+                            + "re-asserted its configuration; nothing is lit and no clamp is released");
                     if (!s.LaunchCommanded)
                         return AscentDecision.Stay(AscentStep.Idle, "no launch GO — the pad is quiet");
                     // ⛔⛔ S214 (2026-09-07): **DO NOT LIGHT AN OCTAWEB NOBODY WILL THROTTLE.** This is
@@ -598,6 +642,16 @@ namespace DragonScreen
                 case AscentStep.Safed:
                     return AscentDecision.Stay(AscentStep.Safed, "SAFED on the pad — crew action required");
 
+                // ⛔⛔ S228 — ABSORBING, AND IT DOES NOT CLEAR ITSELF EVEN IF THE DELTA GOES AWAY.
+                // A count that scrubbed stays scrubbed until a human re-engages, for the same reason
+                // `Safed` does: the vehicle was found in a state nobody intended, and a configuration
+                // that silently repaired itself is not evidence that it is now trustworthy — it is
+                // evidence that something is still writing to it. ⛔ No act is ever emitted from here.
+                case AscentStep.Scrubbed:
+                    return AscentDecision.Stay(AscentStep.Scrubbed,
+                        "⛔ SCRUBBED — MechJeb's ascent configuration is not the one the conductor "
+                        + "wrote and would not stay re-asserted; crew action required");
+
                 default:
                     return AscentDecision.Stay(AscentStep.Idle, "unknown ascent step");
             }
@@ -606,6 +660,9 @@ namespace DragonScreen
         /// <summary>
         /// Has the ascent reached a step from which the mission plan may advance? Only `Complete`.
         /// ⛔ `Safed` is NOT complete — the plan must not walk past a pad that failed to light.
+        /// ⛔ S228: neither is `Scrubbed`. Both are terminal-but-not-successful, and the comparison is
+        /// written as `== Complete` rather than `!= Safed` precisely so a new terminal step is refused
+        /// by default instead of having to be remembered here.
         /// </summary>
         public static bool CanAdvancePlan(AscentStep step) { return step == AscentStep.Complete; }
 

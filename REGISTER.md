@@ -27282,7 +27282,7 @@ from GitHub Desktop.**
 
 ---
 
-### S228 [O] NTSB-2026-002 — MechJeb wipes our configuration 68 ms after `Configure()` and nothing re-asserts it — **DOING** — [owner ruling 2026-09-08 (*"option 2"*); TIER 0: this killed the vehicle and the crew]
+### S228 [O] NTSB-2026-002 — MechJeb wipes our configuration 68 ms after `Configure()` and nothing re-asserts it — **DONE 2026-09-08 — R-01 re-asserts from the read-back (the reflection route was weighed and REJECTED, reasons recorded); R-02 gives the delta authority to SCRUB the count before anything is lit; R-03 floors the cascade at the S1/S2 stage DERIVED from `Crew-2.craft`, blocking the drogues and mains the accident expended at 33.9 km. 54 checks, 24 of 24 mutants killed. ⛔ NO RENDERED PIXEL CHANGED. ⚠ J1's own done-criterion — force `OnLoad(null)`, watch the delta come back empty — IS A FLIGHT TEST AND WAS NOT PERFORMED** — [owner ruling 2026-09-08 (*"option 2"*); TIER 0: this killed the vehicle and the crew]
 - **Marker committed before any code (C1.1).** Tree clean at `867ea20`.
 - ⚠ **S228 was previously used by [[S227]] for a `previewdiff` anomaly.** That line is renumbered
   **[[S230]]** in this commit — C1.16: nothing is deleted, the text is moved intact and both numbers are
@@ -27325,3 +27325,192 @@ from GitHub Desktop.**
   20,093 s wrong; 527 `rec.warp_change` carrying fractional non-warp values; a pre-liftoff mass sample of
   1,572,717 kg) · **the thermal channel carries no part identity** (`BlackBoxSchema.cs:546`), which is
   why NTSB could not name the part at `skin_temp_frac = 0.996`.
+
+#### ⭐⭐ JOB 1 (R-01) — HOW THE WIPE IS DETECTED, AND WHY NOT THE OTHER WAY
+
+**TAKEN: the read-back itself.** `MechAscentReadback.Read` measures what the core actually holds;
+the new pure `AscentReadback.CountMoved` compares it against the reading taken at `Configure`. A
+non-zero count means somebody re-seeded the module, and `MechConductor.ReassertIfWiped` puts it back —
+called from the ascent tick, which is now `if (!configured) Configure(v); else ReassertIfWiped(v);`.
+
+**REJECTED: gating on `MechJebCore._wasMasterAndFocus` by reflection.** ⚠ It would have worked, the
+precedent is real (`MechHost`'s settings-dir redirect reflects over a compiled private field, which is
+not an edit and does not touch §B12.1's pinned tree), and it detects the **cause** rather than the
+symptom — genuinely the better shape. Rejected on two grounds:
+1. ⛔ **It catches exactly one cause.** `_wasMasterAndFocus` is reset whenever we stop being
+   master-or-focus (`MechJebCore.cs:540-543`), so the reload can recur — but a cfg hot-reload, another
+   mod's `OnLoad`, or any future MechJeb path that re-seeds these boxes is missed entirely. **A wiped
+   configuration is a wiped configuration whatever wiped it**, and the read-back is blind to the
+   mechanism by construction.
+2. ⛔ **A reflected private name fails SILENTLY.** Move §B12.1's pin, rename the field, and `GetField`
+   returns null, the guard stops guarding, and nothing says so — the same shape as the reasoning
+   `Typography.cs` lost at `158eb2a` (C1.16 / G12).
+⚠ The rejection is **not** "reflection is bad" — it is that here the symptom is the safer trigger.
+R-02 is the backstop for this detector being wrong, and R-03 for both being wrong.
+
+⭐ **AND IT REWRITES THROUGH `Configure`, WHICH MEANS THROUGH THE PROPERTY.** The NTSB/`:721`
+contradiction stays resolved and was **not** reintroduced: `_autostage` is the `[Persistent]` field,
+`Autostage`'s setter also adds/removes the ascent autopilot from `Core.Staging.Users`, a cfg reload
+writes the field and never invokes the property, so the two halves fall out of sync. The existing
+comment is untouched and the property is what we write. ⚠ **Recorded because it will matter later:** the
+setter is `if (!changed) return;`, so the side effects run only on a real transition. In the observed
+wipe the field returns `true` and we write `false`, so they do run — but a future re-seed that leaves
+the field already `false` while `Staging.Users` still holds the autopilot would make the property write
+a no-op. **That is precisely what R-03 is for**; it does not read `Autostage` at all.
+⚠ Bounded at `MaxReasserts = 5`: something re-seeding every frame must reach R-02, not be papered over.
+
+#### ⛔⛔ JOB 2 (R-02) — THE DELTA NOW DECIDES SOMETHING
+
+`AscentSequence` gains `AscentInputs.ConfigScrub` and a terminal `AscentStep.Scrubbed`. At the terminal
+count, after R-01 has had every ascent tick to re-assert, the delta is re-counted; a survivor sets the
+latch, and the sequence refuses to leave `Idle`. **Nothing is lit and no clamp is released.**
+
+- ⭐ **The scrub is checked FIRST in `Idle` — ahead of the crew's GO, the launch window and the S214
+  guidance hold.** A vehicle whose guidance module holds boxes the conductor did not write is not
+  something a GO can make safe, so the GO must not even be reached.
+- ⚠ **`Scrubbed` is a DIFFERENT FACT from `Safed` and they are not merged.** `Safed` = the stage was lit
+  and failed to make thrust. `Scrubbed` = nothing was ever commanded. Folding them would put a
+  fired-and-failed pad and a never-started count in one bucket.
+- ⛔ **Absorbing, and it does not clear itself if the delta goes away** — a configuration that silently
+  repaired itself is not evidence it is trustworthy, it is evidence something is still writing to it.
+- ⚠ **It only bites before ignition, deliberately.** `Step` consults it from `Idle` alone: a flying
+  vehicle is flown, not scrubbed, and a late delta must not throw the machine out of a live ascent.
+  After liftoff the delta is still logged; it no longer has a decision to make.
+
+#### ⭐ JOB 3 (R-03) — THE FLOOR, DERIVED, AND IT ASSUMES JOBS 1 AND 2 ARE WRONG
+
+New pure `plugin/src/pure/StagingFloor.cs`. `MechJebModuleStagingController.cs:284` refuses to stage
+while `currentStage <= AutostageLimit`, so the floor is set to the S1/S2 separation stage.
+
+⭐ **THE LADDER IS READ OUT OF `docs/reference/Crew-2.craft` — TIER-1, IN-REPO — NOT ASSUMED:**
+
+| istg | contents | |
+|---|---|---|
+| 8 | `TE.19.F9.S1.Engine` | octaweb ignition — **still permitted** |
+| 7 | `TE.Ghidorah.Erector` | hold-down release, liftoff — **still permitted** |
+| **6** | S1 Interstage + S1 Tank + 4 grid fins + 4 legs + 2 clamps | ⛔ **S1/S2 SEPARATION — BLOCKED** |
+| 5 | `TE.19.F9.S2.Engine` | blocked |
+| 4 | Dragon Decoupler + S2 Tank + 4 S2 RCS | blocked |
+| 3 | `TE.18.DRAGONV2.TRUNK` | blocked |
+| **2** | `TE.CD2.POD.DROGUES` | ⭐⭐ **blocked** |
+| **1** | `TE.CD2.POD.MAINS` | ⭐⭐ **blocked** |
+| 0 | NDS + heatshield + pod | blocked |
+
+⭐⭐ **AND THIS IS WHY THERE WERE NO PARACHUTES.** The cascade ran **6 → 1**, so it fired stage
+separation, the S2 engine, the S2 tank and Dragon decoupler, the trunk, **and the drogues** — at
+33.9 km. The recovery system was expended on the way up. A floor that stops the cascade at its FIRST
+step saves everything below it, which is the whole argument for R-03 existing separately from R-01/R-02.
+
+⛔ **The number is DERIVED, never typed in.** This repo holds sixteen `.craft` files; a literal `6`
+would be right for `Crew-2` and silently wrong for the next vehicle — and "silently wrong safety limit"
+is the defect class that produced this line. The interstage is located by `VehicleParts.IsInterstage`,
+the sourced predicate `pure/Actuation.cs` already routes the stage-sep decoupler by (§1.4).
+⛔ **And an underivable floor CLAMPS SHUT, it does not open:** no interstage → `ForbidAll` (99), which
+forbids autostaging outright. "I do not know which stage is safe" must never resolve to "then anything
+goes". That costs nothing as designed — §B8 sets `Autostage = false` and §B12.7 gives part control to
+`Actuator`, so MechJeb autostaging is never how this vehicle is meant to stage.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `python plugin/build.py test` | **ALL SUITES PASSED** |
+| `ConfigWipeTest` (new) | **54 checks, 0 failed** |
+| `python plugin/build.py harnesscheck` | **ok**, 172 clean report lines |
+| `python plugin/build.py previewdiff` | **130 unchanged**, 0 changed — run **twice**, both agreeing, with **3 changed render inputs** listed so the comparison really ran |
+| ⭐ **mutation test** | **24 mutants, 24 KILLED, 0 SURVIVED** — every one by **assertion**, none by compile |
+
+⛔ **DID ANY RENDERED PIXEL CHANGE? NO.** ⚠ `previewdiff` was run twice rather than once **because of
+[[S230]]** — this session's own unexplained 53-changed reading on S227. Both runs agree, and no page
+draws any file this task touched.
+
+⭐ **EACH PROOF IS PAIRED WITH A NEGATIVE CONTROL, because "it did not light" is worthless if the
+sequence was refusing for some other reason.** `ScrubRefusesTheIgnition` first asserts the SAME inputs
+with the flag clear **do** emit `IgniteStageOne`, then flips one flag. J3 asserts stages 8 and 7 remain
+permitted alongside every blocked stage, so a floor that simply forbade everything would fail.
+
+#### ⛔ WHAT IS **NOT** PROVEN HEADLESS — AND WHAT A FLIGHT MUST SHOW
+
+⛔ **No `MechJebCore` is instantiated anywhere in this suite and `OnLoad(null)` is never called.** Both
+need KSP. **J1's done-criterion as the brief words it — "force `OnLoad(null)`, assert the delta comes
+back empty" — is a FLIGHT test, and this task did not perform it.** What is proven headless is: the
+comparison that detects a wipe is correct and cannot silently return zero; the re-assert is wired into
+the ascent tick, bounded, non-fatal, and rewrites through `Configure` (hence through the property); the
+scrub latch stops the sequence before any actuation under a 32-combination sweep; and the floor derived
+from this repo's own craft file lands on stage 6 — the stage the recording says was fired.
+
+**A flight has to show, and none of it is claimed today:**
+1. ⭐ The re-assert actually fires — that `ReassertIfWiped` sees a non-zero count on the frame after
+   `MechJebCore`'s forced `OnLoad(null)`, and that the log line names ~17 boxes.
+2. That re-asserting **sticks** — the terminal-count delta comes back empty and the count does **not**
+   scrub. ⚠ **If it scrubs, the launch is stopped and that is the fix working, not failing.**
+3. `AutostageLimit` survives the reload — it is written in `Configure`, so R-01 restores it, **but
+   whether the reload reverts it has not been observed**, only inferred from the 17-box list.
+4. That the floor does not block a **wanted** stage: our own `Actuator` path stages by part module, not
+   by `StageManager`, so the floor should be invisible in a nominal ascent. ⛔ Unverified.
+5. That `Core.Staging.Users` is genuinely emptied by the property write after a reload — the
+   `if (!changed) return;` subtlety above is reasoned from source, not observed.
+6. ⛔ **That none of the three fixes introduces a new failure on a nominal flight.** This task adds a
+   per-tick read-back of 77 boxes to the ascent loop; its cost has not been measured in-game.
+
+#### ⛔ STRAYS LOGGED, NOT ACTED ON (C1.1)
+
+[[S231]] (R-05, the manifest block is fitted but empty), [[S232]] (R-07, three recorder artefacts) and
+[[S233]] (the thermal channel names no part) are opened below. ⚠ [[S225]] and [[S226]] were **not**
+folded in. ⛔ **No file in the KSP install was touched** —
+`mechjeb_settings_type_New Crew-2.cfg` stays live and is the test case, per the owner's *"option 2"*.
+
+**Commits:** `aeefc3b` (the DOING marker + the S228→S230 renumber, before any code) · this one.
+**No `git push` — the owner pushes from GitHub Desktop.**
+
+---
+
+### S231 [S] R-05 — the S223 MechJeb manifest block is FITTED BUT EMPTY: all 77 entries read `MechJeb.<name> = ?` — **TODO** — [logged by [[S228]] per C1.1, 2026-09-08; NTSB-2026-002 R-05; TIER 1: "what did we fly" is still answerable only from `KSP.log`]
+- **Provenance:** NTSB-2026-002, relayed in this task's brief. ⛔ This chat did not read the manifests —
+  they are in the KSP capture directory, which C7 makes a deploy target.
+- **The finding:** [[S223]] built `MechAscentReadback.ManifestLines` and
+  `AscentReadback.ManifestLines` so the recording would carry the live MechJeb ascent configuration.
+  In **both** manifests of the accident flight every one of the 77 entries reads `MechJeb.<name> = ?`.
+  A `?` is `AscentObserved.Rendered()`'s unread marker, so the read either did not run or ran against a
+  null core.
+- ⭐ **WHY IT IS TIER 1 AND NOT COSMETIC.** It is the exact defect S223 existed to fix, one level out:
+  the audit was made to stop "what did we fly" being answerable only from a `KSP.log` that gets
+  overwritten — and the flight that most needed it produced a manifest of question marks. The
+  configuration wipe [[S228]] fixes was reconstructed from log lines for that reason.
+- ⚠ **Read [[S228]] first:** `ReassertIfWiped` now re-takes `AtConfigure` on every re-assert, so
+  whichever reading the manifest is built from, WHEN it is taken now matters more than it did.
+- **DONE when:** a recorded flight's manifest carries real values for the fitted entries, a `?` means
+  genuinely unread, and a headless check fails if the block is emitted entirely unread.
+
+### S232 [S] R-07 — three recorder artefacts in the accident recording: a 20,093 s `launch_ut`, 527 fractional `rec.warp_change`, and a 1,572,717 kg pre-liftoff mass — **TODO** — [logged by [[S228]] per C1.1, 2026-09-08; NTSB-2026-002 R-07; TIER 2: each one misleads a reader of the one recording that mattered]
+- **Provenance:** NTSB-2026-002, relayed in this task's brief. ⛔ This chat read neither the recording
+  nor the KSP log (C7).
+- **The three, as reported:**
+  1. **`launch_ut` is wrong by 20,093 s.** Every MET derived from it is offset. ⚠ Plausibly the same
+     root as [[S222c]] (the terminal count firing ~20,000 s early) — **the two numbers are suspiciously
+     close and a chat taking either should read the other first.**
+  2. **527 `rec.warp_change` events carrying fractional, non-warp values.** Warp rates are integral;
+     a fractional "rate" means the channel is reporting something that is not a warp rate.
+  3. **A pre-liftoff mass sample of 1,572,717 kg** against a real stack of ~572,285 kg — roughly
+     1,000,000 kg too high, i.e. not a small error but a wrong quantity.
+- ⚠ **Not one of these is a flight-software defect** — they are all recorder truthfulness, which is why
+  they are filed apart from [[S228]]'s three jobs and were not folded in.
+- **DONE when:** each of the three is either reproduced and fixed, or shown to be a reader artefact and
+  documented; and whichever it is, a headless check pins it.
+
+### S233 [S] The thermal channel carries no part identity, so the hottest part cannot be named — **TODO** — [logged by [[S228]] per C1.1, 2026-09-08; NTSB-2026-002; TIER 2: NTSB could not name the part at `skin_temp_frac = 0.996`]
+- **The finding:** `plugin/src/pure/blackbox/BlackBoxSchema.cs:546-547` declares `skin_temp_frac` and
+  `hull_temp_c` as *"hottest part skinTemperature/skinMaxTemp"* and *"that part's skin temperature"* —
+  ⛔ **and nothing anywhere records WHICH PART.** In the accident recording `skin_temp_frac` reached
+  **0.996**, i.e. 99.6 % of that part's skin maximum, and the investigation could not say what was
+  nearly melting.
+- ⭐ **It is the same defect class [[S227]] just fixed one channel over**, and the two should be read
+  together: a part-aware measurement that does not name the part. `PartLossWatch`'s payload already
+  establishes the contract — `part_name`, `persistent_id`, `part_idx`, `stage`, using
+  `craftdump.csv`'s own key names — so this is a solved problem needing application, not design.
+- **Likely shape (NOT decided here):** the hottest-part search in `BlackBoxRecorder.HottestSkin`
+  already HAS the `Part` in hand when it picks the maximum; it discards the identity and keeps two
+  doubles. Appended columns (`hot_part_name` / `hot_part_id`) would cost no schema version bump.
+  ⚠ A per-row string column is a real size cost on a 19-hour recording — measure before assuming.
+- **DONE when:** a recording can name the part behind its own peak `skin_temp_frac`, declaration and
+  writer in one commit (the [[S223]]/[[S227]] trap), and the column is mutation-tested.

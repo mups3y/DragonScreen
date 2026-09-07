@@ -553,9 +553,27 @@ namespace DragonScreen
         /// something does, this names the box and both values, which is the other result. Neither is a
         /// guess, which is the whole point of taking two readings instead of one.
         /// </summary>
-        public static string Delta(AscentObserved[] before, AscentObserved[] after)
+        /// <summary>
+        /// ⭐⭐ S228 (NTSB-2026-002). **HOW MANY BOXES MOVED — the same question `Delta` asks, answered as
+        /// a NUMBER a guard can act on.**
+        ///
+        /// ⛔ THE WHOLE REASON THIS EXISTS: on 2026-09-08 the conductor printed *"⛔ 17 box(es) CHANGED …
+        /// Something re-seeded the module after the conductor configured it"* at the terminal count **and
+        /// lit the engines 69 seconds later**. It had the evidence and no authority to act on it. A
+        /// prose sentence is not something code can refuse to fly on; this is.
+        ///
+        /// ⛔ AND IT SHARES ITS COMPARISON WITH `Delta` RATHER THAN RESTATING IT — one loop, one rule. Two
+        /// copies of "did this box move" is exactly how a count and its own explanation drift apart, and
+        /// then the log says 17 while the guard says 0.
+        /// </summary>
+        public static int CountMoved(AscentObserved[] before, AscentObserved[] after)
         {
-            var sb = new System.Text.StringBuilder();
+            return Moved(before, after, null);
+        }
+
+        /// <summary>The one comparison. `sb` null = count only; non-null = also render each moved box.</summary>
+        static int Moved(AscentObserved[] before, AscentObserved[] after, System.Text.StringBuilder sb)
+        {
             int moved = 0;
             for (int i = 0; i < Expected.Length; i++)
             {
@@ -568,8 +586,16 @@ namespace DragonScreen
                             : string.Equals(sa, sbv, StringComparison.Ordinal);
                 if (same) continue;
                 moved++;
-                sb.Append("\n    ⚠ ").Append(n).Append(": ").Append(sa).Append("  ->  ").Append(sbv);
+                if (sb != null)
+                    sb.Append("\n    ⚠ ").Append(n).Append(": ").Append(sa).Append("  ->  ").Append(sbv);
             }
+            return moved;
+        }
+
+        public static string Delta(AscentObserved[] before, AscentObserved[] after)
+        {
+            var sb = new System.Text.StringBuilder();
+            int moved = Moved(before, after, sb);
             return moved == 0
                 ? "ASCENT READ-BACK DELTA — NOTHING MOVED between the two readings. Every box the "
                   + "conductor left is the box that flew: no later pass re-seeded the module."

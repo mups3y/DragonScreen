@@ -110,6 +110,23 @@ namespace DragonScreen
         /// False means the arm failed and there is no autowarp; the committed T-0 still stands.</summary>
         static bool countdownArmed;
 
+        // ---- ⛔⛔ S228 (NTSB-2026-002). THE THREE PIECES OF STATE THAT WOULD HAVE SAVED THE VEHICLE ----
+        /// <summary>
+        /// R-02's latch. Set at the terminal count when the ascent read-back STILL disagrees after
+        /// R-01's re-assert has had its chance. Feeds `AscentInputs.ConfigScrub`, which stops the
+        /// sequence in `Idle` before anything is lit. ⛔ Never cleared automatically — see
+        /// `AscentStep.Scrubbed`.
+        /// </summary>
+        static bool configScrub;
+        /// <summary>How many times R-01 has re-asserted the configuration this flight.</summary>
+        static int reassertCount;
+        /// <summary>
+        /// ⛔ The ceiling on R-01's re-asserts. If the configuration will not stay written after this
+        /// many attempts, something is re-seeding it continuously and re-writing it forever would only
+        /// hide that from the count — R-02 is what handles it from there. Deliberately small.
+        /// </summary>
+        const int MaxReasserts = 5;
+
         /// <summary>S219: `TimedLaunch` has been cleared, so MechJeb no longer has a T-0 of any kind and
         /// `StageManager.ActivateNextStage()` is unreachable. One-shot, at T-`TerminalCountS`.</summary>
         static bool terminalCountTaken;
@@ -240,6 +257,7 @@ namespace DragonScreen
             windowHoldLogged = false; warpArmed = false;
             stationTargetTried = false;
             countdownArmed = false; terminalCountTaken = false;   // S219
+            configScrub = false; reassertCount = 0;               // S228
             rendezvousEngaged = false; rendezvousMode = RendezvousDrive.Conductor;   // S219
             note = "idle";
             ResetLeg();
@@ -528,6 +546,7 @@ namespace DragonScreen
             try
             {
                 if (!configured) Configure(v);
+                else ReassertIfWiped(v);   // ⛔⛔ S228 / NTSB-2026-002 R-01
 
                 if (!ascentEngaged)
                 {
@@ -712,6 +731,145 @@ namespace DragonScreen
         //  ⚠ EVERY DROPPED WRITE WAS RO's OWN NUMBER ALREADY. Nothing here changes what the vehicle
         //  flies except the three things the owner named; what changes is whose value it is on the
         //  record, which is the entire point (T22 tunes from a flight, not from a chat's judgement).
+        /// <summary>
+        /// ⛔⛔ S228 / NTSB-2026-002 R-03 — **THE STAGING FLOOR, WHICH DOES NOT TRUST `Autostage`.**
+        ///
+        /// R-01 puts `Autostage = false` back and R-02 refuses to launch if it will not stay. ⭐ **This
+        /// assumes both of them are wrong.** §B8's deviation is ONE flag and it has now failed once;
+        /// contributing factor F-102 is that when it failed, `AutostageLimit` sat at its default **0**
+        /// and nothing bounded how far the cascade could run — 6 → 1 in a single frame, the drogues
+        /// (istg 2) expended at 33.9 km, splashdown at ~134 m/s with no parachutes.
+        ///
+        /// `MechJebModuleStagingController.cs:284` refuses to stage while
+        /// `Vessel.currentStage &lt;= AutostageLimit`. Setting the limit to the S1/S2 separation stage
+        /// leaves ignition and liftoff reachable — so a floor can never strand the vehicle on the pad —
+        /// and puts everything from stage separation downward out of MechJeb's reach.
+        ///
+        /// ⛔ The number is DERIVED from the live part list, never typed in: see
+        /// `pure/StagingFloor.cs` for why a literal would be right for `Crew-2` and silently wrong for
+        /// the next craft, and for why an underivable floor clamps shut rather than open.
+        /// ⚠ Written on every `Configure`, so R-01's re-assert restores it along with everything else —
+        /// the reload reverts `AutostageLimit` exactly as it reverts `_autostage`.
+        /// </summary>
+        static void ApplyStagingFloor(Vessel v)
+        {
+            try
+            {
+                MuMech.MechJebModuleStagingController st = core == null ? null : core.Staging;
+                if (st == null || v == null || v.parts == null) return;
+
+                var parts = new List<StagePart>(v.parts.Count);
+                for (int i = 0; i < v.parts.Count; i++)
+                {
+                    Part p = v.parts[i];
+                    if (p != null) parts.Add(StagePart.Of(p.inverseStage, PartNames.Of(p)));
+                }
+
+                int floor = StagingFloor.For(parts.ToArray());
+                st.AutostageLimit.Val = floor;
+                Debug.Log("[DragonScreen] conductor: STAGING FLOOR — AutostageLimit = " + floor
+                          + (floor == StagingFloor.ForbidAll
+                             ? " (⛔ NO INTERSTAGE FOUND, so autostaging is forbidden outright — an "
+                               + "underivable floor clamps shut, it does not open)"
+                             : " (the S1/S2 separation stage, derived from this vehicle's own parts). "
+                               + "MechJeb may still stage above it — ignition and liftoff — and cannot "
+                               + "fire it or anything below, so the second stage, the trunk and both "
+                               + "parachute stages are out of its reach.")
+                          + " ⭐ This does NOT depend on Autostage, by design: §B8's deviation is one "
+                          + "flag and it failed once already. (S228 R-03)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[DragonScreen] conductor: could not set the staging floor: "
+                                 + e.Message + " — ⛔ the cascade backstop is NOT in place. (S228)");
+            }
+        }
+
+        /// <summary>
+        /// ⛔⛔ S228 / NTSB-2026-002 R-01 — **RE-ASSERT AFTER THE RELOAD, BECAUSE `Configure` RUNS ONCE
+        /// AND THE RELOAD COMES AFTERWARDS.**
+        ///
+        /// `MechJebCore.FixedUpdate:552-566`, on its first frame as master-and-focus — 68 ms after
+        /// `Configure()` finished — runs `ClearModulesCache(); OnLoad(null);`. It throws away every
+        /// module, rebuilds from field initialisers, re-runs `ApplyRODefaults()`, then lays
+        /// `mechjeb_settings_global.cfg` and `mechjeb_settings_type_New Crew-2.cfg` over the top.
+        /// **17 boxes reverted, `_autostage` among them.** `RunAscent:530` was `if (!configured)
+        /// Configure(v);` and `:825` set `configured = true`; nothing re-checked, so the wipe stood for
+        /// the whole flight and five stages fired in one frame at 33.9 km.
+        ///
+        /// ---- ⭐⭐ HOW THE WIPE IS DETECTED, AND WHY NOT THE OTHER WAY ----
+        /// **TAKEN: the read-back itself.** `MechAscentReadback.Read` measures what the core actually
+        /// holds; `AscentReadback.CountMoved` compares it against the reading taken at `Configure`. Any
+        /// non-zero count means somebody re-seeded the module, and this puts it back.
+        ///
+        /// **REJECTED: gating on `MechJebCore._wasMasterAndFocus` by reflection.** It would have worked,
+        /// the precedent is real (`MechHost`'s settings-dir redirect reflects over a compiled private
+        /// field, which is not an edit and does not touch §B12.1's pinned tree), and it detects the
+        /// CAUSE rather than the symptom — which is genuinely the better shape. It was rejected on two
+        /// grounds:
+        ///   1. ⛔ **It catches exactly one cause.** `_wasMasterAndFocus` is reset every time we stop
+        ///      being master-or-focus (`:540-543`), so the reload can recur — but a cfg hot-reload,
+        ///      another mod's `OnLoad`, or any future MechJeb path that re-seeds these boxes would all
+        ///      be missed entirely. **A wiped configuration is a wiped configuration whatever wiped
+        ///      it**, and the read-back is blind to the mechanism by construction.
+        ///   2. ⛔ **A reflected private name fails SILENTLY.** If §B12.1's pin is ever moved and the
+        ///      field is renamed, `GetField` returns null, the guard stops guarding, and nothing says
+        ///      so — the same shape as the reasoning `Typography.cs` lost at `158eb2a` (C1.16/G12). The
+        ///      read-back has no such failure mode: it is our own code reading public API.
+        /// ⚠ The rejection is not "reflection is bad" — it is that the symptom is the safer trigger
+        /// here. R-02 is the backstop for this detector being wrong, and R-03 for both being wrong.
+        ///
+        /// ---- ⛔ AND IT REWRITES THROUGH `Configure`, WHICH MEANS THROUGH THE PROPERTY ----
+        /// The NTSB note asked for the `_autostage` FIELD; `Configure`'s own comment (:721) says the
+        /// PROPERTY. **Both are right and the property is what we use.**
+        /// `MechJebModuleAscentSettings.cs:116-131`: `_autostage` is the `[Persistent]` field, and
+        /// `Autostage`'s setter also adds/removes the ascent autopilot from `Core.Staging.Users`. A cfg
+        /// reload writes the FIELD directly and never invokes the property, so the two halves fall out
+        /// of sync — the field says autostage while `Staging.Users` still reflects whatever we last
+        /// told it, or vice versa. Re-invoking the property restores BOTH.
+        /// ⚠ Its setter is `if (!changed) return;` — the side effects run only on a real transition. In
+        /// the observed wipe the field comes back `true` and we write `false`, so they do run. ⛔ But if
+        /// a future re-seed leaves the field already `false` while `Staging.Users` still holds the
+        /// autopilot, the property write is a no-op and this fix alone would not clear it. **That is
+        /// exactly what R-03's floor is for** — it does not depend on `Autostage` at all.
+        /// </summary>
+        static void ReassertIfWiped(Vessel v)
+        {
+            if (core == null || MechAscentReadback.AtConfigure == null) return;
+            if (reassertCount >= MaxReasserts) return;
+            try
+            {
+                AscentObserved[] now = MechAscentReadback.Read(core);
+                int moved = AscentReadback.CountMoved(MechAscentReadback.AtConfigure, now);
+                if (moved == 0) return;
+
+                reassertCount++;
+                Debug.LogWarning("[DragonScreen] conductor: ⛔⛔ ASCENT CONFIGURATION WAS RE-SEEDED — "
+                                 + moved + " box(es) no longer hold what the conductor wrote. This is "
+                                 + "NTSB-2026-002's root cause (MechJebCore.FixedUpdate forces "
+                                 + "OnLoad(null) on its first frame as master-and-focus, reverting 17 "
+                                 + "boxes including _autostage). RE-ASSERTING (attempt " + reassertCount
+                                 + " of " + MaxReasserts + "). (S228 R-01)"
+                                 + AscentReadback.Delta(MechAscentReadback.AtConfigure, now));
+
+                // ⛔ Re-run the FULL configure, not a hand-picked subset. We do not know which boxes the
+                // reload touched — it rebuilds every module from its field initialisers — so writing
+                // back only the ones we happened to think of is how the next one gets missed. This also
+                // re-takes `AtConfigure`, so the terminal-count delta (R-02) then measures "did
+                // anything move AFTER the re-assert", which is the question that decides the count.
+                configured = false;
+                Configure(v);
+            }
+            catch (Exception e)
+            {
+                // ⛔ Non-fatal, and it must be: this runs every ascent tick. A throw here would take
+                // the conductor down mid-flight, which is worse than the defect it is guarding.
+                Debug.LogWarning("[DragonScreen] conductor: could not check the ascent read-back for a "
+                                 + "re-seed: " + e.Message + " — ⛔ R-02's terminal-count check still "
+                                 + "stands between this and an ignition. (S228)");
+            }
+        }
+
         // ============================================================================================
         static void Configure(Vessel v)
         {
@@ -724,6 +882,7 @@ namespace DragonScreen
             // leave the StagingController still holding a user and still able to actuate.
             a.AscentType = MuMech.AscentType.PSG;                      // the ascent-path dropdown
             a.Autostage = false;                                       // §B8 — the sanctioned deviation
+            ApplyStagingFloor(v);                                      // ⛔⛔ S228 R-03 — and if it isn't
 
             // ---- (2) WHAT MECHJEB WOULD OTHERWISE ACTUATE ON OUR VEHICLE --------------------------
             // ⛔ NOT TUNING — the second half of the same deviation. §B12.7: direct part control is
@@ -1373,6 +1532,35 @@ namespace DragonScreen
                 // `TimedLaunch` has already been cleared on the line above.
                 MechAscentReadback.TakeAtTerminalCount(core);
 
+                // ⛔⛔ S228 / NTSB-2026-002 R-02 — **THE DELTA NOW DECIDES SOMETHING.**
+                // On 2026-09-08 this exact measurement printed "⛔ 17 box(es) CHANGED … Something
+                // re-seeded the module after the conductor configured it" — and the engines lit 69
+                // seconds later, because the finding was wired to a log line and nothing else. It is
+                // now wired to the pad. ⭐ An instrument that observes a fatal condition and proceeds is
+                // not an instrument, it is a witness.
+                // ⚠ R-01 has already had its chance by now: it re-asserts on every ascent tick and
+                // re-takes `AtConfigure` when it does, so a delta SURVIVING to here means the
+                // configuration would not stay written — which is strictly worse than the original
+                // wipe and is exactly the case that must not fly.
+                if (MechAscentReadback.AtConfigure != null && MechAscentReadback.AtTerminalCount != null)
+                {
+                    int moved = AscentReadback.CountMoved(MechAscentReadback.AtConfigure,
+                                                          MechAscentReadback.AtTerminalCount);
+                    if (moved > 0)
+                    {
+                        configScrub = true;
+                        Debug.LogError("[DragonScreen] conductor: ⛔⛔ SCRUB — " + moved + " ascent box(es) "
+                                       + "STILL disagree at the terminal count after " + reassertCount
+                                       + " re-assert(s). NOTHING WILL BE LIT AND NO CLAMP WILL BE "
+                                       + "RELEASED. This is the check NTSB-2026-002 R-02 exists to add: "
+                                       + "the flight of 2026-09-08 logged this same delta and launched "
+                                       + "anyway, and the launch vehicle was discarded at 33.9 km. "
+                                       + "Crew action required. (S228 R-02)"
+                                       + AscentReadback.Delta(MechAscentReadback.AtConfigure,
+                                                              MechAscentReadback.AtTerminalCount));
+                    }
+                }
+
                 Debug.Log("[DragonScreen] conductor: TERMINAL COUNT — the conductor has T-0. MechJeb's "
                           + "TimedLaunch is CLEARED at T-" + SecondsToWindow().ToString("F1")
                           + " s, so `StageManager.ActivateNextStage()` is now unreachable and IgnitionGate "
@@ -1528,6 +1716,9 @@ namespace DragonScreen
             AscentInputs s = AscentInputs.Nominal();
             s.LaunchCommanded = launchLatched;
             s.SinceStepS = now - stepStartUT;
+            // ⛔⛔ S228 (NTSB-2026-002 R-02). The scrub latch, set at the terminal count when the
+            // read-back STILL disagrees after Job 1 re-asserted. See `TickTerminalCount`.
+            s.ConfigScrub = configScrub;
 
             // S215: the countdown. ⛔ `WindowRequired` WITHOUT `WindowArmed` is a HOLD, not a launch —
             // that pairing is what stops a rendezvous mission whose window failed to solve from simply

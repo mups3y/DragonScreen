@@ -278,6 +278,14 @@ public static class TestMain
         // ⭐⭐ And `TheScannerCanFail` proves the Add/Remove scanner rejects a leak — including one
         // whose `.Remove` is only commented out (S220's two surviving mutants).
         bad += Suite(PartLossTest.Run);         // S227: which part went, when, and whether anybody asked
+        // ⛔⛔ S228 (NTSB-2026-002). MechJebCore.FixedUpdate clears the module cache and forces
+        // OnLoad(null) on its first frame as master-and-focus, 68 ms after Configure() finished — 17
+        // boxes reverted, `_autostage` among them, and nothing re-checked. Five stages fired in one
+        // frame at 33.9 km; splashdown at ~134 m/s with no parachutes.
+        // ⭐⭐ Its load-bearing check is `ScrubRefusesTheIgnition`, and every scrub assertion is paired
+        // with a NEGATIVE CONTROL that ignites on the same inputs — the conductor already MEASURED this
+        // failure and launched anyway, so "it did not light" has to be proven, not observed.
+        bad += Suite(ConfigWipeTest.Run);       // S228: the wipe is detected, the count can scrub, the cascade is floored
 
         // ---- PART B RECOVERY, W24 (§B16) - the booster STEERING LAW -------------------------------
         // `docs/BOOSTER_STEERING_MOD_SEARCH.md` (C1.15) could neither rule TCA in nor out; the owner ruled
