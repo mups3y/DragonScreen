@@ -25842,7 +25842,7 @@ previewdiff mirror list record that it is deliberately gone so the warning stops
 
 ---
 
-### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DONE · JOB 2 TODO · JOB 3 TODO** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
+### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DONE · JOB 2 DOING · JOB 3 TODO** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
 
 ⚠ **NUMBERING.** The owner's prompt titles this **S218**. That number was already taken by the
 kenney-assets line [[S218]], logged by [[S215]] earlier the same day, so this line is **S219** and the two
