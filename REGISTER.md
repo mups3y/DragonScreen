@@ -25839,3 +25839,44 @@ flight; (2) fly S214 alone first; (3) hold.
 previewdiff mirror list record that it is deliberately gone so the warning stops crying wolf on every run.
 ⚠ The second is likely the right answer given §2's own verdict, **but it is not a build chat's call** —
 `assets/` is the owner's material and C1.1 says log it, do not do it.
+
+---
+
+### S219 [O] DRIVE MECHJEB THE WAY THE RESEARCH ALREADY DOCUMENTS — three jobs — **JOB 1 DOING** — [owner directive, 2026-09-07; TIER 1: the conductor configures modules and does not act like a user of the UI]
+
+⚠ **NUMBERING.** The owner's prompt titles this **S218**. That number was already taken by the
+kenney-assets line [[S218]], logged by [[S215]] earlier the same day, so this line is **S219** and the two
+are different work. Wherever the owner says "S218 (the MechJeb one)", he means **this** line.
+
+**Owner, 2026-09-07, in chat, verbatim (C1.12's evidentiary standard):**
+> *"this is all the research I ordered to be completed, I should not have to explain step by step how to
+> use mechjeb if the research has been done. How can the conductor act like it's a user using mechjebs UI
+> if it does not know what setting/options to set"*
+
+> *"It must also select auto warp for all modes."*
+
+> *"We should also be ticking/selecting max q throttle down etc."*
+
+> *"otherwise it will sit there ready to go but do nothing."*
+
+> *"or mechjeb will throttle up but never activate the engines."*
+
+> *"mechjeb rendezvous autopilot just for now to get things moving… Then we move to the more complicated,
+> mission accurate fidelity way"*
+
+⭐ **THE FINDING: the research is not missing — it was not read.** `docs/MECHJEB_MASTER_MAP.md` **§7.5** is
+titled *"⭐ OPERATIONAL — launch-to-plane / launch-for-rendezvous (`MechJebModuleAscentMenu.cs`)"* and
+already names the exact call sequence. [[S215]] built a parallel launch-window calculator instead. **The
+map is the specification. Follow it section by section.**
+
+#### The three jobs
+
+1. **THE OCTAWEB LIFECYCLE.** ⛔ Not a naming bug. `TE.19.F9.S1.Engine` is on the craft, exact name and
+   length. Establish WHEN and against WHICH vessel the bind runs and why its part list was incomplete.
+   ⛔ Do NOT rename or loosen `IsTundraOctaweb`.
+2. **DRIVE THE UI'S OWN SEQUENCE** (§7.5, §8, §9): set the options, then ENGAGE, for ascent, rendezvous
+   and docking; auto-warp on all three; the full ascent-settings enumeration table.
+3. **PROVE THE ENGAGE AND THE ACTIVATION** headless: a test that fails when a module is configured but
+   not engaged; the full bind → resolve → activate → thrust chain; and establish whether
+   `StageManager.ActivateNextStage()` at T-0 can hurt us.
+
