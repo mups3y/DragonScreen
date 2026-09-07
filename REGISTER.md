@@ -25267,3 +25267,60 @@ reported in one line rather than diagnosed in the seat · and which register lin
   one is a **status read** lit by the conductor, never by a button press.
 - **Did not `git push`.**
 
+
+---
+
+### S214 [O] THE PVG SOLVER THREW ON `SetTarget` AND THE VEHICLE WAS NEVER GIVEN A TRAJECTORY — **DOING** — [owner flight report + overseer-harvested `KSP.log`, 2026-09-07; TIER 1: the whole of T18 is unflyable and `KSP.log` has since been OVERWRITTEN]
+
+**Owner, 2026-09-07, in chat, verbatim (C1.12's evidentiary standard):**
+> *"Gates work, also auto sequence. You can hear something activate but we sit on the pad doing nothing."*
+
+⭐ **[[S213]] IS CONFIRMED ON THE GLASS by that first sentence** — "4.100 MISSION SEQUENCE" reaches the
+conductor, the gates work, AUTO SEQUENCE engages. This line is **only** why the vehicle did not move.
+
+#### ⛔ THE EVIDENCE — `KSP.log` HAS BEEN OVERWRITTEN; THE OVERSEER HARVESTED IT FIRST AND **THIS IS THE ONLY COPY**
+
+Recorded here verbatim, before any work, because it cannot be re-read from the install (C7 forbids it as a
+source anyway) and cannot be re-harvested at all:
+
+```
+20:32:42.533  PVG configured — autostage OFF (§B8), AscentType PSG, target 210 x 210 km @ -51.6000°
+20:32:42.545  octaweb liftoff ignition — 1 all-engines module(s) lit
+20:32:42.545  ASCENT Idle -> Ignition   [S1 0/8227 kN, 0 lit, prop 100.0%]
+20:32:42.549  [MechJeb2] Loading Mechjeb 0.0.0
+20:32:42.690  MechJeb module MechJebModuleAscentPSGAutopilot threw an exception in Drive:
+              System.ArgumentOutOfRangeException: Index was out of range... Parameter name: index
+                at MechJebLib.PSG.Ascent+AscentBuilder.Build ()
+                at MuMech.MechJebModulePSGGlueBall.SetTarget (peR, apR, attR, inclination, lan, ...)
+                at MuMech.MechJebModuleAscentPSGAutopilot.SetTarget ()
+                at MuMech.MechJebModuleAscentPSGAutopilot.Drive (FlightCtrlState s)
+20:32:42.709  Prelaunch -> Ascend
+20:32:44.703  PAD SAFED — ignition did not reach 99% thrust inside 2 s.  [S1 0/8227 kN, 1 lit, prop 100.0%]
+20:33:07.386  System.Exception: Target unreachable (bootstrapping)   (x2, also 20:33:31.844)
+                at MechJebLib.PSG.Ascent.InitialBootstrappingOptimizedWithoutQAlpha ()
+Present: LAUNCH GO latched (2) · PVG configured (2) · PVG ascent ENGAGED (2) · ASCENT Idle -> Ignition (2)
+         · octaweb liftoff ignition (2) · PAD SAFED (2) · SafeAbort (2)
+ABSENT:  "thrust good" (0) · "hold-downs released" (0)
+GetPotentialTorque exceptions: 7,547
+```
+
+#### The diagnosis handed to this line
+
+⛔ **The solver threw on `SetTarget` and never produced a guidance solution.** The vehicle was not held down
+by a throttle fight — **it was never given a trajectory to fly.** `IgnitionGate` then did its job correctly:
+no thrust in 2 s → pad safed, hold-downs held.
+⭐ **Prime suspect: the configure line writes `@ -51.6000°` — a NEGATIVE inclination.** That is **[[T18]]'s
+Q1, the inclination SIGN**, and it is not cosmetic. ⛔ **To be PROVEN from the vendored source, not assumed.**
+
+#### DONE when
+
+The inclination the conductor writes is proven in-range against the vendored solver's own contract, with a
+test that **fails on an out-of-domain value** (`S167`: a test that cannot fail is not evidence); throttle
+ownership is stated in code and here for pre-ignition / ignition / post-release / ascent; `test` green;
+`previewdiff` empty. The in-sim half — does the octaweb light and does the vehicle leave the pad — is the
+owner's, behind a fresh `install` + glass gate (C1.12; the 2026-09-07 gate was scoped to that flight).
+
+#### Bounds set by the brief
+
+⛔ **DO NOT weaken the 2 s / 99 % gate** — it fired CORRECTLY (§B12.7). ⛔ **DO NOT patch the vendored tree**
+(§B12.1 pins it; owner authority). **Fix what we WRITE into it.**
