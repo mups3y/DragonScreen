@@ -3789,9 +3789,20 @@ public static class FigmaUINavTest
 
             // UNDISTORTED: the bar's own x-scale and y-scale are the same number. This is the whole
             // finding - `bw / RefW` used to be `w / RefW` while `bh / 235` was `h / RefH`.
-            float kx = bw / RefW, ky = bh / 235f;
-            Check("bar is undistorted" + at, System.Math.Abs(kx - ky) < 1e-4f,
-                  "x-scale " + kx + " vs y-scale " + ky);
+            // *** SUPERSEDED IN PLACE 2026-09-08 (S236). The three lines above are kept verbatim
+            // (C1.16 / G12) because they name the original defect exactly. Their SUBJECT is gone: the
+            // owner ruled the bar's GROUND spans the glass on every page, so `bw` is now `w` under
+            // every fit and `bw / RefW` is a stretch ratio rather than a scale - which is what the S176
+            // note below already said about the other two fits, now true of Frame as well.
+            // ⭐ THE PROPERTY THAT ACTUALLY MATTERED SURVIVES AND IS ASSERTED INSTEAD: the bar's own
+            // HEIGHT is the uniform scale. That is the half of `kx == ky` that was ever about
+            // distortion - a stretched bar had a y-scale that disagreed with its glyphs, and this
+            // catches exactly that. The x half is now carried, properly, by EveryTileIsSquareToItsSource
+            // below, which measures the EMITTED COMMANDS per fit rather than a box ratio.
+            float ky = bh / 235f;
+            Check("the bar's height is the uniform scale" + at,
+                  System.Math.Abs(ky - BottomBar.Scale(h)) < 1e-4f,
+                  "bh/235 " + ky + " vs Scale(h) " + BottomBar.Scale(h));
 
             // ...and where the panel is at least as wide as the design aspect - which every shipped
             // screen is (1280x703 is 1.82 against the design's 1.623) - it sits inside the panel.
@@ -3973,9 +3984,18 @@ public static class FigmaUINavTest
             {
                 boxed++;
                 // The design frame's own box, where the frame ART is - H-07's fix, unchanged.
-                Check(up + ": letterboxed bar still sits in the design frame",
-                      System.Math.Abs(bx - (VW - 3427f * BottomBar.Scale(VH)) * 0.5f) < 0.01f,
-                      "x " + bx);
+                // *** SUPERSEDED IN PLACE 2026-09-08 (S236) - the assertion this replaced was
+                //     Math.Abs(bx - (VW - 3427f * BottomBar.Scale(VH)) * 0.5f) < 0.01f
+                // and it is quoted here rather than deleted (C1.16 / G12) because it is the record of
+                // the decision the owner reversed. It pinned the letterboxed bar to the design frame,
+                // which was H-07's fix and was right for as long as the bar was allowed to stop at the
+                // letterbox. ⭐ OWNER RULING 2026-09-08, verbatim: *"fix all the pages that the bottom
+                // bar has not been fixed to run from the edge to edge of the entire screen. Not just to
+                // the edge of the letterboxes."* Frame pages now reach the glass like every other page,
+                // so this suite asserts ONE rule for all three fits rather than two.
+                Check(up + ": letterboxed bar now reaches the glass too (owner, 2026-09-08)",
+                      System.Math.Abs(bx) < 0.01f && System.Math.Abs(bx + bw - VW) < 0.01f,
+                      "x " + bx + " .. " + (bx + bw) + " of " + VW);
             }
             else
             {

@@ -271,8 +271,46 @@ namespace DragonScreen
             float sc = Scale(h);
             bh = BarH * sc;
             y = BarY * sc;
-            x = MapX(0f, w, h, fit);
-            bw = MapX(RefW, w, h, fit) - x;
+            // ---- ⭐ S236 / OWNER RULING 2026-09-08 — THE GROUND IS THE PANEL, ON EVERY PAGE ----
+            // Verbatim: *"fix all the pages that the bottom bar has not been fixed to run from the edge
+            // to edge of the entire screen. Not just to the edge of the letterboxes."*
+            // ⛔ THIS OUTRANKS THE EXPORT AND IS NOT A §14.2a QUESTION. §14.2a bounds what may be ADDED
+            // where the export is silent; it does not make the export's letterbox binding on a bar the
+            // owner has ruled must reach the glass. A later chat reading §14.2a must not "correct" this
+            // back — the ruling is the authority, and it is quoted above so it can be checked.
+            //
+            // ⭐ THIS CHANGES ONE FIT ONLY, WHICH IS WHY IT IS ONE LINE. Under Stretch `MapX(0)` is
+            // already 0 and `MapX(RefW)` is already `w`; under Split `SplitReflow.X` gives the same two
+            // numbers by construction (its own test asserts both). So the 90 renders that already
+            // reached the glass are byte-identical after this, and only BarFit.Frame moves — measured
+            // before the change: 35 renders across 14 pages sat at x 140..2420 on a 2560 panel.
+            //
+            // ⛔ AND THIS IS WHY THE HIT MAP CANNOT DRIFT. `Draw` places its icons at `left + IconX[i]*k`,
+            // `Hit` tests `bx + IconX[i]*k` and `Marker` centres on `bx + (IconX[i]+IconS/2)*k` — all
+            // three read THIS rect and nothing else. Moving the ground moves the icons, their touch
+            // targets and the marker as one thing, because there is only one thing. That is the coupling
+            // this file's header demands ("changing one without the other slides every nav icon's touch
+            // target off its icon on all 35 pages, silently"), and it is honoured by not having a second
+            // number to change. `FigmaUINavTest.BarFollowsItsPage` re-proves it per page by measurement.
+            //
+            // ⚠ `MapX` IS DELIBERATELY NOT TOUCHED. The bar's two internal rules still take the page's
+            // own map, so on a letterboxed page they keep continuing that page's column divider rather
+            // than sliding out to a bar-relative position. The ground spans the glass; the rules stay
+            // with the page. Those are different questions and only the first was ruled on.
+            x = 0f;
+            bw = w;
+            // ⚠ SUPERSEDED IN PLACE 2026-09-08 (S236) — EVERYTHING BELOW DESCRIBES THE OLD `MapX`-DERIVED
+            // BOX AND IS KEPT VERBATIM (C1.16 / G12), because it is the record of a mistake that was made
+            // once and must not be made again. Its subject no longer exists: the ground is `0..w` now, so
+            // there is no letterbox to be negative and nothing left to clamp — the failure it warns about
+            // (bw shrinking while bh did not, measured 0.2918 against 0.3788 at 1000x800) is unreachable
+            // from a box that is the panel by definition. ⭐ ITS SECOND ARGUMENT STILL BINDS AND IS WHY
+            // `MapX` WAS LEFT ALONE ABOVE: "it would put the bar in a DIFFERENT frame from the page art,
+            // which is H-07 all over again." The GROUND is now deliberately in a different frame from the
+            // art on the letterboxed pages — that is what the owner ruled — and the consequence on the
+            // three pages that draw a baked full-height frame raster is measured and logged, not waved
+            // through. See this task's register line and [[S173]], which owns whether that art should
+            // letterbox at all.
             // ⛔ NOT CLAMPED TO THE PANEL, DELIBERATELY, and this was got wrong once already.
             // A panel TALLER than the design aspect (w < RefW*sc) makes `x` negative and the bar hangs
             // off both ends. Clamping it to the panel width was tried and is wrong twice over: it

@@ -27852,3 +27852,68 @@ event that would have fired at MET 139.28) are opened below.
   added to a proven frame, and [[S235]]'s emit scanner will require it to emit.
 - **DONE when:** the event is subscribed, emits both vessel identities and the parts that left, is
   mutation-tested, and the register says what it would have shown at MET 139.28.
+
+### S236 [O] JOB A — the bottom bar runs edge to edge of the whole screen, on every page — **DONE 2026-09-08** — [🟢 OWNER RULING 2026-09-08; 35 renders moved, 95 unchanged; H-10 filed for the three pages where it costs something]
+
+**🟢 OWNER RULING, 2026-09-08, verbatim (C1.12):** *"fix all the pages that the bottom bar has not been
+fixed to run from the edge to edge of the entire screen. Not just to the edge of the letterboxes."*
+⛔ **This outranks the export and is recorded as doing so in the code**, so a later chat reading §14.2a
+does not "correct" it back. §14.2a bounds what may be ADDED where the export is silent; it does not make
+the export's letterbox binding on a bar the owner has ruled must reach the glass.
+
+**THE CHANGE IS ONE LINE, AND THAT IS THE POINT.** `BottomBar.Rect` set the ground from `MapX(0)` /
+`MapX(RefW)`; it now sets `x = 0, bw = w`.
+⭐ **Under `Stretch`, `MapX(0)` is already 0 and `MapX(RefW)` is already `w`; under `Split`,
+`SplitReflow.X` gives the same two numbers by construction.** So the change is a no-op for those two fits
+and moves **`BarFit.Frame` only** — which is exactly the set the owner was pointing at. Confirmed by
+`previewdiff`, not asserted: **35 changed, 95 unchanged, 0 new, 0 removed, of 130.**
+
+**THE TRAP, AND WHY IT DID NOT FIRE.** The file's own header: *"THE HIT MAP AND THE MARKER MOVE WITH THE
+DRAW OR NOT AT ALL … Changing one without the other slides every nav icon's touch target off its icon on
+all 35 pages, silently."* ⭐ `Draw` places icons at `left + IconX[i]*k`, `Hit` tests `bx + IconX[i]*k`,
+`Marker` centres on `bx + (IconX[i]+IconS/2)*k` — **all three read this one rect and nothing else**, so
+moving the ground moved the icons, their touch targets and the marker as one thing. There was no second
+number to forget. Asserted per page by `FigmaUINavTest.BarFollowsItsPage`, which renders every page, finds
+the `bar_nav_0` tile it actually drew, and requires that tile's own centre to be a hit on icon 0.
+⛔ **Typography untouched** — `S153a-Q1` and `S147b` own those sizes. Geometry only.
+
+**MEASURED, BEFORE AND AFTER** (fresh render at HEAD both times):
+
+| | before | after |
+|---|---|---|
+| real pages with the bar short of the glass | **35 renders / 14 pages**, all at x 140..2420 | **0** |
+| real pages edge-to-edge | 90 | **124 of 124** |
+
+⚠ The five surfaces still reported "short" by the sweep — `panel_rest/armed/fired/inert_swap` (3600×540)
+and `ui_turntable_sheet` (920×1820) — **do not draw the nav bar at all**; `PanelBoardPage` has no
+`BottomBar` reference. They were false positives in the scan and are correctly unchanged. Likewise
+`ui_docking_camfeed` was a false NEGATIVE (its cam feed filled the sampled row) and did change, correctly.
+
+**TWO STALE ASSERTIONS UPDATED, BOTH SUPERSEDED IN PLACE (C1.16 / G12), NEITHER WEAKENED.**
+1. `BottomBarUndistorted`'s `bw/RefW == bh/235`. Its subject is gone — `bw` is `w` now, so that ratio is a
+   stretch ratio, not a scale, which is what S176's own note already said about the other two fits. ⭐ **The
+   half that was ever about distortion is asserted instead**: `bh/235 == Scale(h)`, the bar's height IS the
+   uniform scale. The x half is carried, better, by `EveryTileIsSquareToItsSource`, which measures the
+   **emitted commands** per fit rather than a box ratio — and that is the fence a real re-stretch trips.
+2. `BarReachesTheGlass`'s *"letterboxed bar still sits in the design frame"*. That pinned the behaviour the
+   owner reversed. It now asserts **one rule for all three fits**: the bar starts at 0 and ends at `w`.
+
+**⚠ WHAT IT COST, MEASURED AND LOGGED RATHER THAN SHIPPED QUIETLY — [[S173]] / QC `H-10`.** On **three**
+pages the ART is still a baked full-height raster drawn at `ox`, so it stops at x 141/2419 while the bar now
+runs 0/2560. That is **QC H-07's symptom restated**: two rounded corners ~140 px apart, and the raster's own
+border dropping into the bar as a vertical rule. Classified by measurement — non-background rows in the
+letterbox column above the bar, of 1114:
+
+- **1114/1114 — affected:** `ui_hud` (frame58), `ui_cabin` (frame66), `frame59`
+- **0/0 — clean:** `ui_ascent`, `ui_deorbitburnprep`, `ui_docking`, `ui_entryprocedure`, `ui_navorbitplot`,
+  `ui_phasedeport`, `ui_rendezvous`, `ui_systemspid`, `ui_systemstree`
+
+⭐ **Nine of the twelve gained the full-width bar with nothing above it to disagree with**, which is why the
+ruling was applied rather than held. **The remedy is [[S173]] clause (1), which already owns it** — S236 did
+not create that question, it made it visible instead of latent. ⛔ **The obvious fix is forbidden:**
+stretching `frame58/59/66` to the panel is QC **C-04**, they are glyph-bearing rasters.
+
+**VERIFIED.** `build.py test` **ALL SUITES PASSED**; `harnesscheck` ok (*"fault named, exit 1, all 172 clean
+report lines still present"*); `previewdiff` **35 changed / 95 unchanged / 130 compared**, and the changed
+set is exactly the letterboxed renders — cross-checked name by name against the pre-change measurement.
+Bar extent re-measured on the fresh render: **124 of 124 real pages at x 0..w**.

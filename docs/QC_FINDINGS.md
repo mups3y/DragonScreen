@@ -2630,6 +2630,58 @@ flatters us is worse than none.* **Three distinct renders**, as this finding req
 page's only live feature, which is what the finding asked for.
 ---
 
+## H-10 — The bar now reaches the glass and the frame raster does not, so H-07's doubled corner is back on the three baked-frame pages
+
+**TIER 2** · **NEW 2026-09-08 (S236)** · created by an owner ruling, not by a regression · the remedy belongs to **[[S173]]**
+
+**Evidence.** `ui_hud.png`, `ui_cabin.png`, `frame59.png` @2560×1406, HEAD after S236. Rendered fresh; the
+bottom-left corner of `ui_hud.png` at 2× shows it plainly.
+
+**What is wrong.** S236 applied the owner's ruling of 2026-09-08 — *"fix all the pages that the bottom bar
+has not been fixed to run from the edge to edge of the entire screen. Not just to the edge of the
+letterboxes."* The bar's ground is now `0..w` on every page. On **three** pages the page ART is still a
+baked full-height raster drawn fit-to-height at `ox`, so the art stops at **x 141 / 2419** while the bar
+runs to **0 / 2560**. The result is exactly QC **H-07**'s original symptom, restated:
+
+- **two rounded corners instead of one**, now **~140 px apart** (H-07 measured ~50 px at the old size):
+  the bar's own `bar_cap_left` at x 0, and the raster's own corner at x ≈ 140;
+- **a vertical white rule at x ≈ 140** — the raster's own left border — dropping out of the art and landing
+  on the bar's top edge, in the middle of the page.
+
+**Measured, and this is what bounds the finding to three pages.** Every letterboxed page was classified by
+whether anything is drawn in the letterbox column above the bar (non-background rows at x 141 / 2419, of
+1114):
+
+| page | L | R | verdict |
+|---|---|---|---|
+| `ui_hud` (frame58), `ui_cabin` (frame66), `frame59` | **1114** | **1114** | **RASTER fills the edge — affected** |
+| `ui_ascent`, `ui_deorbitburnprep`, `ui_docking`, `ui_entryprocedure`, `ui_navorbitplot`, `ui_phasedeport`, `ui_rendezvous`, `ui_systemspid`, `ui_systemstree` | 0 | 0 | bare background — **clean, no artefact** |
+
+⭐ **Nine of the twelve letterboxed pages gained the full-width bar with nothing above it to disagree with**,
+which is why the ruling was applied rather than held: the defect is confined to the three pages that still
+draw a baked frame raster.
+
+**Fix plan — and it is NOT this finding's to make.**
+- ⛔ **The remedy is [[S173]] clause (1)**, which already owns it and states it in the same terms: *"THE
+  WHOLE PAGE LETTERBOXES, NOT JUST THE BAR. Art ink runs x 8..2420 of 2560 with the rounded frame's own
+  border at 140 and 2419."* S236 did not create that question; it made it **visible on the glass instead of
+  latent**, on three pages, and moved nothing that S173 needs.
+- ⛔ **The obvious-looking fix is forbidden.** Stretching `frame58` / `frame59` / `frame66` to the panel
+  width is QC **C-04** — they are glyph-bearing rasters, and `BottomBar`'s own header records what
+  stretching one cost. The route S173 must take is the one S176 took for the bar: the frame's ground as a
+  primitive across the full width, its contents placed at a uniform scale.
+- ⚠ **What it must not break:** the nine clean pages, which need no change at all; and the bar's own
+  coupling — `Draw`, `Hit` and `Marker` all read one rect and must continue to.
+- **Verify:** on all three pages, one rounded corner per side and no vertical rule inboard of the glass
+  edge; the other nine unchanged; `previewdiff` naming exactly the pages touched.
+
+⚠ **This finding exists because the ruling and H-07 genuinely conflict on three pages, and the owner has
+not been asked which he wants there.** Queued as `Q: QC-1`. It is a **TASTE** call in the sense that both
+states are defensible — a bar that reaches the glass with a seam above it, or a bar that stops with the art
+— and he has already ruled for the first. This records the cost of that ruling so he can revisit it having
+seen it, not so it can be quietly undone.
+---
+
 ## Open questions for the owner — HUD (Q5)
 
 ### Q5 — The preview renders the Figma pages at 2560 wide; the shipped cfg says 1280. Which is authoritative? (H-01)
