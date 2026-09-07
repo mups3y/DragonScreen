@@ -338,6 +338,7 @@ public static class TestMain
         // state or by a documented interval after a measured event; ⛔ none of them reads MET, which is
         // `pure/BarEvent.cs`'s standing rule and is pinned by a 100000-second check in the suite.
         bad += Suite(AscentSequenceTest.Run);
+        bad += Suite(PvgPreflightTest.Run);
 
         // T18-T21: ONE MISSION, WALKED END TO END, CLOSED-LOOP. The gates advance the plan, the plan hands
         // a phase to `Conductor.Decide`, the decision hands work to that phase's sequencer, the sequencer

@@ -153,6 +153,15 @@ namespace DragonScreen
         public int    S2LitCount;
 
         // ── guidance / orbit, measured ──────────────────────────────────────────────────
+        /// <summary>
+        /// **MechJeb holds a guidance SOLUTION, so something will raise the throttle.** Measured by the
+        /// caller off `MechJebModuleGuidanceController.Solution != null` — which is `HandleThrottle`'s
+        /// OWN first line (`MechJebModuleGuidanceController.cs:292-296`: `if (Solution == null) return;`).
+        /// ⛔ **THIS IS NOT A CONVENIENCE FLAG — IT IS THE PRECONDITION FOR THRUST.** See S214's block in
+        /// this file's header: with no solution, nobody on either side of the seam owns the throttle,
+        /// the octaweb lights into a commanded zero, and `IgnitionGate` correctly safes the pad.
+        /// </summary>
+        public bool   GuidanceReady;
         /// <summary>PVG reports `PSGStatus.FINISHED` — the insertion is flown. THE SECO signal.</summary>
         public bool   PvgFinished;
         public bool   OrbitClosed;
@@ -199,6 +208,10 @@ namespace DragonScreen
             s.Seco1ToDragonSepS      = Seco1ToDragonSepSeconds;
             s.DragonSepToNoseS       = DragonSepToNoseSeconds;
             s.SecoBackstopPeriapsisM = SecoBackstopDisabled;
+            // ⭐ A NOMINAL flight is one where MechJeb has converged before the crew's GO. Defaulting
+            // this true keeps `Nominal()` meaning "nothing is wrong"; every S214 hold-test sets it
+            // false EXPLICITLY, so the hold can never pass by accident of the default.
+            s.GuidanceReady          = true;
             return s;
         }
 
@@ -352,6 +365,18 @@ namespace DragonScreen
                 case AscentStep.Idle:
                     if (!s.LaunchCommanded)
                         return AscentDecision.Stay(AscentStep.Idle, "no launch GO — the pad is quiet");
+                    // ⛔⛔ S214 (2026-09-07): **DO NOT LIGHT AN OCTAWEB NOBODY WILL THROTTLE.** This is
+                    // NOT a weakening of `IgnitionGate` and it does not touch its 2 s / 99 % rule — it
+                    // decides WHEN that rule's clock is allowed to start. The flight of 2026-09-07 lit
+                    // the stage at 20:32:42.545 with no guidance solution in existence; MechJeb's
+                    // `HandleThrottle` returns on its own first line while `Solution == null`, so the
+                    // commanded throttle stayed at the zero `DrivePrelaunch` had already written, the
+                    // stage made 0 of 8227 kN, and the gate safed the pad at 20:32:44.703 — correctly.
+                    // Holding here spends seconds on the pad; releasing the clamps on a stage nobody is
+                    // throttling cannot be taken back (`pure/IgnitionGate.cs`).
+                    if (!s.GuidanceReady)
+                        return AscentDecision.Stay(AscentStep.Idle,
+                            "launch GO held — no guidance solution, so nothing would raise the throttle");
                     return AscentDecision.Of(AscentStep.Ignition, AscentAct.IgniteStageOne,
                                              "launch GO — octaweb ignition (all-engines mode only)");
 

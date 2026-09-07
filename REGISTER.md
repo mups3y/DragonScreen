@@ -25270,7 +25270,7 @@ reported in one line rather than diagnosed in the seat · and which register lin
 
 ---
 
-### S214 [O] THE PVG SOLVER THREW ON `SetTarget` AND THE VEHICLE WAS NEVER GIVEN A TRAJECTORY — **DOING** — [owner flight report + overseer-harvested `KSP.log`, 2026-09-07; TIER 1: the whole of T18 is unflyable and `KSP.log` has since been OVERWRITTEN]
+### S214 [O] THE PVG SOLVER THREW ON `SetTarget` AND THE VEHICLE WAS NEVER GIVEN A TRAJECTORY — **NEEDS-WORK — DIAGNOSED FROM SOURCE, FIXED AND MUTATION-PROVEN HEADLESS; awaiting the one in-sim criterion behind a fresh `install` + glass gate. ⛔ THE PRIME SUSPECT WAS WRONG: the inclination sign is INNOCENT and is disproven three ways below** — [owner flight report + overseer-harvested `KSP.log`, 2026-09-07; TIER 1: the whole of T18 is unflyable and `KSP.log` has since been OVERWRITTEN]
 
 **Owner, 2026-09-07, in chat, verbatim (C1.12's evidentiary standard):**
 > *"Gates work, also auto sequence. You can hear something activate but we sit on the pad doing nothing."*
@@ -25324,3 +25324,259 @@ owner's, behind a fresh `install` + glass gate (C1.12; the 2026-09-07 gate was s
 
 ⛔ **DO NOT weaken the 2 s / 99 % gate** — it fired CORRECTLY (§B12.7). ⛔ **DO NOT patch the vendored tree**
 (§B12.1 pins it; owner authority). **Fix what we WRITE into it.**
+
+---
+
+## ⭐ THE ANSWER — read off the vendored source, with the line numbers to check it by
+
+### 1. ⛔ THE PRIME SUSPECT IS **WRONG**. The negative inclination is INNOCENT.
+
+The brief named `@ -51.6000°` as the prime suspect and required it be **proven, not assumed**. It is
+disproven, three independent ways, all in `plugin/mech/`:
+
+| # | The evidence | Where |
+|---|---|---|
+| **a** | **`AscentBuilder.SetTarget` performs NO validation at all.** It assigns ten fields and returns `this`. It has no branch and **cannot throw**. The logged frame is `Build()`, and `SetTarget` only appears in the trace because it is `Build()`'s caller. | `MechJebLib/PSG/AscentBuilder.cs` |
+| **b** | **ALL SEVEN terminal-constraint classes take the ABSOLUTE VALUE.** `double incT = Abs(_incT);` — the sign is stripped by the solver before it is ever used. | `Kepler3.cs:48`, `Kepler4.cs:36`, `Kepler5.cs:40-41`, `FlightPathAngle4.cs:52`, `FlightPathAngle3Energy.cs:44`, `FlightPathAngle4Energy.cs:37`, `FlightPathAngle5.cs:41` |
+| **c** | **The sign is a DELIBERATE MechJeb convention.** `inclination = Math.Sign(inclination) * Core.Target.TargetOrbit.inclination;` — MechJeb carries the sign ITSELF, to encode launch-azimuth direction. A negative inclination is *designed for*. | `MechJebModuleAscentPSGAutopilot.cs:114` |
+
+⭐ **The ONLY validation anywhere on the inclination's whole path through the PSG library is
+`Check.Finite(incT)`** (`FlightPathAngle4.cs:33`). **There is no range check to violate.**
+⇒ **[[T18]]-Q1 (the inclination SIGN) is untouched by this line.** It stays an open TASTE question, and
+it was never the cause of anything. The flown `-51.6°` is now asserted **as an in-domain value** in
+`test/PvgPreflightTest.cs`, so the disproof is executable rather than a claim in a comment.
+
+### 2. ⭐ WHAT IT ACTUALLY WAS: **AN EMPTY PHASE TABLE**
+
+`AscentBuilder.Build()`'s **first statement** is `double m0 = _phases[0].M0;`. `_phases` is a
+`PhaseCollection`, and `PhaseCollection : List<Phase>` (`PhaseCollection.cs:20`). **`List<T>`'s indexer
+on an empty list throws `ArgumentOutOfRangeException … Parameter name: index`** — *word for word the
+logged exception, `Parameter name: index` included.* It is the **only unguarded index in `Build()`**.
+
+`_phases` is filled only by `AddStage`/`AddCoast`, whose only caller is the stage loop at
+`MechJebModulePSGGlueBall.cs:245-303`, walking `Core.StageStats.VacStats`.
+⇒ **`VacStats` empty ⇒ zero phases ⇒ that exact throw.**
+
+⭐⭐ **AND IN THIS BUILD IT IS NOT A RACE — IT IS DETERMINISTIC, AND IT IS OUR DOING.**
+`MechJebModuleStageStats` *harvests* results in `OnFixedUpdate` but **never starts a simulation of its
+own**; only `RequestUpdate()` calls `TryStartSimulation()` (`:254-258`). In stock MechJeb the **GUI**
+pumps that constantly (`MechJebModuleAscentMenu.cs:382` + eight sites in `MechJebModuleInfoItems.cs`).
+**[[T15b]] suppressed the GUI and nothing replaced the pump.** The only remaining caller is
+`MechJebModuleAscentBaseAutopilot.OnFixedUpdate:119`, which `MechJebCore.FixedUpdate` runs **only
+`if (module.Enabled)`** (`MechJebCore.cs:587`) — so nothing starts the fuel-flow simulation until we
+enable the ascent module, and **the first `Drive` after enabling therefore always sees an empty table.**
+
+⚠ **AND THE PAD IS THE ONE PLACE MECHJEB DOES NOT GUARD ITSELF.** `MechJebModulePSGGlueBall.cs:166`
+early-returns on an unusable stage table — but only `if (Vessel.VesselOffGround())`, and
+`VesselOffGround()` is FLYING/SUB_ORBITAL/ORBITING/ESCAPING **only** (`VesselExtensions.cs:19-21`). On
+`PRELAUNCH` it is **false**, the guard is skipped, and the empty table reaches `Build()`. Off the ground
+this bug is invisible; on the pad it is certain.
+
+### 3. ⭐⭐ WHO OWNS THE THROTTLE — and why the "secondary" is the SAME failure, not a second one
+
+The brief required this be stated in code and here. It is, and stating it **collapsed the two defects
+into one**:
+
+| Window | Owner | Proof |
+|---|---|---|
+| **Pre-ignition** | **MechJeb.** `DrivePrelaunch()` calls `Core.Thrust.ThrustOff()` → `mainThrottle = 0`, `Tmode = OFF`. ⚠ **NOT "every tick", as the brief suspected** — with no panels to retract it falls straight through to `_mode = ASCEND`, which is why the log shows `Prelaunch -> Ascend` **once**, 176 ms in. A single write of zero. | `MechJebModuleAscentBaseAutopilot.cs:183-218`; `MechJebModuleThrustController.cs:263-272` |
+| **Ignition (light → 99 % → release)** | ⛔ **NOBODY. THIS IS THE GAP.** We activate engine modules and command no throttle at all — `FlightDriver.SetThrottle` is an honest no-op and its only caller is `Actuator.FireAbort`. And MechJeb will not fill it while `Solution == null`, because **`HandleThrottle` returns on that as its first line.** The octaweb lit into a commanded **zero**. **That is the whole of "0/8227 kN, 1 lit".** | `FlightDriver.cs:222`; `Actuator.cs:440`; `MechJebModuleGuidanceController.cs:292-296` |
+| **Post-release** | **MechJeb**, via `HandleThrottle → ThrottleOn()`. | `MechJebModuleGuidanceController.cs:418` |
+| **Ascent** | **MechJeb**, same path, `_throttle` from `Solution.InertialGuidance`. | `MechJebModuleGuidanceController.cs:370, 418` |
+
+⭐⭐ **AND THE FIX FALLS OUT OF THAT TABLE.** `HandleThrottle` is **NOT** gated on `IsGrounded()` —
+compare `HandleTerminal` (`:150`) and `UpdatePitchAndHeading` (`:354`), which both are. **So the moment
+a solution exists, MechJeb raises the throttle ON THE PAD by itself** — exactly what our
+light-then-release design needs. ⇒ **Guidance and throttle were never two failures. They are one: no
+solution.** The brief's "secondary" is real and is now documented, but it is *not* an independent
+`DrivePrelaunch` collision — it is the same missing solution seen from the other end.
+
+---
+
+## ⭐ WHAT WAS BUILT — three changes, none of them in the vendored tree
+
+⛔ **`plugin/mech/` is byte-for-byte untouched** (§B12.1). ⛔ **`IgnitionGate`'s 2 s / 99 % rule is
+byte-for-byte untouched** — it fired **correctly** and is the only thing that kept the hold-downs bolted
+to a cold octaweb (§B12.7). What changed is **when its clock is allowed to start**.
+
+**1 · `plugin/src/pure/PvgPreflight.cs` (NEW).** The two preconditions, pure and testable, with the full
+diagnosis and every citation above carried in the file header so it survives a re-pin.
+ · `InclinationInDomain` — the domain is the **source's own**: finite, |inc| ≤ 180, **sign deliberately
+   accepted**.
+ · `WouldBuildAPhase` — a faithful, statement-for-statement mirror of the vendored stage loop (its
+   `break`, its `continue`, its backwards walk), deliberately **conservative**: a `true` is always safe,
+   a `false` may merely be early. Erring toward *wait* is the correct direction on a pad.
+
+**2 · `plugin/src/MechConductor.cs`.**
+ · **`PumpStageStatsAndCheck()` — replaces the pump the GUI used to provide.** Calls the vendored
+   module's own public `RequestUpdate()` and **HOLDS the PVG engage** until the table would give the
+   builder ≥1 phase. Returning false is a **hold, not a failure**: nothing is lit, no clamp is touched,
+   the caller returns next tick. The wait log is latched so a per-tick hold cannot flood `KSP.log`.
+ · **`GuidanceHasSolution()`** reads `HandleThrottle`'s **own** precondition (`Solution != null`) —
+   asking the same question the throttle path asks is the only way to be sure the answer means what we
+   need it to.
+ · **`Configure` now refuses an out-of-domain inclination** with the value named, rather than letting it
+   surface as an anonymous solver exception 145 ms later. ⚠ This is **not** what fixed the flight — it
+   is so the *next* poisoned value arrives with a name attached.
+
+**3 · `plugin/src/pure/AscentSequence.cs`.** New measured input **`GuidanceReady`**, and `Idle` now
+holds the launch GO until it is true: **do not light an octaweb nobody will throttle.**
+
+---
+
+## ⭐ VERIFICATION — every gate the brief set
+
+**`python plugin/build.py test` — ALL SUITES PASSED.**
+`PvgPreflightTest` **36 checks, 0 failures** (new) · `AscentSequenceTest` **108** · `MissionWalkTest`
+**79** · `RendezvousOpsTest` **122** · `DockingLadderTest` **39** · `ReturnSequenceTest` **88** ·
+`CrewGatePageTest` **37** · `BlackBoxTest` **1882** · `CrewPressTest` **1783** · **70 suite lines
+reporting 0 failures.** All five build guards green (harness fault check, event vocabulary, part-name
+source, black-box columns, previewdiff selftest).
+
+**`python plugin/build.py previewdiff` — EMPTY, as required: `0 existing page(s) changed, 0 new, 0
+removed (of 130 compared)`.** These decisions draw nothing.
+*(The run reprints the standing `assets/kenney_ui_scifi is now EMPTY` warning — that is **[[S207]]**,
+pre-existing and already logged, not something this line introduced.)*
+
+### ⭐ THE MUTATION RUN — 11 mutants, **10 KILLED**, 1 PROVEN EQUIVALENT
+
+The brief: *"a test that cannot fail on an out-of-domain value is not evidence (`S167`)"*. So it was run,
+not asserted:
+
+| # | Mutation | Result |
+|---|---|---|
+| **M1** | `InclinationInDomain` → `return true;` | **KILLED** (9 fails, `PvgPreflightTest`) |
+| **M2** | `InclinationInDomain` → `return false;` | **KILLED** (8, `PvgPreflightTest`) |
+| **M3** | drop the magnitude — signed compare, so `-1e9` is wrongly accepted | **KILLED** (2, `PvgPreflightTest`) |
+| **M4** | drop the finiteness check | ⚠ **SURVIVED — and it is an EQUIVALENT MUTANT, proven below** |
+| **M5** | `MaxInclinationDeg` 180 → 360 | **KILLED** (4, `PvgPreflightTest`) |
+| **M6** | phase mirror: the source's `break` weakened to a `continue` | **KILLED** (1, `PvgPreflightTest`) |
+| **M7** | phase mirror: drop the `MinDeltaV` skip | **KILLED** (1, `PvgPreflightTest`) |
+| **M8** | phase mirror: index by the first array (ragged input) | **KILLED** — `PvgPreflightTest` crashed with `IndexOutOfRangeException` |
+| **M9** | phase mirror: walk forwards instead of backwards | **KILLED** (1, `PvgPreflightTest`) |
+| **M10** | ⭐ **THE FIX ITSELF** — remove the `GuidanceReady` hold from `Idle` | **KILLED** (2, `PvgPreflightTest`) |
+| **M11** | `Nominal()`'s `GuidanceReady` default flipped to false | **KILLED** (31 fails, broadly — the expected signature of stranding every nominal walk) |
+
+⚠ **M4 IS REPORTED HONESTLY RATHER THAN CHASED OR HIDDEN.** It survived because the statement is
+**redundant, not because the test is weak**, and the redundancy is proven **for every double**:
+`NaN <= 180.0` is false, `+∞ <= 180.0` is false, and `-∞` becomes `+∞` at the magnitude step — so the
+comparison already rejects all three and **no input can distinguish the two programs**. An equivalent
+mutant cannot be killed by any test; the correct handling is to *declare* it. The line is **kept** (it
+mirrors the source's own `Check.Finite`) and is now **annotated in place** saying exactly this, so no
+later reader mistakes it for the thing doing the work — or "tightens" it believing it is load-bearing.
+
+---
+
+## ⛔ WHAT THIS LINE DID **NOT** DO
+
+- **Did not weaken the 2 s / 99 % ignition gate.** `pure/IgnitionGate.cs` is byte-for-byte unchanged, and
+  `PvgPreflightTest` now asserts the **flown** cold-pad case (0 of 8227 kN at 2.5 s, 1 lit) **still
+  SAFES with the clamps held**, so a future "tune" cannot quietly relax it.
+- **Did not patch the vendored tree.** `plugin/mech/` is untouched (§B12.1). The one vendored method
+  called — `MechJebModuleStageStats.RequestUpdate()` — is public, on an always-enabled module, and is
+  exactly what MechJeb's own GUI calls.
+- **Did not answer [[T18]]-Q1** (the inclination sign). It only proved the sign is **not** the defect.
+- **Did not install, did not fly, did not open a gate** (C1.12 — the 2026-09-07 gate was scoped to that
+  flight and did not carry).
+- **Did not touch `docs/BUILD_PLAN.md`** (guarded, G10) **or `docs/QC_FINDINGS.md`**.
+- **Did not `git push`.**
+
+---
+
+## 🟠 GATE REQUEST — `install` + glass, ONE pad test (C1.13, paste-ready for the overseer)
+
+⛔ **A BUILD CHAT DOES NOT OPEN THIS GATE AND HAS NOT (C1.12).** The 2026-09-07 gate — *"install and
+let's fly it"* — was **scoped to that flight** and does not carry to this one.
+
+**The situation.** The owner flew the S213 build and reported: *"Gates work, also auto sequence. You can
+hear something activate but we sit on the pad doing nothing."* The glass half is **confirmed** — S213
+works. The vehicle did not move because MechJeb's PSG solver threw on an **empty stage table** and never
+produced a guidance solution, so nothing ever raised the throttle; `IgnitionGate` then safed the pad
+**correctly**. The cause is proven from the vendored source (above), the fix is in, `test` is green,
+**10 of 11 mutants are killed with the 11th proven equivalent**, and `previewdiff` is empty.
+
+**The decision needed:** open `install` + glass for **one pad test**. Everything else about this line is
+already closed headless.
+
+**The one-line check he is being asked for:** ⭐ **does the octaweb light, and does the vehicle leave the
+pad?**
+
+What to watch for, in the order it will appear in `KSP.log`:
+1. `conductor: HOLDING the PVG engage — MechJeb's stage table is still empty` — **EXPECTED**, and should
+   appear at most once, immediately followed by `… stage table is usable (N row(s)) — releasing the PVG
+   engage hold`. If it holds and **never** releases, the stage table never fills and this line reopens.
+2. **ZERO** `AscentBuilder.Build` / `ArgumentOutOfRangeException` frames from
+   `DragonScreen.Mech.MechJebLib.PSG`. Any at all means the mirror is wrong.
+3. `ASCENT Idle -> Ignition` **must not appear before** a guidance solution exists. If it still lights
+   early, `GuidanceHasSolution` is reading the wrong thing.
+4. ⭐ `thrust good — hold-downs released` — **the line that was ABSENT (0 occurrences) on 2026-09-07.**
+   Its presence is the pass.
+5. ⛔ `PAD SAFED` again, **with a non-zero thrust number**, is a *different* failure from last time and
+   should be reported with the number — it would mean the stage lit but did not reach 99 %.
+6. The `GetPotentialTorque` count **and its namespace** — see **[[S216]]** for why the namespace is the
+   whole question.
+
+**Options:** (1) open the gate for one pad test — *recommended*; (2) hold, and batch it with
+[[S215]] (the launch-window feature) so one flight tests both; (3) hold entirely.
+⛔ **(1) and (2) both need an owner gate-open** (C1.12). This chat proceeds past none of them.
+
+---
+
+### S216 [S] `GetPotentialTorque` threw 7,547 times, and the harvest does not say WHOSE MechJeb — **TODO** — [logged by [[S214]] per C1.1, 2026-09-07; TIER 2: an unresolved instrument reading, and the discriminator already exists]
+
+⛔ **LOGGED, NOT DONE.** The brief named this explicitly: *"LOG SEPARATELY (C1.1), do not fix here"*.
+
+The harvested log records **`GetPotentialTorque exceptions: 7,547`** and **does not record the namespace
+they came from** — and *that is the whole question*, because [[S194]] already established the
+discriminator and used it to overturn exactly this reading:
+
+- **`DragonScreen.Mech.MuMech.VesselState…`** = **OURS** (§B3's private namespace). On 2026-09-05 ours
+  threw **6,935**; [[T15d]] closed that and on 2026-09-07's 05:06 flight ours threw **0**.
+- **bare `MuMech.VesselState…`** = **the owner's own installed `MechJeb2`**, on his own vessel. That is
+  what the 05:06 flight's **19,246** were, every one of them.
+
+⭐ **THE RENAMED NAMESPACE IS WHAT MAKES THIS DECIDABLE AT ALL**, and the harvest threw the answer away.
+So **7,547 is currently unattributable**, and it must not be read either way:
+- if they are **bare `MuMech`**, this is the owner's own MechJeb2 and is not ours to fix;
+- if they are **`DragonScreen.Mech`**, then **[[T18]] made our core master and T15d's fix does not hold
+  under drive authority** — which is the hazard [[T15d]] flagged and the S213 checklist's item 3 called
+  *"THE ONE THAT MOST NEEDS WATCHING"*, whose mitigation (`RefreshGimbalEngineLists`) is recorded there
+  as **a HYPOTHESIS, not a proven fix**.
+
+**DONE when:** the next flight's log is searched for **both** namespaces separately and the two counts
+are recorded here; then the `DragonScreen.Mech` count decides whether anything is owed at all.
+⚠ **Cheap and must not be skipped again:** two greps. `KSP.log` was overwritten before this one could be
+attributed, which is exactly how a real defect stays invisible for another flight.
+
+---
+
+### S217 [S] `Target unreachable (bootstrapping)` ×2 is UNDIAGNOSED and was read as downstream — **TODO** — [logged by [[S214]] per C1.1, 2026-09-07; TIER 2: a second solver failure that a plausible story was told about rather than proven]
+
+⛔ **LOGGED, NOT DONE — and logged precisely because [[S214]] did NOT prove it.**
+
+The harvest carries a **second, different** solver exception, 25 s after the first:
+
+```
+20:33:07.386  System.Exception: Target unreachable (bootstrapping)   (x2, also 20:33:31.844)
+                at MechJebLib.PSG.Ascent.InitialBootstrappingOptimizedWithoutQAlpha ()
+```
+
+⭐ **THIS IS NOT THE SAME EXCEPTION AS THE ONE S214 FIXED.** The first was
+`ArgumentOutOfRangeException` in `AscentBuilder.Build()` — an **empty phase table**. This one is a
+**named exception from the optimizer**, which means `Build()` **succeeded** and the solver then failed to
+converge. So the stage table evidently *did* fill within ~25 s — consistent with S214's diagnosis (the
+ascent module's own `OnFixedUpdate` pump starts working once the module is enabled) but proving the
+first failure was the **first few frames** rather than permanent.
+
+**The plausible story, recorded AS a hypothesis and not as a finding:** by 20:33:07 the pad had been
+safed (20:32:44.703) and the octaweb shut, so the solver was asked to reach a 210 km orbit from a
+stationary vehicle with its engines off. **That is a guess.** It was not traced through
+`FuelFlowSimulation` and it must not be cited as though it were established.
+
+**Why it matters even so:** if the "unreachable" is **not** merely downstream of the safing, then S214's
+fix makes the vehicle light and release **and it still will not converge** — a different failure at a
+worse moment, off the clamps.
+
+**DONE when:** the next flight either (a) shows no `Target unreachable` at all, closing this as
+downstream of the safing — the expected outcome if S214 is right; or (b) shows it again **with the
+vehicle flying**, in which case it is a real convergence defect and gets traced properly.

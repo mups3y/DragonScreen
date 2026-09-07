@@ -79,6 +79,8 @@ namespace DragonScreen
         static bool configured;
         static string note = "idle";
         static bool ascentEngaged;
+        /// <summary>S214: latches the PVG engage-hold log so a per-tick wait cannot flood `KSP.log`.</summary>
+        static bool stageStatsWaitLogged;
 
         // ── T19: the on-orbit leg (§B9 P2/P3, §B10.2, §B12.4) ────────────────────────────────────
         static RendezvousLeg leg;            // which leg, from the gate it walks to
@@ -177,7 +179,7 @@ namespace DragonScreen
         {
             core = null; boundVesselId = 0;
             ascentStep = AscentStep.Idle; stepStartUT = 0.0;
-            launchLatched = false; configured = false; ascentEngaged = false;
+            launchLatched = false; configured = false; ascentEngaged = false; stageStatsWaitLogged = false;
             note = "idle";
             ResetLeg();
             leg = RendezvousLeg.None;
@@ -474,6 +476,17 @@ namespace DragonScreen
                         }
                     }
 
+                    // ⛔⛔ S214 (2026-09-07): **PUMP THE STAGE TABLE, AND DO NOT ENABLE THE MODULE UNTIL
+                    // IT CAN BE BUILT FROM.** `MechJebModuleStageStats` never starts a fuel-flow
+                    // simulation of its own — only `RequestUpdate()` does — and in stock MechJeb the GUI
+                    // pumps that. **T15b suppressed the GUI and nothing replaced the pump**, so on
+                    // 2026-09-07 the first `Drive` after enabling saw `VacStats` EMPTY, the glue ball
+                    // added zero phases, and `AscentBuilder.Build()` threw on `_phases[0]`. The full
+                    // proof, with line numbers, is `pure/PvgPreflight.cs`'s header §1.
+                    // ⚠ THE PUMP MUST COME FIRST AND MUST KEEP RUNNING: the simulation is asynchronous,
+                    // so the first call only STARTS it. We hold here, ticking it, until it answers.
+                    if (!PumpStageStatsAndCheck()) return;
+
                     // ⭐ THE ORDER MATTERS. Authority first, then the module: a module enabled on a core
                     // that is not master would have `OnModuleEnabled` run (grabbing the attitude and
                     // thrust user pools) while `Drive` never fires, so it would hold the vehicle's
@@ -494,6 +507,79 @@ namespace DragonScreen
             {
                 Debug.LogWarning("[DragonScreen] MechConductor ascent tick failed: " + e.Message);
             }
+        }
+
+        /// <summary>
+        /// S214. Tick MechJeb's stage-stats simulation and report whether it has yet produced a table
+        /// the PSG builder could make at least one phase from.
+        ///
+        /// ⛔ **RETURNING FALSE IS A HOLD, NOT A FAILURE.** The fuel-flow simulation is asynchronous;
+        /// the honest answer for the first few frames is "not yet". Nothing is lit, nothing is
+        /// released, and the caller simply comes back next tick.
+        /// ⚠ `RequestUpdate()` is a PUBLIC method on an always-enabled vendored module
+        /// (`MechJebModuleStageStats.cs:41` sets `Enabled = true` in its constructor), and calling it is
+        /// exactly what MechJeb's own GUI does. **Nothing in `plugin/mech/` is edited** (§B12.1).
+        /// </summary>
+        static bool PumpStageStatsAndCheck()
+        {
+            MuMech.MechJebModuleStageStats st = core == null ? null : core.StageStats;
+            if (st == null) { note = "the core has no StageStats module"; return false; }
+
+            st.RequestUpdate();
+
+            int n = st.VacStats.Count;
+            if (n == 0)
+            {
+                if (!stageStatsWaitLogged)
+                {
+                    stageStatsWaitLogged = true;
+                    Debug.Log("[DragonScreen] conductor: HOLDING the PVG engage — MechJeb's stage table "
+                              + "is still empty (the fuel-flow simulation is asynchronous). Nothing is "
+                              + "lit and no clamp is touched while we wait. (S214)");
+                }
+                return false;
+            }
+
+            int[] stages = new int[n];
+            double[] dv = new double[n];
+            for (int i = 0; i < n; i++) { stages[i] = st.VacStats[i].KSPStage; dv[i] = st.VacStats[i].DeltaV; }
+
+            MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
+            int lastStage = a == null ? -1 : a.LastStage.Val;
+            double minDv  = a == null ? 0.0 : a.MinDeltaV.Val;
+
+            if (!PvgPreflight.WouldBuildAPhase(stages, dv, lastStage, minDv))
+            {
+                if (!stageStatsWaitLogged)
+                {
+                    stageStatsWaitLogged = true;
+                    Debug.Log("[DragonScreen] conductor: HOLDING the PVG engage — MechJeb's stage table "
+                              + "has " + n + " row(s) but none survives its own filters (LastStage "
+                              + lastStage + ", MinDeltaV " + minDv.ToString("F1")
+                              + " m/s), so AscentBuilder.Build() would throw on _phases[0]. (S214)");
+                }
+                return false;
+            }
+
+            if (stageStatsWaitLogged)
+                Debug.Log("[DragonScreen] conductor: MechJeb's stage table is usable ("
+                          + n + " row(s)) — releasing the PVG engage hold. (S214)");
+            stageStatsWaitLogged = false;
+            return true;
+        }
+
+        /// <summary>
+        /// S214. Does MechJeb hold a guidance SOLUTION — i.e. will anything raise the throttle?
+        ///
+        /// ⭐ THIS READS `HandleThrottle`'s OWN PRECONDITION, deliberately and literally:
+        /// `MechJebModuleGuidanceController.HandleThrottle` opens `if (Solution == null) return;`
+        /// (`:292-296`). Asking the same question the throttle path asks is the only way to be sure the
+        /// answer means what we need it to mean. `pure/PvgPreflight.cs`'s header §3 is the argument.
+        /// </summary>
+        static bool GuidanceHasSolution()
+        {
+            MuMech.MechJebModuleGuidanceController g = core == null ? null : core.Guidance;
+            return g != null && g.Solution != null;
         }
 
         /// <summary>
@@ -529,6 +615,23 @@ namespace DragonScreen
             // (3) §B5's named exception: the destination is a MISSION FACT, not a tune. The SIGN of the
             //     inclination is preserved from whatever is loaded — see `AscentTargets.For`.
             AscentTarget t = AscentTargets.For(CrewProcedureOps.Profile, a.DesiredInclination.Val);
+
+            // ⛔ S214: **NEVER HAND THE SOLVER AN INCLINATION IT CANNOT TAKE.** The domain is the
+            // vendored source's own — FINITE, |inc| ≤ 180 — and the SIGN is deliberately allowed
+            // through (`pure/PvgPreflight.cs` §2 proves all seven terminals `Abs()` it, so the
+            // 2026-09-07 `-51.6°` was innocent). This guard is not what fixed that flight; it is here so
+            // that if a profile ever DOES carry a poisoned value, we refuse it here with a name attached
+            // rather than letting it surface as an anonymous solver exception 145 ms later.
+            if (!PvgPreflight.InclinationInDomain(t.InclinationDeg))
+            {
+                note = "target inclination out of domain";
+                Debug.LogError("[DragonScreen] conductor: REFUSING to configure PVG — target inclination "
+                               + t.InclinationDeg + "° is outside the solver's domain (finite, |inc| ≤ "
+                               + PvgPreflight.MaxInclinationDeg + "°). Nothing was written to MechJeb "
+                               + "and the ascent will not engage. (S214)");
+                return;
+            }
+
             a.DesiredInclination.Val   = t.InclinationDeg;
             a.DesiredOrbitAltitude.Val = t.PeriapsisM;
             a.DesiredApoapsis.Val      = t.ApoapsisM;
@@ -561,6 +664,10 @@ namespace DragonScreen
             Actuator.EngineThrust(v, EngineRole.SecondStage, out thrust, out max, out lit);
             s.S2ThrustN = thrust; s.S2LitCount = lit;
 
+            // S214: the octaweb is not lit until somebody will raise the throttle. See
+            // `pure/PvgPreflight.cs` §3 — with no solution, NOBODY owns the throttle in the ignition
+            // window, and the stage lights into a commanded zero.
+            s.GuidanceReady = GuidanceHasSolution();
             s.PvgFinished = PvgFinished();
             Orbit o = v.orbit;
             if (o != null)
