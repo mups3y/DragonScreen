@@ -24113,7 +24113,7 @@ ships; `Crew Dragon Flight Control UI.png` (2352×1410) is a UI reference, not v
   source rather than picked, `VehicleGeometryTest` is extended to pin it, and `previewdiff` shows this
   page's views alone.
 
-### S187 [S] The gauge ring diverges from BOTH sources three ways — and `Gauge` is shared verbatim across SEVEN page-views — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: the most visible remaining difference from the reference]
+### S187 [S] The gauge ring diverges from BOTH sources three ways — and `Gauge` is shared verbatim across SEVEN page-views — **BLOCKED 2026-09-08 — owner design call; and its stated gate, `S185 Q3`, DOES NOT EXIST** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: the most visible remaining difference from the reference]
 - **Three divergences, each agreed by `Overview.vue` AND the mock against this build:**
   1. **The bottom gap is 60°; the reference's is 92.6°.** Computed exactly, not eyeballed: the reference
      clips a circle `r=70` at `(75,75)` with a `clipPath` circle `cx=0 cy=150 r=162.5`, which leaves the
@@ -24131,7 +24131,36 @@ ships; `Crew Dragon Flight Control UI.png` (2352×1410) is a UI reference, not v
 - **DONE when:** the owner has answered [[S185]] Q3, and if the answer is the reference's construction it is
   done on ALL SEVEN page-views in one line, with `previewdiff` reporting all of them and the reason.
 
-### S188 [S] The capsule slot stretches a glyph-bearing PNG by 22.2 % — QC `C-04`'s own rule, on two pages — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: a standing rule broken in the build's most-looked-at picture]
+#### ⛔ BLOCKED 2026-09-08 (QC overnight loop) — AND THE GATE IT NAMES DOES NOT EXIST
+
+⚠ **`S185 Q3` IS NOT A THING.** Searched `REGISTER.md` and `docs/` for `S185-Q3` / `S185 Q3` / `S185.Q3` —
+**no hits.** S185's own segment mentions `Q1`, `Q2` and `Q4` and contains **no `Q3` at all**; its `Q1`/`Q2`
+references are to **[[S81]]**'s questions, quoted in its backlog table. So this line is gated on a question
+that was never posed, and would have waited forever.
+
+⛔ **NOT GUESSED, AND NOT BUILT.** This line's own reasoning is why: `VehicleSubsystemPage.cs:147` carries a
+**verbatim copy** of the same `Gauge`, so changing one *"splits a matched pair across seven page-views"*.
+The three divergences are measured and are not in doubt; **which construction we want is taste**, and the
+sources agree with each other and against us, which makes it a real choice rather than a bug to fix.
+
+**THE QUESTION THIS LINE ACTUALLY NEEDS, POSED PROPERLY (C1.14) — queued as `QC-4`.**
+Adopt the reference's gauge construction across all seven page-views, or keep ours?
+
+1. **Adopt all three** — 92.6° bottom gap (computed from the reference's own `clipPath`, not eyeballed),
+   dotted hairline track at 1.07 % of diameter, label INSIDE the ring near the top. Most faithful.
+   ⚠ **Cost:** the dotted track is a **new `DisplayList` capability** and BOTH renderers (GL and the GDI+
+   preview) would have to agree on it. This line already says that is *"the real cost of this item, not the
+   page edit."*
+2. **Adopt the two that need no new capability** — the 92.6° gap and the label inside the ring — and leave
+   the track solid for now. ⭐ **Recommended:** it takes the two divergences that are pure geometry, on one
+   shared function, in one line across all seven views, and defers the only one that needs a renderer
+   change. The track's weight is the least legible of the three at IVA distance.
+3. **Leave it.** Ours is internally coherent and already shared across seven views; the divergence is
+   fidelity, not correctness.
+
+⛔ **Nothing was changed.** `Gauge` is untouched on all seven page-views.
+
+### S188 [S] The capsule slot stretches a glyph-bearing PNG by 22.2 % — QC `C-04`'s own rule, on two pages — **BLOCKED 2026-09-08 — owner design call, and the two sources disagree so there is no reference answer to take** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 2: a standing rule broken in the build's most-looked-at picture]
 - **The finding, measured two ways.** `dragon_crew.png` is **294×468**, ink aspect **0.6244**. Both pages
   draw it `520 * sx, 760 * sy` — and because this page maps x through `sx` and y through `sy`, the box's
   **device** aspect at the shipped 2560×1406 is **0.7678**, a **22.2 % horizontal stretch**. Confirmed on
@@ -24149,6 +24178,36 @@ ships; `Crew Dragon Flight Control UI.png` (2352×1410) is a UI reference, not v
 - **DONE when:** the owner has chosen between leaving it, letterboxing the art inside the slot at its own
   aspect, and re-cutting the slot; it is applied to both call sites; and a test pins the drawn aspect
   against the art's own.
+
+#### ⛔ BLOCKED 2026-09-08 (QC overnight loop) — THE DEFECT IS NOT IN DOUBT; THE REMEDY IS THE OWNER'S
+
+**The defect stands exactly as measured** and was not re-derived here: `dragon_crew.png` is 294×468, ink
+aspect **0.6244**; drawn at `520*sx, 760*sy` the device aspect at 2560×1406 is **0.7678** — a **22.2 %
+horizontal stretch** of a PNG carrying the SPACEX and DRAGON wordmarks, the NASA meatball and the US flag.
+That is QC **C-04**'s rule broken in, as this line says, the build's most-looked-at picture.
+
+⛔ **WHY IT CANNOT BE FIXED BY CONFORMING TO THE REFERENCE.** This line already records it: the two sources
+**disagree** — `Overview.vue` makes the slot `13.5% × 50%`, a box aspect of ~0.44, which **squeezes the art
+harder than we stretch it**, while the mock renders it at roughly its natural shape. So "do what the
+reference does" selects a *worse* distortion. There is no source answer to take, which is precisely what
+makes this taste rather than a defect with a known fix.
+
+**THE QUESTION, POSED PROPERLY (C1.14) — queued as `QC-5`.**
+
+1. **Letterbox the art inside the slot at its own aspect** — compute the drawn width from the height and
+   `sy/sx` at draw time, the pattern `Images.FitHeight` and `BarFit` already use and that [[S103]] used for
+   the bottom bar. ⭐ **Recommended:** it closes C-04 without moving the slot, needs no layout decision,
+   is resolution-independent (this line notes the device aspect is resolution-dependent, so a fixed design
+   box cannot fix it), and the mechanism exists twice in the build already.
+2. **Re-cut the slot to the art's aspect.** Undistorted and tidy, but it changes page layout on **two**
+   pages (`VehicleOverviewPage` and `VehicleSubsystemPage.cs:290`) and is a design change, not a fix.
+3. **Leave it.** ⚠ Not recommended: it is the build's own standing rule broken in its most-looked-at
+   picture, and it will be noticed on the glass before it is noticed in a file.
+
+⚠ **Whichever is chosen it must land on BOTH call sites in one change**, and the test this line asks for —
+pinning the drawn aspect against the art's own — is what stops it drifting back.
+
+⛔ **Nothing was changed.** Both call sites are untouched.
 
 ### S189 [S] The elements the reference places INDEPENDENTLY of the centre block — five measured divergences [[S185]] did not take — **TODO** — [logged by [[S185]] per C1.1, 2026-09-07; TIER 3: fidelity]
 - ⭐ **CABIN MICS is the largest single delta left on this page.** `#dragon-main-heading { left: 50%;
