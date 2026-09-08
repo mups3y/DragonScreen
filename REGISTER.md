@@ -21513,7 +21513,7 @@ build chat does not change it. This is a proposal.
   which is the OWNER's to settle. NOT decided here and NOT re-posed.
 
 
-### S173 [O] Attitude HUD / Frame 58 — the page letterboxes, and three readouts break their own boxes — **TODO** — [logged by the 2026-09-06 glass pass per C1.1; TIER 2]
+### S173 [O] Attitude HUD / Frame 58 — the page letterboxes, and three readouts break their own boxes — **TODO — clause (1) is now OWNER-RULED and fully specced below (2026-09-08); it is TWO rasters, not three, and it carries a C-04 trap** — [logged by the 2026-09-06 glass pass per C1.1; TIER 2]
 - **How it was reviewed.** Second page of the owner's page-by-page pass (*"preview the next page and
   show me the issues you see"*), taken in the bottom bar's OWN tab order — `FigmaUI.BarTarget` =
   `{Cover, Hud, Vehicle, SuitCheck, Audio}`, so icon 1 follows [[S172]]'s Cover. Measured against
@@ -21635,6 +21635,83 @@ the whole R-01 policy exists to prevent.
    and a preview fixture that printed `18 %` beside `0.0 h`. Both were caught by looking at the output
    rather than by trusting the method that produced it.
 
+
+### S173 clause (1) — SPECCED 2026-09-08 by the QC overnight loop. ⛔ Nothing was cut; this is the survey that de-risks it.
+
+**🟢 OWNER RULING, 2026-09-08 (answering QC-1): "option 1" — MOVE THE ART TO MATCH.** The bar is
+edge-to-edge and **stays** so; returning it to the frame on those pages was **rejected**. The frame raster
+is to be extended so the frame reaches the glass, killing QC `H-10`'s two rounded corners and stray rule.
+⭐ **Record in the code that the bar's full width is an OWNER RULING that outranks the export**, so a future
+chat reading §14.2a does not correct the frame back to 140 px.
+
+#### ⚠ CORRECTION 1 — IT IS **TWO** RASTERS, NOT THREE. `frame59` MUST NOT BE TOUCHED.
+
+The task named `ui_hud`, `ui_cabin` and `frame59`. Traced, not assumed:
+
+| key | file | bytes | drawn by |
+|---|---|---|---|
+| `frame58` | `art/cover/frame58.png` | 898,256 | `Frame58Hud.cs:34` → **`ui_hud`, a live page** |
+| `frame66` | `art/cover/frame66.png` | 2,022,133 | `FigmaUI.cs:238` → **`ui_cabin`, a live page** |
+| `frame59` | `art/cover/frame59.png` | 143,168 | ⛔ **NO PAGE.** |
+
+⛔ **`frame59` is drawn by nothing.** [[S110]] pointed `UiPage.Procedure` at `VrioTestPage`, and
+`FigmaUI.cs:229` records it: *"`frame59` stays ON DISK"* — it is the **tier-2 reference `VrioTestPage` is
+measured against** (`VrioTestPage.cs:4`, `:364`). The only thing that renders it is the preview **fixture**
+at `PreviewMain.cs:859`, *"Complex frame pages shown from their Figma export"*. So `frame59.png` in the
+sweep was the raw export shown as a fixture, **not a shipped page**. Editing it would corrupt a tier-2
+source for zero on-glass gain — and the task's own rule, *"never overwrite the only copy of a clean
+export"*, argues against it. ⚠ **QC `H-10` over-counted and is corrected there too.**
+
+#### ⛔ CORRECTION 2 — THE SHARED DRAW SITE IS A C-04 TRAP, AND IT IS THE REAL COST
+
+`FigmaFramePage.Build` (`:22-26`) hardcodes the box:
+```
+float sc = h / RefH;  float dw = RefW * sc, ox = (w - dw) * 0.5f;
+dl.Asset(frameKey, ox, 0f, dw, h, DragonPalette.White);
+```
+It is shared by **`ui_cabin` (frame66)** *and* **the fixture that renders frame58/59/66**. An extended
+raster keeps its pixels only if the draw box matches its new aspect — so the draw must change. ⛔ **But
+changing `dw` to `w` unconditionally would draw un-extended `frame59` (2048×1263) into a 2560-wide box: a
+12.3 % horizontal stretch of a glyph-bearing raster — QC `C-04`, the exact rule this task forbids.**
+**The draw must become per-asset, not one constant.** Simplest honest form: a parameter on
+`FigmaFramePage.Build` saying whether this key is panel-aspect or design-aspect. (`Images.Size` exists but
+keys off `ImageId`, not asset keys, so it does not answer this as-is.)
+
+#### THE MEASURED SPEC — both rasters, exactly
+
+Both are **2048×1263, aspect 1.6215**; the shipped panel is 2560×1406, **aspect 1.8208**. Target width at
+the same height: `1263 × 1.8208 = 2299.6` → **2300**, i.e. **+126 columns each side**. Background just
+inside every edge is plain `(2, 7, 56, 255)` on both, so padding with background is safe — verified by
+sampling.
+
+⚠ **THE TWO FRAMES ARE CONSTRUCTED DIFFERENTLY AND NEED DIFFERENT EDITS** — measured, full-length white:
+
+| | left | right | top | bottom | thickness |
+|---|---|---|---|---|---|
+| `frame58` | **1263/1263** | **1263/1263** | **2048/2048** | 2048/2048 | L1 R1 T1 **B2** |
+| `frame66` | 1/1263 | 130/1263 | 0/2048 | **2048/2048** | L0 R0 T0 **B2** |
+
+- **`frame58` has a complete 1 px border on all four sides.** Extend: pad to 2300 with background; **erase**
+  the old side border columns (now interior at x 126 and 2173); redraw 1 px white at x 0 and x 2299 full
+  height; extend the 1 px top row and the 2 px bottom rows across 0..2299.
+- **`frame66` has only a bottom border.** Extend: pad to 2300 with background; extend the 2 px bottom rows
+  across 0..2299. Nothing else moves.
+
+#### THE PRECEDENT TO FOLLOW, AND WHERE THE CLEAN EXPORTS ARE
+
+`docs/COVER_PAGE_ASSETS.md` §*"`component_48.png` — the one shipped asset we have EDITED, twice"* is the
+pattern: a table row per edit, the **exact rectangles**, and verification stating what stayed
+**byte-identical**, how many pixels changed and that **none changed outside the box** — plus the standing
+warning that a re-export must re-apply the edits. Clean sources are preserved in `assets/figma/`:
+`frames/Frame 66.png` and `dashboard_ui/Frame 58.svg` (⚠ there is **no** `frames/Frame 58.png`).
+
+#### DONE WHEN
+Both live pages' frames reach the glass; **one** rounded/square corner per side and **no** vertical rule
+inboard of the glass edge on `ui_hud` and `ui_cabin`; **`frame59.png` byte-identical**; the C-04 trap
+resolved per-asset rather than by one constant; every glyph in both rasters undistorted (the draw box aspect
+equals the raster's); `previewdiff` reporting **exactly** the `ui_hud`, `ui_cabin` and their fixture renders
+and **no fourth page** — if a fourth moves, stop and find out why; and both edits recorded in
+`docs/COVER_PAGE_ASSETS.md` on the `component_48` pattern.
 ### S174 [O] Re-distribute the fill-to-fit slack on the two SPLIT pages — **DONE 2026-09-06 — the content panel takes half the slack and its interior stretches with it; the camera slot does NOT shrink** — [🟢 OWNER RULING via the overseer, 2026-09-06, **option SELECTED, not free text** — step ONE of `S153a-Q1`, which stays OPEN]
 
 **🟢 AUTHORITY — RECORDED AS A SELECTION (C1.12).** The owner was given options and **chose one**; he did
