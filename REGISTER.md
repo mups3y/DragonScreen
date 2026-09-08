@@ -28461,3 +28461,105 @@ chamfers, the notched window with true-45 bevels, nine tabs with the Comms wifi 
 rocket, the selector under "All", the live bar, and an empty content area.
 
 **Commit:** this one. **No `git push`.**
+
+---
+
+### S244 [O] Clear the shell work — the page rebuild is reset to a clean base — **DONE 2026-09-09 — every byte of [[S242]] + [[S243]] page work removed; the tree is now IDENTICAL to [[S241]] apart from the four KEEP items and one dead path repaired. ⛔ NOTHING BUILT** — [overseer PROMPT_1_RESET_AND_CLEAR, 2026-09-09; branch `rebuild/base-screens`]
+
+- ⛔ **THIS IS A RESET, NOT A REVERT OF A MISTAKE, AND THE DISTINCTION MATTERS TO ANYONE READING
+  BACKWARDS.** The overseer's own account, verbatim: *"the fault was the prompts, not your work"* — the
+  specification lived in three places (the overseer's memory, a generator script, a published canvas) and
+  they silently diverged, so the shells were built to *"a description of a page the owner approved
+  **before** a change to it."* ⭐ [[S242]] and [[S243]] were each green, mutation-tested and inspected;
+  they were correct builds of a superseded target. Their register lines stay exactly as written (C1.16) —
+  ⛔ they are not struck through, because nothing in them was wrong when it was written.
+- ⭐ **THE NEW REGIME, WHICH IS WHY THIS CLEAR IS WORTH A COMMIT OF ITS OWN.** `SPEC_BASE_SCREENS.md`
+  becomes the SINGLE AUTHORITY for the base screens; prompts reference it by section and restate nothing;
+  ⛔ if a prompt and the spec disagree, **the spec wins and the build stops and raises it.** Work arrives
+  one prompt at a time, verified against the spec's acceptance table before the next is written.
+- ⛔ **EVERYTHING BEFORE THAT PROMPT IS SUPERSEDED:** `PROMPT_0`, `PROMPT_1_BASE_SCREENS*`, `PROMPT_2*`,
+  `PROMPT_3*`, `PROMPT_A*`. Recorded here so a later chat that finds one of those files on the Desktop
+  does not build from it.
+
+#### ⭐ WHAT WAS REMOVED, AND THE PROOF IT WAS EXACTLY THAT
+
+Five files deleted — `pure/ShellPage.cs`, `pure/BaseScreen.cs`, `pure/BaseScreenTabbed.cs`,
+`test/ShellPageTest.cs`, `test/BaseScreenTest.cs` — plus the four `UiPage` appends
+(`VehicleComms` 36, `ShellCover` 37, `ShellVehicle` 38, `ShellSuitCheck` 39), `PageCount` 40 → **36**,
+their four `Titles`, three `Build` cases, `IsPlaceholder` entries, `BottomBar.FitFor` cases,
+`PageControls.ShellTab` + its `Default` assignment, both `TestMain` registrations, and the preview
+render-list entries.
+
+⭐ **AND THE FOUR RATCHETS WENT BACK TO THEIR PRE-[[S242]] VALUES, WHICH IS THE REAL CHECK.** A ratchet
+that did not fall here would mean something of the page work survived:
+
+| ratchet | was → is | why |
+|---|---|---|
+| `FigmaUINavTest` spread/letterbox | 20/20 → **17/19** | the three shells are gone, `VehicleComms` with them |
+| `LegibilityFloorTest.BarTextDraws` | 30 → **27** | three shells drew the bar; none do now |
+| `CrewPressTest` CVR namespace | 203 → **199** | four page-scoped control ids removed |
+| `CrewPressTest.PinUiPage` | 40 → **36** | the four appended members |
+
+⛔ The three `LegibilityFloorTest` floor-baseline rows were removed with them.
+
+⭐⭐ **THE PROOF, AND IT IS STRONGER THAN A GREEN TEST RUN.** `git diff 20f0805` — [[S241]], the last
+commit before ANY page work — over the whole repo returns **only** `REGISTER.md`, `ic_tab_comms.png`,
+`NASA_REFERENCE_ART.md`, `VehicleTabBar.cs` and `render_turntable.py`: the four KEEP items plus step 3's
+fix, and **nothing else**. `plugin/src/pure/BottomBar.cs`, `PageAction.cs` and `preview/PreviewMain.cs`
+are **byte-identical** to their pre-[[S243]] state. ⛔ That is a measurement, not an assertion that the
+removal was complete.
+
+#### ⭐ KEPT — VERIFIED PRESENT, EACH ONE
+
+| item | evidence |
+|---|---|
+| `DrawKind.Tri` = 5 + `DisplayList.Tri` | `DisplayList.cs:60`, `:339`; `DisplayListTriTest` **39 checks** |
+| `--tricheck` gate + `DegenerateTrisDropped` | `build.py:444` inside `test`; `DisplayList.cs:150/166/343` |
+| `ic_tab_comms.png` + its manifest row | 802 bytes on disk; `NASA_REFERENCE_ART.md:295` |
+| the in-place claim corrections | `NASA_REFERENCE_ART.md:264`, `VehicleTabBar.cs:199` |
+
+⭐ **`--tricheck` SURVIVES THE PAGE DELETION BECAUSE IT NEVER RENDERED A PAGE** — its own docstring:
+*"It does NOT render any page — it draws triangles into throwaway bitmaps."* That was checked before the
+files were deleted, not discovered afterwards.
+
+#### ⛔ ONE ITEM ON THE KEEP LIST POINTED AT NOTHING, AND IT IS RECORDED RATHER THAN QUIETLY IGNORED
+
+The prompt's KEEP list named *"the in-place claim corrections in `NASA_REFERENCE_ART.md`,
+`VehicleTabBar.cs`, `BottomBar.cs`"*. ⚠ **There is no [[S243]] claim correction in `BottomBar.cs`.**
+[[S243]]'s only change to that file was **7 lines of `FitFor` page routing** (`git show f0f57ce --stat`),
+which step 2 explicitly ordered removed as *"their `FigmaUI` routing"*. ⭐ The owner confirmed in chat:
+*"delete the bottom bar reference too."* So the file is back to byte-identical pre-[[S243]] state, and
+its six PRE-EXISTING `SUPERSEDED IN PLACE` blocks ([[S175]], [[S176]], [[S236]]) were never at risk and
+are untouched — the KEEP intent is satisfied either way.
+
+#### ⚠ ONE DANGLING REFERENCE, RAISED NOT FIXED
+
+`VehicleTabBar.cs:206` — inside the KEPT claim correction — points at *"`pure/BaseScreenTabbed.cs`"*, a
+file this task deleted. ⛔ **Left alone deliberately:** the prompt says keep that correction and
+*"⛔ Nothing else"*, and the correction's CLAIM is still true (the owner overrode the eight-tab ruling;
+the glyph was harvested and ships). Only the parenthetical path is now forward-looking rather than
+current — the rebuild will re-create that file. Raised as `BOB-23`.
+
+#### ⭐ STEP 3 — ONE DEAD PATH REPAIRED
+
+`plugin/build/render_turntable.py:70` pointed at `assets/reference/models/crew_dragon_falcon_9 (1).glb`,
+which **is not in the tree**; the model there is `scene.gltf`. One functional line changed, so the script
+could not have run as committed. ⚠ The comment beneath it — *"the 1k-texture export is the one used …
+the 4k twin (crew_dragon_falcon_9.glb, 32 MB)"* — describes two files that no longer exist either, so it
+is **marked SUPERSEDED IN PLACE and kept verbatim** (C1.16): its REASONING still governs whatever export
+is used, only its subject is gone.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** |
+| `harnesscheck` | **ok**, fault named, exit 1, 174 clean report lines |
+| `--tricheck` (inside `test`) | 12 raster checks at both sizes |
+| `previewdiff` | **1 changed (`ui_menu.png`), 0 new, 3 REMOVED** (the three shells), 129 unchanged |
+| `git diff 20f0805` | only the 4 KEEP items + step 3 — the exactness proof above |
+
+⛔ **NOTHING WAS BUILT IN THIS COMMIT.** No base screens, no pages, no gauge — the next prompt starts the
+build, against the spec.
+
+**Commit:** this one. **No `git push`.**

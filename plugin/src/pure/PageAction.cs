@@ -145,15 +145,6 @@ namespace DragonScreen
         /// </summary>
         public int AudioSeat;
 
-        /// <summary>
-        /// ⭐ S243. Which of `BaseScreenTabbed`'s NINE tabs `ShellVehicle` is showing. Held by the
-        /// painter beside the other per-page control state, so the selector's position survives a
-        /// rebuild of the display list — the same footing `AudioSeat` and `GateNumber` have.
-        /// ⚠ Out of range draws the strip with NO selector, which is a real state (a tabbed page
-        /// reached before a tab is chosen) and not an error.
-        /// </summary>
-        public int ShellTab;
-
         /// <summary>What a screen opens on: FUNCTIONS, and both clusters on LARGE - the states every
         /// page already drew before the toggles could be tapped, so nothing moved under anyone.</summary>
         public static PageControls Default
@@ -170,7 +161,6 @@ namespace DragonScreen
                 // loop unless somebody deliberately takes them out. The live value is read from the
                 // conductor every frame; this is only what a screen opens on.
                 c.GateNumber = 0;
-                c.ShellTab = 0;   // S243: a tabbed shell opens on its first tab
                 c.AutoGates = false;
                 return c;
             }

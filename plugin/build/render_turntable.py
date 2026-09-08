@@ -67,11 +67,17 @@ PREFIX = 'dragon_turn_'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..'))
-MODEL = os.path.join(REPO, 'assets', 'reference', 'models', 'crew_dragon_falcon_9 (1).glb')
+MODEL = os.path.join(REPO, 'assets', 'reference', 'models', 'scene.gltf')
 OUT_DIR = os.path.join(HERE, '..', 'GameData', 'DragonScreen', 'art', 'cover')
 
-# The 1k-texture export is the one used: at 512 px across the whole vehicle the 4k twin
-# (crew_dragon_falcon_9.glb, 32 MB) resolves to the same pixels and costs ten times the import.
+# SUPERSEDED IN PLACE 2026-09-09 - kept verbatim (C1.16), because it is the record of WHY a 1k
+# export was chosen over a 4k one, and that reasoning still applies to whatever export is used:
+#   "The 1k-texture export is the one used: at 512 px across the whole vehicle the 4k twin
+#   (crew_dragon_falcon_9.glb, 32 MB) resolves to the same pixels and costs ten times the import."
+# Its SUBJECT no longer exists. Neither 'crew_dragon_falcon_9 (1).glb' (which MODEL pointed at,
+# above) nor its 4k twin is in the tree; the model is now assets/reference/models/scene.gltf, so
+# the path was dead and this script could not have run. Only the filename changed - nothing about
+# the framing, the material isolation or the 36-frame sequence is affected.
 
 # ---- the isolation, by material (see the header) ----
 KEEP_MATERIALS = {'SpaceX_Dragon2.001', 'Capsule_trunk', 'Trunk1', 'Trunk2'}

@@ -114,10 +114,7 @@ public static class CrewPressTest
         "SystemsTree", "SystemsPid",
         "Ascent",
         "NavOrbitPlot",
-        "CrewGate",
-        // S243: the rebuild's pages, appended beside the originals rather than replacing them
-        // (BOB-16 - the existing pages keep their ints, their classes and every assertion).
-        "VehicleComms", "ShellCover", "ShellVehicle", "ShellSuitCheck" };
+        "CrewGate" };
 
     static readonly string[] PinCoverButton = {
         "None", "Menu", "Back", "Forward",
@@ -651,10 +648,7 @@ public static class CrewPressTest
         //   procedure can show (`CrewGatePage.MaxSteps` = 8). So 199.
         //   ⚠ The step ids are the reason this number moves when `MaxSteps` does, and that is deliberate:
         //   a procedure that can show a row the recorder cannot name is the defect S164 exists to catch.
-        // ⚠ S243: 199 -> 203. Four new `UiPage` values, each contributing its own page-scoped
-        // control id to the CVR namespace. ⛔ A count that moves without a reason is how a control
-        // goes missing unnoticed, so the reason is here.
-        Check(all.Count == 203, "the namespace should hold 203 ids, it holds " + all.Count);
+        Check(all.Count == 199, "the namespace should hold 199 ids, it holds " + all.Count);
 
         Dictionary<string, string> seen = new Dictionary<string, string>();
         for (int i = 0; i < all.Count; i++)

@@ -137,16 +137,6 @@ public static class TestMain
         // nothing to show for it - which is H-01's shape. Pixels are proved separately by
         // `DragonScreenPreview.exe --tricheck`, because no rasteriser is reachable from this build.
         bad += Suite(DisplayListTriTest.Run);   // S240: Tri packing, degeneracy, and the two-renderer pin
-        // ⭐⭐ S242. The two locked base screens. Its load-bearing check is
-        // `DrawAndHitShareOneSource`: it renders the strip, finds the selector the DRAW actually put
-        // down, and asserts that selector's own centre is a hit on that tab - comparing the drawing
-        // against the hit map rather than both against one constant, which is the only version that
-        // catches them drifting together. `BottomBar.cs:68-77` is why.
-        bad += Suite(BaseScreenTest.Run);       // S242: the locked geometry + the tab coupling
-        // ⭐⭐ S243. The three shells, APPENDED beside the originals (BOB-16). Its load-bearing check
-        // is : "draws nothing" and "is not connected" produce identical
-        // display lists, so it DRIVES a callout in and watches it appear.
-        bad += Suite(ShellPageTest.Run);        // S243: wired, empty on purpose, originals untouched
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
