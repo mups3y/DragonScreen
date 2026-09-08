@@ -145,6 +145,13 @@ public static class TestMain
         // ⚠ Design space only. §11's DEVICE-space table is pixels, and no rasteriser is reachable from
         // this build; `DragonScreenPreview.exe --basecheck` holds that half and is a gate in `test`.
         bad += Suite(BasePageNoIconTest.Run);
+        // ⭐⭐ S246. The ICON base screen - the same page plus §6's notch and §7's nine tabs.
+        // ⛔ Still a RENDERER: no `UiPage` value, no routing, `PageCount` unchanged. Its own
+        // load-bearing checks are that the ICON path is the NON-ICON path PLUS FOUR POINTS, that
+        // §7's stack is DERIVED from the shelf and lands on §5's border inner face from the opposite
+        // direction, and that the surface and the whole border are command-for-command IDENTICAL to
+        // the proved page - which is what calling one expression of the border buys.
+        bad += Suite(BasePageIconTest.Run);
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)

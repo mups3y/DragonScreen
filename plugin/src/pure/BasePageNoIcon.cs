@@ -17,14 +17,24 @@
  * DRAWN geometry agrees with them, so the page is pinned against the specification's own characters
  * by two independent expressions of it. Change one coordinate in either and the suite fails.
  *
- * ---- ⚠ TWO PLACES THIS FILE MAKES A CHOICE THE SPEC DOES NOT MAKE FOR IT ----
- * Both are recorded rather than buried, and both are raised to the overseer with this commit:
- *  (1) ⭐ THE GROUND IS PAINTED OVER THE WHOLE DEVICE SURFACE, not only inside the mapped frame.
+ * ---- ⚠ TWO PLACES THIS FILE MADE A CHOICE THE SPEC DID NOT MAKE FOR IT — BOTH NOW RULED ----
+ * ~~Both are recorded rather than buried, and both are raised to the overseer with this commit.~~
+ * ⭐ SUPERSEDED IN PLACE 2026-09-09 (S246): both were raised as `BOB-27` and `BOB-29` and both came
+ * back ANSWERED. The original text is kept verbatim below (C1.16) with the ruling under each.
+ *
+ *  (1) ~~⭐ THE GROUND IS PAINTED OVER THE WHOLE DEVICE SURFACE, not only inside the mapped frame.
  *      §2 leaves the spare pixels' colour unstated, and at 2560x1419 that is a ~6.8 px band top and
  *      bottom. Painting them the page ground is the only option that renders IDENTICALLY in both
  *      renderers: leaving them unpainted shows GDI+'s clear colour in the preview and GL's on the
  *      glass, which is a silent two-renderer divergence — the exact failure this project keeps
- *      paying for. One `Rect` to change if the owner wants black bands instead. (`BOB-27`)
+ *      paying for. One `Rect` to change if the owner wants black bands instead. (`BOB-27`)~~
+ *      ὾2 **RULED, OWNER, 2026-09-09 — THE BAND IS `#070810`, NOT THE PAGE GROUND.** Verbatim:
+ *      *"use whatever gets it closest to the design I approved."* The approved design has NO band at
+ *      all, and `#070810` reads as unlit screen where `#1A1F35` read as a lighter stripe framing the
+ *      border. Now spec §2.1. ⭐ The REASONING above stands — painting the surface at all is right,
+ *      and for exactly the two-renderer reason given; only the colour was wrong. ⛔ The band's colour
+ *      is asserted in `--basecheck` so the choice stays visible.
+ *
  *  (2) ⭐ THE BORDER'S 3px STROKE IS DRAWN AS TWO OFFSET REGIONS — the path outset by 1.5 in white,
  *      then the path inset by 1.5 in `#070810` — rather than as separate edge bands. The border has
  *      45-degree chamfer joins, and butted bands leave a notch at a mitre that offset regions cannot
@@ -32,6 +42,11 @@
  *      quarter-annuli), which is what keeps its 0.55 alpha compositing over the right two grounds:
  *      the outer half over `#070810` and the inner half over the window's own `#1A1F35`, exactly as
  *      a centred SVG stroke does.
+ *      ὾2 **CONFIRMED, `BOB-29`, and it is now spec §4:** *"a diagonal is STROKED as two offset FILL
+ *      regions ..., not with `Line`"*, for the mitre reason given here. ⚠ §4's rule cannot reach an
+ *      ALPHA stroke — an offset region is a multi-piece fill and its internal boundaries would seam at
+ *      0.55 (a 26/255 step) with no overlap available to fix them. That is why the window keeps its
+ *      ring, and why `BasePageIcon` strokes its two notch bevels as `Tri` bands inside that ring.
  */
 using System;
 
@@ -39,8 +54,8 @@ namespace DragonScreen
 {
     public static class BasePageNoIcon
     {
-        /// <summary>Ground + border (9+9) + window fill (7) + window ring (8) + the bar.</summary>
-        public const int Commands = 34 + BaseBar.Commands;
+        /// <summary>Surface + ground + border (9+9) + window fill (7) + ring (8) + the bar.</summary>
+        public const int Commands = 35 + BaseBar.Commands;
 
         // ==========================================================================================
         //  §5 — THE OUTER BORDER, VERBATIM. 3px #FFFFFF, fill #070810, top corners r=12, bottom
@@ -127,9 +142,27 @@ namespace DragonScreen
         {
             BaseFit fit = BaseFit.For(w, h);
 
-            // ---- the page ground. See this file's header, note (1), for why it covers the SURFACE
-            // and not merely the mapped frame.
-            dl.Rect(0f, 0f, w, h, Ground);
+            // ---- §2.1: the WHOLE DEVICE SURFACE is painted `#070810` before the mapped frame goes
+            // on it. ὾2 OWNER RULING, 2026-09-09: *"use whatever gets it closest to the design I
+            // approved."* The approved design has no letterbox band at all, and this value reads as
+            // unlit screen; the page ground read as a lighter stripe framing the border. See the
+            // header's note (1) for why the surface is painted AT ALL, which is the part that stands.
+            // ⚠ IT BLEEDS ONE PIXEL PAST EVERY EDGE, AND THAT IS MEASURED, NOT CAUTIOUS.
+            // Drawn exactly 0..w, the render left ROW 0 at rgb(5,7,36) - a blend of this colour with
+            // whatever the renderer had cleared to - because GDI+ samples pixel CENTRES, so the
+            // topmost row is only half covered by a rect whose edge sits exactly on 0. ⛔ The glass
+            // clears to something else again, so that row would differ between the two renderers for
+            // no reason anyone chose. One pixel of bleed removes the question.
+            dl.Rect(-1f, -1f, w + 2f, h + 2f, Margin);
+
+            // ---- ⛔ AND THEN §3's PAGE GROUND, OVER THE MAPPED FRAME ONLY. These are TWO different
+            // things and collapsing them into one was a real defect for the length of one render:
+            // §3 gives `#1A1F35` as "page ground · bottom-bar ground · content-window fill", and §8.1
+            // says the bar "draws NO ground of its own" because THIS is the ground it sits on. With
+            // only the surface painted, the whole bar band came out `#070810` and the two 1px rules
+            // measurably dimmed (peak 193 against 198) because they were compositing over the wrong
+            // colour. ⭐ Caught by `--basecheck`, not by any design-space test.
+            dl.Rect(fit.X(0f), fit.Y(0f), fit.S(BaseFit.FrameW), fit.S(BaseFit.FrameH), Ground);
 
             // ---- §5: the border. Outset by half the stroke in white, then inset by half the stroke
             // in #070810 — a 3px stroke centred on the path, with the mitres exact at the chamfers.
@@ -150,6 +183,12 @@ namespace DragonScreen
         /// <summary>
         /// §5's path, offset INWARD by <paramref name="d"/> (negative outsets), filled.
         ///
+        /// ⭐ `internal` RATHER THAN `private` SINCE S246, AND THAT IS THE WHOLE OF THE CHANGE. §5 says
+        /// the outer border is *"identical on BOTH pages"*, so there must be exactly ONE expression of
+        /// it; `BasePageIcon` calls this rather than carrying a second copy that could drift. ⛔ Not a
+        /// base class and not a refactor — the ICON page is a separate renderer that shares this one
+        /// method, and nothing about the proved page's OUTPUT moved when the visibility changed.
+        ///
         /// ⭐ §4 assigns the shapes: straight runs → `Rect`, the 45-degree diagonals → `Tri`, the
         /// rounded corners → `ArcBand` quarter-discs. The two bottom chamfers are the diagonals.
         /// ⛔ `Line` could stroke a diagonal but cannot FILL beside one — which is the whole reason
@@ -159,7 +198,7 @@ namespace DragonScreen
         /// edges, so shrinking the radius by d as both edges move in by d keeps it tangent to both.
         /// That is why 13 and 1907 appear as literals below and the radius does not.
         /// </summary>
-        private static void BorderRegion(DisplayList dl, BaseFit fit, float d, Rgba col)
+        internal static void BorderRegion(DisplayList dl, BaseFit fit, float d, Rgba col)
         {
             float e = d * Diag;
             float l = OuterLeft + d, r = OuterRight - d;

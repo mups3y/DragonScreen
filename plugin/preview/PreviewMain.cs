@@ -992,6 +992,14 @@ public static class PreviewMain
                 Render(bdl, sc.W, sc.H, path);
                 Console.WriteLine("  " + path + "   " + sc.W + "x" + sc.H + "   " + bdl.Count
                                   + " commands   (§11's device table is checked by --basecheck)");
+
+                DisplayList idl = new DisplayList(BasePageIcon.Commands + 8);
+                BasePageIcon.Draw(idl, sc.W, sc.H);
+                if (idl.Overflowed) Console.WriteLine("  WARNING ICON base page OVERFLOWED");
+                string ipath = Path.Combine(outDir, "ui_baseicon_screen" + sc.Index + ".png");
+                Render(idl, sc.W, sc.H, ipath);
+                Console.WriteLine("  " + ipath + "   " + sc.W + "x" + sc.H + "   " + idl.Count
+                                  + " commands   (§6's notch + §7's nine tabs)");
             }
         }
 
@@ -2354,32 +2362,36 @@ public static class PreviewMain
     }
 
     // ============================================================================================
-    //  ⭐⭐ S245 — THE NON-ICON BASE PAGE'S DEVICE-SPACE PROOF (`SPEC_BASE_SCREENS.md` §11).
+    //  ⭐⭐ S245/S246 — THE TWO BASE PAGES' DEVICE-SPACE PROOF (`SPEC_BASE_SCREENS.md` §11).
     //
     //  ⛔ WHY IT IS HERE AND NOT IN `plugin/test/`. Same reason `--tricheck` is: `build.py test`
     //  compiles `src/pure` + `test` only, so no rasteriser is reachable from the headless suite.
-    //  `BasePageNoIconTest` proves the DESIGN-space column exactly — it can read every command the
-    //  page emitted — but it cannot put down a pixel, and §11's second table is pixels: which ROW the
-    //  border's white band starts on at 2560x1405, where `#070810` begins, where the window line is.
+    //  `BasePageNoIconTest` / `BasePageIconTest` prove the DESIGN-space columns exactly — they can read
+    //  every command a page emitted — but they cannot put down a pixel, and §11's second table is
+    //  pixels: which ROW the border's white band starts on at 2560x1405, where `#070810` begins, where
+    //  the window line and the SHELF land, and whether the nine tab icons really do all peak at 255.
     //
     //  ⭐ IT RENDERS THROUGH `Paint`, THE REAL LOOP. Not the reduced two-branch dispatcher below that
     //  serves `--tricheck`: that one draws Rects and Tris and would silently skip every ArcBand and
-    //  every Image on this page, then report on a picture nobody ships.
+    //  every Image on these pages, then report on a picture nobody ships.
     //
-    //  ⚠ AND THE INSTRUMENT IS MADE TO FAIL ON PURPOSE BEFORE IT IS TRUSTED (`BaseCheckFalsifies`).
+    //  ⚠ AND EVERY PROBE IS MADE TO FAIL ON PURPOSE BEFORE IT IS TRUSTED (`BaseCheckFalsifies`).
     //  The overseer's own coverage check reported "zero unaccounted pixels" and went on reporting zero
-    //  with EVERY MASK REMOVED — it was measuring nothing. So this one is run against a render with
-    //  its border and its rules erased, and it must report faults. A probe that still passes with its
-    //  subject deleted is decorative.
+    //  with EVERY MASK REMOVED — it was measuring nothing. So these are run against renders with their
+    //  subjects erased — the border and the rules on one page, the SHELF and the TAB STRIP on the
+    //  other — and they must report faults. ⛔ The ICON probes get their own falsification rather than
+    //  inheriting the NON-ICON one, because a probe that has never failed has never been tested.
     // ============================================================================================
 
     /// <summary>§11's probes down column x=1280, in device rows. -1 means "never found".</summary>
     struct BaseProbe
     {
-        public int FirstWhite, MarginTop, WindowLine, GroundTop, BorderBottom;
+        public int FirstWhite, MarginTop, WindowLine, GroundTop, ShelfLine, TabBandTop, BorderBottom;
         public int RuleA, RuleB;
         public int RulePeakA, RulePeakB;
         public Color BandTop;              // the letterbox row, where there is one
+        public int TabIconsFound, TabIconDimmest, TabLabelsFound, TabLabelDimmest;
+        public int SelectorRuns, SelectorLeft, SelectorRight;
     }
 
     static bool PxWhite(Color c) { return c.R > 200 && c.G > 200 && c.B > 200; }
@@ -2391,16 +2403,20 @@ public static class PreviewMain
     static bool PxGround(Color c) { return PxIs(c, 26, 31, 53); }    // #1A1F35
 
     /// <summary>
-    /// Walk one column and one row and report what is actually there. ⛔ Nothing here knows what it
-    /// is SUPPOSED to find - the expectations live in the caller, so a probe cannot quietly agree
-    /// with the page by construction.
+    /// Walk one column, one bar row, and — on the ICON page — the tab strip, and report what is
+    /// actually there. ⛔ Nothing here knows what it is SUPPOSED to find: the expectations live in the
+    /// caller, so a probe cannot quietly agree with the page by construction.
     /// </summary>
-    static BaseProbe ProbeBasePage(Bitmap bmp, int w, int h)
+    static BaseProbe ProbeBasePage(Bitmap bmp, int w, int h, bool icon)
     {
         BaseProbe p = new BaseProbe();
-        p.FirstWhite = p.MarginTop = p.WindowLine = p.GroundTop = p.BorderBottom = -1;
+        p.FirstWhite = p.MarginTop = p.WindowLine = p.GroundTop = -1;
+        p.ShelfLine = p.TabBandTop = p.BorderBottom = -1;
         p.RuleA = p.RuleB = p.RulePeakA = p.RulePeakB = -1;
+        p.SelectorLeft = p.SelectorRight = -1;
+        p.TabIconDimmest = p.TabLabelDimmest = 255;
 
+        BaseFit f = BaseFit.For(w, h);
         int x = 1280;
         p.BandTop = bmp.GetPixel(x, 2);
 
@@ -2414,6 +2430,13 @@ public static class PreviewMain
         if (y < h) p.WindowLine = y;                                // the window's 0.55 stroke begins
         while (y < h && !PxGround(bmp.GetPixel(x, y))) y++;
         if (y < h) p.GroundTop = y;
+        // ⭐ ...and on down through the window fill to the next line. On the ICON page that is §6's
+        // SHELF; on the NON-ICON page it is the window's own bottom edge. Same walk, different answer,
+        // and the caller knows which design number to expect.
+        while (y < h && PxGround(bmp.GetPixel(x, y))) y++;
+        if (y < h) p.ShelfLine = y;
+        while (y < h && !PxMargin(bmp.GetPixel(x, y))) y++;
+        if (y < h) p.TabBandTop = y;
 
         // The bottom border is the LAST white run in the column - found by walking up from the foot,
         // so a stray bright pixel higher up cannot be mistaken for it.
@@ -2429,45 +2452,128 @@ public static class PreviewMain
         // `b_state` tile's own lettering, which reads as a third and fourth "rule". Design x 812..1096
         // is the gap between `b_state` (ends 807.9) and `b_point` (starts 1103.1), and it holds both
         // rules at every size.
-        // ⚠ A 1-design-px rule is 1.33 device px wide, so at a fractional offset NEITHER rule can
-        // reach 255 - one of them peaks at 198 here. They are found as PEAKS above the ground and the
-        // peak VALUE is printed, because "white means > 200" cannot be met by a sub-pixel feature and
-        // an assertion that says otherwise would fail for the wrong reason.
-        BaseFit ff = BaseFit.For(w, h);
-        int row = (int)Math.Round(ff.Y(1020.2f));
-        int xLo = (int)Math.Floor(ff.X(812f)), xHi = (int)Math.Ceiling(ff.X(1096f));
+        // ⚠ §11 as amended (`BOB-25`): a 1-DESIGN-px rule is 1.33 device px, so at a fractional offset
+        // it covers at most 75 % of any device pixel and peaks at ~198. The rules are found as PEAKS
+        // and their peak VALUE is printed; they are NOT thresholded, and they are NOT widened.
+        int row = (int)Math.Round(f.Y(1020.2f));
         var peaks = new System.Collections.Generic.List<int>();
         var vals = new System.Collections.Generic.List<int>();
-        int xi = xLo;
-        while (xi < xHi)
-        {
-            if (bmp.GetPixel(xi, row).R > 100)
-            {
-                int best = xi, bestV = bmp.GetPixel(xi, row).R;
-                while (xi < xHi && bmp.GetPixel(xi, row).R > 100)
-                {
-                    if (bmp.GetPixel(xi, row).R > bestV) { bestV = bmp.GetPixel(xi, row).R; best = xi; }
-                    xi++;
-                }
-                peaks.Add(best); vals.Add(bestV);
-            }
-            else xi++;
-        }
+        Runs(bmp, row, (int)Math.Floor(f.X(812f)), (int)Math.Ceiling(f.X(1096f)), 100, peaks, vals);
         if (peaks.Count > 0) { p.RuleA = peaks[0]; p.RulePeakA = vals[0]; }
         if (peaks.Count > 1) { p.RuleB = peaks[1]; p.RulePeakB = vals[1]; }
-        if (peaks.Count > 2) { p.RuleA = -2; }      // more than two brights on that row: report it
+        if (peaks.Count > 2) p.RuleA = -2;      // more than two brights on that row: report it
+
+        if (!icon) return p;
+
+        // ---- §7, THE TAB STRIP, IN PIXELS -------------------------------------------------------
+        // ⛔ NO DIMMING. NONE. §7: "all nine icons and all nine labels peak at 255 whether active or
+        // not". That is a claim about PIXELS, so it is measured in pixels: the dimmest of the nine
+        // peaks is reported, and one dimmed icon drops it.
+        for (int i = 0; i < BasePageIcon.TabCount; i++)
+        {
+            float cx = BasePageIcon.TabCentre(i);
+            int pk = BoxPeak(bmp, w, h,
+                             f.X(cx - BasePageIcon.IconSize * 0.5f), f.Y(BasePageIcon.IconTop),
+                             f.S(BasePageIcon.IconSize), f.S(BasePageIcon.IconSize));
+            if (pk >= 0) { p.TabIconsFound++; if (pk < p.TabIconDimmest) p.TabIconDimmest = pk; }
+            int lp = BoxPeak(bmp, w, h,
+                             f.X(cx - BasePageIcon.TabPitch * 0.5f), f.Y(BasePageIcon.LabelTop),
+                             f.S(BasePageIcon.TabPitch), f.S(BasePageIcon.LabelLineHeight));
+            if (lp >= 0) { p.TabLabelsFound++; if (lp < p.TabLabelDimmest) p.TabLabelDimmest = lp; }
+        }
+
+        // The selector: one white run on its own row, under the ACTIVE tab and nowhere else.
+        int selRow = (int)Math.Round(f.Y(BasePageIcon.SelectorTop + BasePageIcon.SelectorHeight * 0.5f));
+        var sp = new System.Collections.Generic.List<int>();
+        var sv = new System.Collections.Generic.List<int>();
+        int lo = (int)Math.Floor(f.X(BasePageIcon.TabCentre(0) - BasePageIcon.TabPitch));
+        int hi = (int)Math.Ceiling(f.X(BasePageIcon.TabCentre(BasePageIcon.TabCount - 1)
+                                       + BasePageIcon.TabPitch));
+        if (lo < 0) lo = 0;
+        if (hi > w) hi = w;
+        p.SelectorRuns = Runs(bmp, selRow, lo, hi, 200, sp, sv);
+        if (p.SelectorRuns > 0)
+        {
+            int xx = sp[0];
+            while (xx > lo && bmp.GetPixel(xx - 1, selRow).R > 200) xx--;
+            p.SelectorLeft = xx;
+            xx = sp[0];
+            while (xx < w - 1 && bmp.GetPixel(xx + 1, selRow).R > 200) xx++;
+            p.SelectorRight = xx;
+        }
         return p;
     }
 
-    static Bitmap RenderBasePage(int w, int h)
+    /// <summary>Bright runs across one row: appends each run's brightest x and value, returns the
+    /// number of runs.</summary>
+    static int Runs(Bitmap bmp, int row, int x0, int x1, int threshold,
+                    System.Collections.Generic.List<int> at,
+                    System.Collections.Generic.List<int> peak)
     {
-        DisplayList dl = new DisplayList(BasePageNoIcon.Commands + 8);
-        BasePageNoIcon.Draw(dl, w, h);
+        int n = 0, x = x0;
+        if (row < 0 || row >= bmp.Height) return 0;
+        while (x < x1)
+        {
+            if (bmp.GetPixel(x, row).R > threshold)
+            {
+                int best = x, bestV = bmp.GetPixel(x, row).R;
+                while (x < x1 && bmp.GetPixel(x, row).R > threshold)
+                {
+                    if (bmp.GetPixel(x, row).R > bestV) { bestV = bmp.GetPixel(x, row).R; best = x; }
+                    x++;
+                }
+                at.Add(best); peak.Add(bestV); n++;
+            }
+            else x++;
+        }
+        return n;
+    }
+
+    /// <summary>The brightest channel value anywhere in a device-space box, or -1 if the box is
+    /// empty of anything brighter than the ground.</summary>
+    static int BoxPeak(Bitmap bmp, int w, int h, float x, float y, float bw, float bh)
+    {
+        int x0 = (int)Math.Floor(x), x1 = (int)Math.Ceiling(x + bw);
+        int y0 = (int)Math.Floor(y), y1 = (int)Math.Ceiling(y + bh);
+        if (x0 < 0) x0 = 0;
+        if (y0 < 0) y0 = 0;
+        if (x1 > w) x1 = w;
+        if (y1 > h) y1 = h;
+        int best = -1;
+        for (int yy = y0; yy < y1; yy++)
+            for (int xx = x0; xx < x1; xx++)
+            {
+                Color c = bmp.GetPixel(xx, yy);
+                int v = Math.Max(c.R, Math.Max(c.G, c.B));
+                if (v > best) best = v;
+            }
+        return best > 60 ? best : -1;      // 60 clears #070810 and #1A1F35 both
+    }
+
+    static Bitmap RenderBasePage(bool icon, int w, int h)
+    {
+        DisplayList dl = new DisplayList(
+            (icon ? BasePageIcon.Commands : BasePageNoIcon.Commands) + 8);
+        if (icon) BasePageIcon.Draw(dl, w, h);
+        else BasePageNoIcon.Draw(dl, w, h);
         Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(bmp)) g.Clear(Color.Magenta);   // unpainted = obvious
         Paint(bmp, dl);
         return bmp;
     }
+
+    /// <summary>
+    /// ⭐⭐ GDI+'s OWN HALF PIXEL, MEASURED RATHER THAN ASSUMED, AND IT IS WHY §11's TOLERANCE IS ±1.
+    ///
+    /// The preview draws with `PixelOffsetMode` at its default, which samples PIXEL CENTRES (integer
+    /// coordinates) rather than pixel AREAS - so a shape whose edge sits at device y lands as though
+    /// it sat at y + 0.5. ⚠ It is not a fudge and it is not guessed: every one of the eight edge
+    /// probes below lands within 0.8 px of `boundary + 0.5` and none within 0.8 of `boundary`, which
+    /// is what identified it. ⛔ The shipped glass rasterises with MSAA and need not share the
+    /// convention - which is exactly why §11's tolerance is ±1 and not 0, and why every number in
+    /// this file is MEASURED off a render instead of computed from the design and trusted.
+    /// </summary>
+    const double GdiHalfPixel = 0.5;
 
     static int SayAt(string what, int got, double want, double tol, string extra)
     {
@@ -2477,29 +2583,42 @@ public static class PreviewMain
                           + (extra == "" ? "" : "   " + extra));
         return ok ? 0 : 1;
     }
+    static int Say2(string what, bool ok, string detail)
+    {
+        Console.WriteLine((ok ? "    ok   " : "    FAIL ") + what + (detail == "" ? "" : "   " + detail));
+        return ok ? 0 : 1;
+    }
 
-    static int BaseCheckAt(int w, int h, string label)
+    static int BaseCheckAt(bool icon, int w, int h, string label)
     {
         int fail = 0;
         BaseFit f = BaseFit.For(w, h);
-        Console.WriteLine("  [" + label + "] " + w + "x" + h
+        Console.WriteLine("  [" + (icon ? "ICON " : "NON-ICON ") + label + "] " + w + "x" + h
                           + "   k = " + f.K.ToString("F5")
                           + "   x-offset " + f.OffX.ToString("F2")
                           + "   y-offset " + f.OffY.ToString("F2"));
 
-        using (Bitmap bmp = RenderBasePage(w, h))
+        using (Bitmap bmp = RenderBasePage(icon, w, h))
         {
-            BaseProbe p = ProbeBasePage(bmp, w, h);
+            BaseProbe p = ProbeBasePage(bmp, w, h, icon);
 
             // ⭐ EVERY EXPECTATION IS THE DESIGN NUMBER MAPPED THROUGH §2's FIT - so the SAME row of
             // this table serves both shipped sizes, which is what "every ratio must be identical"
             // means operationally. §11's own literal device values for 2560x1405 are checked below.
             fail += SayAt("first white (border top)", p.FirstWhite,
-                          Math.Max(0.0, f.Y(1f - 1.5f)), 1.0, "");
-            fail += SayAt("#070810 begins", p.MarginTop, f.Y(1f + 1.5f), 1.0, "");
-            fail += SayAt("window line", p.WindowLine, f.Y(19.5f - 1f), 1.0, "");
-            fail += SayAt("#1A1F35 begins", p.GroundTop, f.Y(19.5f + 1f), 1.0, "");
-            fail += SayAt("white (border bottom)", p.BorderBottom, f.Y(979f - 1.5f), 1.0, "");
+                          Math.Max(0.0, f.Y(1f - 1.5f) + GdiHalfPixel), 1.0, "");
+            fail += SayAt("#070810 begins", p.MarginTop, f.Y(1f + 1.5f) + GdiHalfPixel, 1.0, "");
+            fail += SayAt("window line", p.WindowLine, f.Y(19.5f - 1f) + GdiHalfPixel, 1.0, "");
+            fail += SayAt("#1A1F35 begins", p.GroundTop, f.Y(19.5f + 1f) + GdiHalfPixel, 1.0, "");
+            // ⭐ The next line down the column is §6's SHELF on the ICON page and the window's own
+            // bottom edge on the NON-ICON page.
+            float lineY = icon ? BasePageIcon.Shelf - 1f : BasePageNoIcon.WindowBottom - 1f;
+            float bandY = icon ? BasePageIcon.Shelf + 1f : BasePageNoIcon.WindowBottom + 1f;
+            fail += SayAt(icon ? "window line (SHELF)" : "window line (bottom edge)",
+                          p.ShelfLine, f.Y(lineY) + GdiHalfPixel, 1.0, "");
+            fail += SayAt(icon ? "#070810 (TAB BAND) begins" : "#070810 (below the window) begins",
+                          p.TabBandTop, f.Y(bandY) + GdiHalfPixel, 1.0, "");
+            fail += SayAt("white (border bottom)", p.BorderBottom, f.Y(979f - 1.5f) + GdiHalfPixel, 1.0, "");
             fail += SayAt("thin white vertical, rule 1", p.RuleA, f.X(820.2f + 0.5f), 1.0,
                           "peak " + p.RulePeakA);
             fail += SayAt("thin white vertical, rule 2", p.RuleB, f.X(1088.6f + 0.5f), 1.0,
@@ -2518,33 +2637,117 @@ public static class PreviewMain
                     int dev = Math.Max(Math.Abs(c.R - 7), Math.Max(Math.Abs(c.G - 8), Math.Abs(c.B - 16)));
                     if (dev > 2) { bad++; if (dev > worst) { worst = dev; worstY = y; } }
                 }
-                for (int y = p.GroundTop + 2; y < (int)f.Y(940f); y++)
+                for (int y = p.GroundTop + 2; y < p.ShelfLine - 2; y++)
                 {
                     Color c = bmp.GetPixel(1280, y);
                     int dev = Math.Max(Math.Abs(c.R - 26), Math.Max(Math.Abs(c.G - 31), Math.Abs(c.B - 53)));
                     if (dev > 2) { bad++; if (dev > worst) { worst = dev; worstY = y; } }
                 }
-                Console.WriteLine((bad == 0 ? "    ok   " : "    FAIL ")
-                                  + "no same-colour seam in the margin field or the window field"
-                                  + (bad == 0 ? "" : "   " + bad + " row(s), worst " + worst
-                                                     + "/255 at y " + worstY));
-                if (bad != 0) fail++;
+                fail += Say2("no same-colour seam in the margin field or the window field", bad == 0,
+                             bad == 0 ? "" : bad + " row(s), worst " + worst + "/255 at y " + worstY);
             }
 
-            // ⚠ THE LETTERBOX. §2 leaves the spare pixels' colour unstated and this build paints them
-            // the page ground, so that both renderers put down the same thing. Asserted, so the
-            // choice is visible and any change to it fails here rather than on the glass. (`BOB-27`)
+            // ⚠ THE LETTERBOX. 🟢 §2.1, OWNER RULING 2026-09-09: the whole surface is `#070810`.
+            // Verbatim: "use whatever gets it closest to the design I approved" - the approved design
+            // has no band, and this value reads as unlit screen rather than as a lighter stripe.
+            // ⛔ Asserted, so the choice stays visible and a change to it fails here, not on the glass.
             bool band = f.OffY > 1.5f;
             Console.WriteLine("    " + (band
-                ? "note: " + f.OffY.ToString("F2") + "px letterbox band, painted the page ground "
-                  + "rgb(" + p.BandTop.R + "," + p.BandTop.G + "," + p.BandTop.B + ")"
+                ? "note: " + f.OffY.ToString("F2") + "px letterbox band at rgb("
+                  + p.BandTop.R + "," + p.BandTop.G + "," + p.BandTop.B + ")"
                 : "note: no letterbox band at this size (spare height " + f.OffY.ToString("F2") + "px)"));
             if (band)
+                fail += Say2("§2.1 the letterbox band is #070810, the owner's value", PxMargin(p.BandTop), "");
+            // ⛔ INCLUDING ROW 0. A surface rect drawn exactly 0..h leaves the topmost row half
+            // covered under GDI+'s pixel-centre sampling, blended with whatever the renderer cleared
+            // to - rgb(5,7,36) here, something else on the glass. The rect bleeds a pixel for this.
             {
-                bool ok = PxGround(p.BandTop);
-                Console.WriteLine((ok ? "    ok   " : "    FAIL ")
-                                  + "the letterbox band is the page ground, not a renderer clear colour");
-                if (!ok) fail++;
+                Color top = bmp.GetPixel(1280, 0), bot = bmp.GetPixel(1280, h - 1);
+                fail += Say2("§2.1 ...on the VERY first and last rows too, with no renderer clear showing",
+                             PxMargin(top) || PxGround(top) || PxWhite(top),
+                             "row 0 rgb(" + top.R + "," + top.G + "," + top.B + "), row " + (h - 1)
+                             + " rgb(" + bot.R + "," + bot.G + "," + bot.B + ")");
+            }
+
+            if (icon)
+            {
+                // ---- §7, MEASURED IN PIXELS ----
+                fail += Say2("§7 all nine tab icons are on the glass", p.TabIconsFound == 9,
+                             p.TabIconsFound + " found");
+                fail += Say2("§7 all nine tab labels are on the glass", p.TabLabelsFound == 9,
+                             p.TabLabelsFound + " found");
+                // ⛔ NO DIMMING. §7: "all nine icons and all nine labels peak at 255 whether active or
+                // not". The DIMMEST of the nine peaks is what a dimming scheme would move.
+                fail += Say2("§7 NO DIMMING: the dimmest tab icon still peaks at 255",
+                             p.TabIconDimmest >= 254, "dimmest peak " + p.TabIconDimmest);
+                fail += Say2("§7 NO DIMMING: the dimmest tab label still peaks at 255",
+                             p.TabLabelDimmest >= 254, "dimmest peak " + p.TabLabelDimmest);
+                // The selector: ONE run, under tab 0, 81.5 design px wide.
+                fail += Say2("§7 exactly one selector on its row", p.SelectorRuns == 1,
+                             p.SelectorRuns + " white runs");
+                // ⭐ ITS CENTRE AND ITS WIDTH, not its two edges. §7 says the selector is 81.5 wide and
+                // sits under the ACTIVE tab; a left edge alone cannot tell a shifted selector from a
+                // narrowed one, and each edge carries its own antialiasing while the pair does not.
+                fail += SayAt("§7 the selector is centred on tab 0",
+                              (p.SelectorLeft + p.SelectorRight + 1) / 2,
+                              f.X(BasePageIcon.TabCentre(0)) + GdiHalfPixel, 1.0, "");
+                fail += SayAt("§7 ...and is 81.5 design px wide",
+                              p.SelectorRight - p.SelectorLeft + 1,
+                              f.S(BasePageIcon.SelectorWidth), 1.0, "");
+
+                // ⚠ THE FOUR BEVEL JUNCTIONS. Each 2px bevel band ends square across its own width
+                // rather than at the exact mitre point, which is ±(√2−1)·o away - at most 0.41 design
+                // px. MEASURED here rather than assumed: the shelf's own line must be continuous
+                // across the junction, with no gap and no double-bright pixel.
+                // ---- ⚠ THE TWO BEVEL BANDS, ALONG THEIR OWN CENTRELINES ----------------------
+                // ⛔ THE FIRST VERSION OF THIS PROBE WAS WRONG AND SAID SO LOUDLY, WHICH IS THE POINT.
+                // It scanned horizontally across the shelf's row past x = SL and called the drop to
+                // the ground a "gap". It is not: the line TURNS there. Past the corner there is no
+                // horizontal line left to find, only the bevel heading down-left, so a horizontal scan
+                // can only ever measure the bevel's own cross-section tapering out of the row.
+                //
+                // ⭐ What actually needs measuring is whether the bevel band is CONTINUOUS along its
+                // length. It is drawn as two `Tri`s sharing a long diagonal, and at 0.55 alpha a seam
+                // on that diagonal would be a 26/255 dip running the length of the band - the same
+                // defect class as S245's rect/rect hairline, which no design-space test could see and
+                // which cannot be fixed by overlapping, because two 0.55 fills composite to 0.80.
+                int jrow = (int)Math.Round(f.Y(BasePageIcon.Shelf));
+                int line = bmp.GetPixel((int)Math.Round(f.X(900f)), jrow).R;
+                int lo255 = 255, hi255 = 0;
+                double loAt = -1;
+                for (int side = 0; side < 2; side++)
+                {
+                    float x0 = side == 0 ? BasePageIcon.ShelfLeft : BasePageIcon.ShelfRight;
+                    float x1 = side == 0 ? BasePageIcon.BevelLeft : BasePageIcon.BevelRight;
+                    for (int k = 2; k <= 98; k++)
+                    {
+                        double tt = k / 100.0;
+                        double dx = x0 + (x1 - x0) * tt;
+                        double dy = BasePageIcon.Shelf
+                                    + (BasePageNoIcon.WindowBottom - BasePageIcon.Shelf) * tt;
+                        int px = (int)Math.Round(f.X((float)dx)), py = (int)Math.Round(f.Y((float)dy));
+                        if (px < 0 || py < 0 || px >= w || py >= h) continue;
+                        int v = bmp.GetPixel(px, py).R;
+                        if (v < lo255) { lo255 = v; loAt = tt; }
+                        if (v > hi255) hi255 = v;
+                    }
+                }
+                // ⛔ The band must be present everywhere along both bevels - never falling to the
+                // ground beneath - and never BRIGHTER than the straight run beside it, which is what a
+                // double-covered overlap would look like.
+                // ⚠ MEASURED, AND THE THRESHOLD IS A RATCHET ON THAT MEASUREMENT, NOT A GUESS.
+                // The dimmest point on either bevel is 127 against a straight run of 152 - a 25/255
+                // dip at t≈0.55, exactly where the two `Tri`s' shared diagonal crosses the centreline.
+                // ⛔ IT IS THE ALPHA SEAM, AND IT IS THE BEST THESE PRIMITIVES CAN DO: overlapping the
+                // pair would composite 0.55 over 0.55 = 0.80 and turn a 25/255 dip into a +64/255
+                // bright nick, and `Line` is forbidden by §4 (and caps differently in the two
+                // renderers). A QUAD primitive would remove it. Raised as `BOB-31`.
+                // ⭐ `line - 35` leaves ~10 of headroom on the measured value, so this fails if the
+                // seam ever gets worse and does not fail on rounding.
+                fail += Say2("§6 both bevel bands are continuous, with no seam and no double-cover",
+                             lo255 > line - 35 && hi255 <= line + 8,
+                             "straight run " + line + ", dimmest " + lo255
+                             + " at t=" + loAt.ToString("F2") + ", brightest " + hi255);
             }
 
             if (w == 2560 && h == 1405)
@@ -2555,6 +2758,13 @@ public static class PreviewMain
                 fail += SayAt("§11 #070810 begins        y 4", p.MarginTop, 4.0, 1.0, "");
                 fail += SayAt("§11 window line           y 25..27", p.WindowLine, 25.0, 1.0, "");
                 fail += SayAt("§11 #1A1F35 begins        y 28", p.GroundTop, 28.0, 1.0, "");
+                if (icon)
+                {
+                    fail += SayAt("§11 window line (shelf)   y 1190..1192 [ICON only]",
+                                  p.ShelfLine, 1190.0, 1.0, "");
+                    fail += SayAt("§11 #070810 (tab band)    y 1193 [ICON only]",
+                                  p.TabBandTop, 1193.0, 1.0, "");
+                }
                 fail += SayAt("§11 white (border bottom) y 1304", p.BorderBottom, 1304.0, 1.0, "");
                 fail += SayAt("§11 row 1360, vertical at x 1094", p.RuleA, 1094.0, 1.0, "");
                 fail += SayAt("§11 row 1360, vertical at x 1452", p.RuleB, 1452.0, 1.0, "");
@@ -2564,67 +2774,99 @@ public static class PreviewMain
     }
 
     /// <summary>
-    /// ⭐⭐ THE INSTRUMENT, MADE TO FAIL ON PURPOSE. Part of the probe's INPUT is deleted - the
-    /// border's white band and both 1px rules are painted out of the finished render - and the same
-    /// comparison must then report faults. ⛔ If it still passes, it is reading nothing, and the green
-    /// above means nothing either.
+    /// ⭐⭐ THE INSTRUMENT, MADE TO FAIL ON PURPOSE. Part of the probe's INPUT is deleted from the
+    /// finished render and the same comparison must then report faults. ⛔ If it still passes, it is
+    /// reading nothing, and the green above means nothing either.
+    ///
+    /// ⛔ THE ICON PAGE GETS ITS OWN, against its OWN subjects — the shelf and the tab strip — because
+    /// erasing the border proves nothing about a probe that looks at tab icons.
     /// </summary>
-    static int BaseCheckFalsifies(int w, int h)
+    static int BaseCheckFalsifies(bool icon, int w, int h)
     {
-        Console.WriteLine("  [falsification] the same probes over a render with its border and rules ERASED");
+        Console.WriteLine("  [falsification, " + (icon ? "ICON" : "NON-ICON")
+                          + "] the same probes over a render with its subject ERASED");
         BaseFit f = BaseFit.For(w, h);
         int faults = 0, moved = 0;
-        using (Bitmap bmp = RenderBasePage(w, h))
+        using (Bitmap bmp = RenderBasePage(icon, w, h))
         {
-            BaseProbe before = ProbeBasePage(bmp, w, h);
+            BaseProbe before = ProbeBasePage(bmp, w, h, icon);
             using (Graphics g = Graphics.FromImage(bmp))
             using (SolidBrush margin = new SolidBrush(Color.FromArgb(7, 8, 16)))
             using (SolidBrush ground = new SolidBrush(Color.FromArgb(26, 31, 53)))
             {
-                g.FillRectangle(margin, 0, 0, w, (int)f.Y(6f));          // the border's top band
-                g.FillRectangle(ground, (int)f.X(810f), (int)f.Y(985f),
-                                (int)f.S(290f), (int)f.S(60f));                  // both rules
+                if (!icon)
+                {
+                    g.FillRectangle(margin, 0, 0, w, (int)f.Y(6f));          // the border's top band
+                    g.FillRectangle(ground, (int)f.X(810f), (int)f.Y(985f),
+                                    (int)f.S(290f), (int)f.S(60f));          // both rules
+                }
+                else
+                {
+                    // the SHELF line and the whole TAB STRIP
+                    g.FillRectangle(ground, (int)f.X(500f), (int)f.Y(888f),
+                                    (int)f.S(920f), (int)f.S(10f));
+                    g.FillRectangle(margin, (int)f.X(540f), (int)f.Y(896f),
+                                    (int)f.S(840f), (int)f.S(80f));
+                }
             }
-            BaseProbe after = ProbeBasePage(bmp, w, h);
+            BaseProbe after = ProbeBasePage(bmp, w, h, icon);
 
-            if (after.FirstWhite != before.FirstWhite) moved++;
-            if (after.RuleA != before.RuleA) moved++;
-            if (after.RuleB != before.RuleB) moved++;
-
-            if (Math.Abs(after.FirstWhite - Math.Max(0.0, f.Y(1f - 1.5f))) > 1.0) faults++;
-            if (Math.Abs(after.RuleA - f.X(820.7f)) > 1.0) faults++;
-            if (Math.Abs(after.RuleB - f.X(1089.1f)) > 1.0) faults++;
-
-            Console.WriteLine("    erased: first white " + before.FirstWhite + " -> " + after.FirstWhite
-                              + " ;  rules " + before.RuleA + "/" + before.RuleB
-                              + " -> " + after.RuleA + "/" + after.RuleB);
+            if (!icon)
+            {
+                if (after.FirstWhite != before.FirstWhite) moved++;
+                if (after.RuleA != before.RuleA) moved++;
+                if (after.RuleB != before.RuleB) moved++;
+                if (Math.Abs(after.FirstWhite - Math.Max(0.0, f.Y(1f - 1.5f))) > 1.0) faults++;
+                if (Math.Abs(after.RuleA - f.X(820.7f)) > 1.0) faults++;
+                if (Math.Abs(after.RuleB - f.X(1089.1f)) > 1.0) faults++;
+                Console.WriteLine("    erased: first white " + before.FirstWhite + " -> " + after.FirstWhite
+                                  + " ;  rules " + before.RuleA + "/" + before.RuleB
+                                  + " -> " + after.RuleA + "/" + after.RuleB);
+            }
+            else
+            {
+                if (after.ShelfLine != before.ShelfLine) moved++;
+                if (after.TabIconsFound != before.TabIconsFound) moved++;
+                if (after.SelectorRuns != before.SelectorRuns) moved++;
+                if (Math.Abs(after.ShelfLine - f.Y(BasePageIcon.Shelf - 1f)) > 1.0) faults++;
+                if (after.TabIconsFound != 9) faults++;
+                if (after.SelectorRuns != 1) faults++;
+                Console.WriteLine("    erased: shelf line " + before.ShelfLine + " -> " + after.ShelfLine
+                                  + " ;  tab icons " + before.TabIconsFound + " -> " + after.TabIconsFound
+                                  + " ;  selector runs " + before.SelectorRuns + " -> " + after.SelectorRuns);
+            }
         }
         bool ok = faults >= 3 && moved >= 3;
-        Console.WriteLine((ok ? "    ok   " : "    FAIL ")
-                          + "deleting the input moves the numbers AND fails the comparison ("
-                          + moved + " moved, " + faults + " faults)");
-        return ok ? 0 : 1;
+        return Say2("deleting the input moves the numbers AND fails the comparison ("
+                    + moved + " moved, " + faults + " faults)", ok, "");
     }
 
     /// <summary>
     /// §11: "At 2560x1419 every ratio must be identical." Both probes are converted BACK into design
     /// space and required to land on the same design number. ⛔ Never force one size to the other.
     /// </summary>
-    static int BaseRatiosAgree()
+    static int BaseRatiosAgree(bool icon)
     {
-        Console.WriteLine("  [ratios] the same design numbers, measured at both shipped sizes");
+        Console.WriteLine("  [ratios, " + (icon ? "ICON" : "NON-ICON")
+                          + "] the same design numbers, measured at both shipped sizes");
         int fail = 0;
         BaseFit f1 = BaseFit.For(2560, 1405), f2 = BaseFit.For(2560, 1419);
-        using (Bitmap a = RenderBasePage(2560, 1405))
-        using (Bitmap b = RenderBasePage(2560, 1419))
+        using (Bitmap a = RenderBasePage(icon, 2560, 1405))
+        using (Bitmap b = RenderBasePage(icon, 2560, 1419))
         {
-            BaseProbe p1 = ProbeBasePage(a, 2560, 1405), p2 = ProbeBasePage(b, 2560, 1419);
+            BaseProbe p1 = ProbeBasePage(a, 2560, 1405, icon);
+            BaseProbe p2 = ProbeBasePage(b, 2560, 1419, icon);
             fail += RatioSay("#070810 begins", p1.MarginTop, f1, p2.MarginTop, f2, false);
             fail += RatioSay("window line", p1.WindowLine, f1, p2.WindowLine, f2, false);
             fail += RatioSay("#1A1F35 begins", p1.GroundTop, f1, p2.GroundTop, f2, false);
+            fail += RatioSay(icon ? "shelf line" : "window bottom",
+                             p1.ShelfLine, f1, p2.ShelfLine, f2, false);
             fail += RatioSay("white (border bottom)", p1.BorderBottom, f1, p2.BorderBottom, f2, false);
             fail += RatioSay("rule 1", p1.RuleA, f1, p2.RuleA, f2, true);
             fail += RatioSay("rule 2", p1.RuleB, f1, p2.RuleB, f2, true);
+            if (icon)
+                fail += RatioSay("the selector's left edge",
+                                 p1.SelectorLeft, f1, p2.SelectorLeft, f2, true);
         }
         return fail;
     }
@@ -2644,16 +2886,21 @@ public static class PreviewMain
     static int BaseCheck()
     {
         int fail = 0;
-        Console.WriteLine("--- NON-ICON base page: spec §11's device-space table, measured off the render (S245)");
-        fail += BaseCheckAt(2560, 1405, "SCREEN 1/3");
-        fail += BaseCheckAt(2560, 1419, "SCREEN 2");
-        fail += BaseRatiosAgree();
-        fail += BaseCheckFalsifies(2560, 1405);
+        Console.WriteLine("--- the two base pages: spec §11's device-space table, measured off the render");
+        fail += BaseCheckAt(false, 2560, 1405, "SCREEN 1/3");
+        fail += BaseCheckAt(false, 2560, 1419, "SCREEN 2");
+        fail += BaseCheckAt(true, 2560, 1405, "SCREEN 1/3");
+        fail += BaseCheckAt(true, 2560, 1419, "SCREEN 2");
+        fail += BaseRatiosAgree(false);
+        fail += BaseRatiosAgree(true);
+        fail += BaseCheckFalsifies(false, 2560, 1405);
+        fail += BaseCheckFalsifies(true, 2560, 1405);
         Console.WriteLine(fail == 0
-            ? "--- ok: §11's device table holds at both shipped sizes, ratios identical, probes provably able to fail"
+            ? "--- ok: §11 holds on BOTH pages at both shipped sizes, ratios identical, every probe provably able to fail"
             : "!! " + fail + " base-page device check(s) FAILED");
         return fail == 0 ? 0 : 1;
     }
+
 
     static double LitFraction(Bitmap bmp, int w, int h)
     {

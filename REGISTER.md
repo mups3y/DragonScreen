@@ -28748,3 +28748,158 @@ of a number"* against §8.1's `r_count` / `r_spx` / `b_state`, which are picture
 say what STROKES one.
 
 **Commit:** this one. **No `git push`.**
+
+---
+
+### S246 [O] The ICON base page — the notch and the tab strip — **DONE 2026-09-09 — §6's notched window and §7's nine tabs, §11's ICON column asserted in BOTH spaces, 15 mutants raised and 15 killed, TWO defects found in pixels that no design-space test could see. ⛔ Nothing became reachable** — [overseer PROMPT_3_ICON_BASE_PAGE + `SPEC_BASE_SCREENS.md` v1 as amended, 2026-09-09; branch `rebuild/base-screens`]
+
+- ⛔ **BUILT FROM THE SPEC AND NOTHING ELSE (§0).** `BottomBar.cs`, `CoverPage.cs`,
+  `VehicleOverviewPage.cs` and `FigmaUI`'s page bodies were **not opened**. `audit_spec.py` run first
+  against the amended spec: **98 passed, 0 FAILED**.
+- ⛔ **NOTHING BECAME REACHABLE (§10.2).** No `UiPage` value, no routing, no `PageAction`, no hit map.
+  ⭐ **`PageCount` is still 36.**
+- ⭐ **`BaseBar` IS UNCHANGED** — not a line, not a special case. The prompt said that if the ICON page
+  needed it altered, §8 was wrong; it did not.
+
+#### ⭐ THE THREE SPEC AMENDMENTS SINCE [[S245]], AND WHAT EACH COST
+
+| amendment | what changed here |
+|---|---|
+| 🟢 **§2.1** — the letterbox band is `#070810`, owner ruling | one colour in `BasePageNoIcon` + its assertion; **and it exposed a real bug, below** |
+| ⭐ **§4** — `BOB-29` confirmed: a diagonal is stroked as two offset FILL regions | the border already did this; the ICON window's bevels **cannot**, and that is raised, not silently ignored |
+| ⭐ **§11** — `BOB-25` confirmed: the two rules are asserted by PEAK POSITION, not thresholded | the probe already did this; the spec now says so |
+
+#### ⛔⛔ TWO DEFECTS FOUND IN PIXELS. NEITHER WAS VISIBLE TO ANY DESIGN-SPACE TEST.
+
+**(1) THE PAGE GROUND WENT MISSING, AND IT WAS THIS SESSION'S OWN MISTAKE.** §2.1 says *"paint the
+WHOLE device surface `#070810` **before drawing the mapped frame**"*. ⛔ I read that as REPLACING §3's
+page ground rather than sitting UNDER it, and painted one rect where the spec wants two. §3 is
+explicit — *"page ground `#1A1F35`; outer-border shape filled `#070810`"* — and §8.1 says the bar
+*"draws NO ground of its own"* precisely because §3's ground is what it sits on.
+⚠ **HOW IT SHOWED:** the entire bottom-bar band came out `#070810`, and `--basecheck` reported the
+left rule's peak dropping from **198 to 193** — it was compositing over the wrong colour. ⭐ Nothing
+else caught it: every design-space assertion passed, and the change is invisible at a glance because
+both colours are near-black. **Fixed: two rects — the surface, then §3's ground over the mapped frame
+only.** Mutant `N13` now guards it.
+
+**(2) ROW 0 WAS HALF THE RENDERER'S CLEAR COLOUR.** A surface rect drawn exactly `0..h` left the
+topmost row at **rgb(5,7,36)** — half `#070810`, half the preview's own clear — because GDI+ samples
+pixel CENTRES, so a rect whose edge sits exactly on 0 covers that row only halfway. ⛔ The glass clears
+to something else again, so that one row would have differed between the two renderers for no reason
+anyone chose. **Fixed: the surface bleeds one pixel past every edge.** Asserted on the first AND last
+row at both sizes.
+
+⭐⭐ **AND THE SAME HALF PIXEL EXPLAINS EVERY EDGE PROBE.** `GdiHalfPixel` is now named in
+`PreviewMain` and applied to every derived expectation — ⛔ not as a fudge: **all eight edge probes
+land within 0.8 px of `boundary + 0.5` and none within 0.8 of `boundary`**, which is what identified
+it. ⚠ The shipped glass rasterises with MSAA and need not share the convention, **which is exactly why
+§11's tolerance is ±1 and not 0**, and why every number here is measured off a render.
+
+#### ⭐ §11's ICON COLUMN — DEVICE SPACE, MEASURED, at 2560 x 1405
+
+| §11 probe, column x=1280 | expected | **measured** |
+|---|---:|---:|
+| first white (border top) | y 0..3 | **0** |
+| `#070810` begins | y 4 | **4** |
+| window line | y 25..27 | **25** |
+| `#1A1F35` begins | y 28 | **28** |
+| ⭐ window line (SHELF) — ICON only | y 1190..1192 | **1189** |
+| ⭐ `#070810` (TAB BAND) begins — ICON only | y 1193 | **1193** |
+| white (border bottom) | y 1304 | **1304** |
+| row 1360, thin white verticals | x 1094 / 1452 | **1094** (peak 198) / **1452** (peak 255) |
+
+⭐ **AND §7 IN PIXELS, WHICH IS WHERE "NO DIMMING" ACTUALLY LIVES.** §7 claims *"all nine icons and all
+nine labels peak at 255 whether active or not"* — a claim about PIXELS, so it is measured in pixels:
+**nine icons found, nine labels found, dimmest peak 255 on both**, at both sizes. The selector is
+**one** white run on its row, centred on tab 0 to within 0.32 px and **108 device px wide against
+108.64 expected**. ⛔ A dimming scheme drops the dimmest-peak number, which is what mutant `N4` proves.
+
+⭐ At **2560 x 1419** every probe converts back to the same DESIGN number within 0.13 px, on both
+pages — shelf line 891.96 / 891.88, selector left 559.40 / 559.50. ⛔ Neither size forced to the other.
+
+#### ⚠ ONE MEASURED ARTEFACT, RAISED RATHER THAN HIDDEN BEHIND A LOOSE THRESHOLD
+
+The two bevel bands are 2px at 45°, so each is a parallelogram, so each is **two `Tri`s sharing a long
+diagonal** — and at 0.55 alpha that diagonal seams. ⚠ **Measured: the dimmest point on either bevel is
+127 against the straight run's 152 — a 25/255 dip at t≈0.55, exactly where the shared diagonal crosses
+the centreline.**
+⛔ **IT IS THE BEST THESE PRIMITIVES CAN DO.** Overlapping the pair composites 0.55 over 0.55 = 0.80
+and turns a 25/255 dip into a **+64/255 BRIGHT nick** — worse. §4's offset-region rule cannot reach it
+either: an offset region is a multi-piece fill and its internal boundaries would seam the same way,
+with the same no-overlap-available problem. `Line` is forbidden by §4 and caps differently in the two
+renderers. ⭐ A QUAD primitive would remove it. Raised as `BOB-31`; the check is a **ratchet on the
+measured value** (`line − 35`), so a worse seam fails and rounding does not.
+
+⚠ **AND THE FIRST VERSION OF THAT PROBE WAS WRONG, WHICH IS WHY IT IS WORTH WRITING DOWN.** It scanned
+horizontally across the shelf's row past the junction and called the drop to ground a "gap". ⛔ It is
+not — **the line TURNS there**; past the corner there is no horizontal line left to find. The probe now
+follows each bevel's own centreline, which is the thing that needed measuring.
+
+#### ⭐⭐ MUTATION — 15 RAISED, 15 KILLED, 0 SURVIVED
+
+| # | mutant | killed by |
+|---|---|---|
+| N1 | ⭐ **move the shelf** 893 → 903 (prompt) | suite **+** `--basecheck` |
+| N2 | ⭐ **break one bevel's 45°** (prompt) | suite **+** `--basecheck` |
+| N3 | ⭐ **move the selector off the active tab** (prompt) | suite **+** `--basecheck` |
+| N4 | ⭐ **dim one inactive icon** (prompt) | suite **+** `--basecheck` (dimmest peak 255 → 166) |
+| N5 | the tab pitch 90.3 → 91.3 | suite |
+| N6 | two tab icons swapped (comms/prop) | suite |
+| N7 | the icon size 37 → 36 | suite |
+| N8 | the derived stack: icon pad 5.1 → 6.1 | suite (the stack misses the border's inner face) |
+| N9 | a shelf end: SL 534 → 544 | suite **+** `--basecheck` |
+| N10 | the ICON path TEXT: one notch point 1386 → 1387 | suite (path-vs-code) |
+| N11 | the labels stop being centred in their box | suite |
+| N12 | the selector width 81.5 → 85 | suite |
+| N13 | ⭐ **REGRESSION GUARD: the page ground rect dropped** | suite (border commands stop matching) |
+| N14 | §2.1 reverted: the band back to the page ground | suite **+** `--basecheck` |
+| N15 | the shelf stroked one pixel low | suite **+** `--basecheck` |
+
+⛔ **ONE OF THE PROMPT'S FIVE COULD NOT BE RAISED, AND IT IS REPORTED RATHER THAN QUIETLY DROPPED.**
+*"delete the label letter-spacing"* — **there is nothing to delete.** §7's `LETTER-SPACING 0.3px` is a
+CSS property on `reference_gen.py`'s `.tl` class, and `DisplayList.Text` HAS NO SUCH FIELD; neither
+renderer can honour one, and pure has no font metrics to advance characters itself (`DisplayList.Text`:
+*"WIDTH IS NOT KNOWN HERE, AND THAT IS A REAL LIMIT"*). ⭐ The value is RECORDED in `BasePageIcon` and
+**explicitly not applied**, and the suite says so in those words — including a check that
+`DisplayList.Text` still has no letter-spacing, so the day the primitive gains one, THIS test fails and
+points at the omission. ⚠ **Measured cost:** CSS adds 0.3px per character, so the widest label
+("Avionics", 8 characters) renders **2.4px narrower** than the approved canvas, centred, in a 90.3px
+box it fills to about 52px. Nothing clips and nothing moves. Raised as `BOB-30`.
+
+#### ⭐ WHAT IS SHARED, AND THE ONE LINE OF THE PROVED PAGE THAT CHANGED
+
+⛔ **`BasePageNoIcon` WAS NOT REFACTORED INTO A BASE CLASS**, as the prompt required. Three changes to
+it, all recorded: §2.1's colour (owner ruling), §3's ground restored as a second rect (the defect
+above), and `BorderRegion` `private` → **`internal`** so §5's *"identical on BOTH pages"* has exactly
+ONE expression. ⭐ That sharing is then PROVED, not asserted: the two pages' **first 20 commands are
+compared command-for-command** and must be equal.
+⚠ The window's fill and ring are deliberately NOT shared — this one has a notch, and the abstraction
+that covers both is better written once both exist and the duplication is visible.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** — `BasePageIconTest` **110 checks**, `BasePageNoIconTest` **149**, both 0 failed |
+| `--basecheck` (extended) | ok on **BOTH** pages at **BOTH** sizes; ratios identical; **both** falsifications fire |
+| `--tricheck` | 12 raster checks, unchanged |
+| `harnesscheck` | **ok**, fault named, exit 1, **178** clean report lines |
+| `previewdiff HEAD` | **2 changed, 2 new, 0 removed** (of 132) — see below |
+| mutation | **15 raised, 15 killed, 0 survived** |
+
+⚠ **THE 2 CHANGED PAGES ARE MINE, NOT THE OWNER'S, AND THE DISTINCTION IS THE WHOLE POINT.** The
+prompt asked for *"0 existing pages changed"* under the heading *"Nothing the owner flies may move"*.
+⭐ **130 pages unchanged — that is every page the owner flies.** The two that moved are
+`ui_basenoicon_screen1/2.png`, [[S245]]'s own base-page renders, and they moved because **§2.1 is an
+owner ruling that changes them**: the letterbox band from `#1A1F35` to `#070810`, plus the two defect
+fixes above. ⛔ A prompt line and a spec ruling disagreed; the spec wins, and the number is reported as
+it is rather than made to look like the one that was asked for.
+*(The `kenney_ui_scifi is now EMPTY` warning is the standing [[S207]]/[[S218]] line.)*
+
+#### ⚠ QUESTIONS RAISED — `BOB-30`, `BOB-31`
+
+`BOB-30` §7's letter-spacing is unbuildable with today's `Text` command — recorded, not applied ·
+`BOB-31` the 25/255 alpha seam down the middle of each 2px bevel band, and whether a QUAD primitive is
+worth its own task.
+
+**Commit:** this one. **No `git push`.**

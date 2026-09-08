@@ -307,10 +307,25 @@ public static class BasePageNoIconTest
         DisplayList dl = Page();
         Rgba ground = Rgba.Hex("1A1F35"), margin = Rgba.Hex("070810");
 
-        Check("§3 the page ground is #1A1F35", SameColour(dl.At(0).Colour, ground), "");
-        Check("§3 the page ground covers the whole surface",
-              dl.At(0).Kind == DrawKind.Rect && dl.At(0).A == 0f && dl.At(0).B == 0f
-              && dl.At(0).C == FW && dl.At(0).D == FH, "");
+        // ⭐ §2.1, OWNER RULING 2026-09-09: the whole device surface is `#070810`, NOT the page
+        // ground. ~~The surface was `#1A1F35` when this suite was written ([[S245]], `BOB-27`).~~
+        // ⛔ SUPERSEDED IN PLACE: the approved design has no letterbox band at all, and `#070810`
+        // reads as unlit screen where the page ground read as a lighter stripe framing the border.
+        Check("§2.1 the letterbox surface is #070810, not the page ground",
+              SameColour(dl.At(0).Colour, margin), "");
+        // ⚠ AND IT BLEEDS A PIXEL PAST EVERY EDGE. Drawn exactly 0..w the render left row 0 at
+        // rgb(5,7,36), half this colour and half the renderer's own clear, because GDI+ samples pixel
+        // CENTRES - and the glass clears to something else again. ⛔ One pixel of bleed removes a
+        // row that would otherwise differ between the two renderers for no reason anyone chose.
+        Check("§2.1 ...and it covers the whole surface, bleeding a pixel past every edge",
+              dl.At(0).Kind == DrawKind.Rect && dl.At(0).A == -1f && dl.At(0).B == -1f
+              && dl.At(0).C == FW + 2f && dl.At(0).D == FH + 2f, "");
+        // ⛔ AND §3's PAGE GROUND IS A SECOND, DIFFERENT RECT, over the MAPPED FRAME only. Collapsing
+        // the two was a real defect for the length of one render: the bar band came out `#070810` and
+        // the two 1px rules dimmed measurably because they composited over the wrong colour.
+        Check("§3 the page ground #1A1F35 is drawn over the mapped frame, on top of the surface",
+              SameColour(dl.At(1).Colour, ground) && dl.At(1).Kind == DrawKind.Rect
+              && dl.At(1).C == BaseFit.FrameW && dl.At(1).D == BaseFit.FrameH, "");
 
         int marginCmds = 0, groundCmds = 0, whiteish = 0;
         for (int i = 0; i < dl.Count; i++)
@@ -320,9 +335,8 @@ public static class BasePageNoIconTest
             else if (SameColour(c, ground)) groundCmds++;
             else if (c.R > 0.99f && c.G > 0.99f && c.B > 0.99f) whiteish++;
         }
-        Check("§3 the border shape is filled #070810", marginCmds == 9, "got " + marginCmds + " commands");
-        Check("§3 the window fill and the page ground are both #1A1F35",
-              groundCmds == 8, "got " + groundCmds);
+        Check("§3 the surface and the border shape are filled #070810", marginCmds == 10, "got " + marginCmds + " commands");
+        Check("§3 the page ground and the window fill are #1A1F35", groundCmds == 8, "got " + groundCmds);
         Check("§3 nothing on the page is any OTHER colour (no event driven)",
               marginCmds + groundCmds + whiteish == dl.Count,
               dl.Count + " commands, " + (marginCmds + groundCmds + whiteish) + " accounted");
