@@ -26,11 +26,11 @@ namespace DragonScreen
     public static class BaseScreenTabbed
     {
         /// <summary>
-        /// ⚠ NINE, not eight. `VehicleTabBar.cs:201` and `docs/reference/NASA_REFERENCE_ART.md:265` both
-        /// still assert *"T9's eight tabs are confirmed-real … and are not changed to suit an icon"* —
-        /// the owner has OVERRIDDEN that, and the NASA sheet's own tab row shows nine clusters with the
-        /// ninth captioned "Comms". ⛔ Those two claims are RAISED AND LEFT ALONE by this task, not
-        /// edited; see the register. This array is the rebuild's own list.
+        /// ⚠ NINE, not eight. `VehicleTabBar.cs` and `docs/reference/NASA_REFERENCE_ART.md` both used
+        /// to assert *"T9's eight tabs are confirmed-real … and are not changed to suit an icon"*. The
+        /// owner OVERRODE that, and the NASA sheet's own tab row has nine clusters with the ninth
+        /// captioned "Comms". ⭐ S243 corrected both files IN PLACE (C1.16 — marked, not deleted); this
+        /// array is the rebuild's own list and the two are no longer in conflict.
         /// </summary>
         public static readonly string[] Tabs =
             { "All", "Crew", "Comms", "Prop", "Mech", "Power", "Avionics", "GNC", "Thermal" };
@@ -174,11 +174,17 @@ namespace DragonScreen
         }
 
         /// <summary>
-        /// The asset key for tab `i`'s icon. ⚠ The eight existing keys are reused as-is; the NINTH,
-        /// Comms, has no harvested glyph — `NASA_REFERENCE_ART.md:265` records that its wifi glyph
-        /// *"was NOT harvested"* because the old strip had no Comms tab to put it on. ⛔ Rather than
-        /// invent one, this returns the tab-all key so the slot draws SOMETHING recognisable and the
-        /// gap is visible in the register instead of being silently filled with a wrong picture.
+        /// The asset key for tab `i`'s icon.
+        ///
+        /// ⭐⭐ S243 — THE NINTH GLYPH EXISTS. It was harvested by the overseer on 2026-09-08 and simply
+        /// never made it into `plugin/GameData/`, which is why `NASA_REFERENCE_ART.md` said it had not
+        /// been. `ic_tab_comms.png` — 48x48 RGBA, 802 bytes, md5 `493b93b1`, ink 44.8 % — is cut from
+        /// `assets/reference/nasa/interface_2352x1410.png` at (940,1309) 42x42, by the same recipe as
+        /// the other eight, and that recipe was PROVED by re-cutting `mech`, `crew` and `thermal`
+        /// bit-exact.
+        /// ⛔ THE `ic_tab_all` FALLBACK IS GONE. It was the honest placeholder while the glyph was
+        /// believed lost; keeping it now would draw a duplicate rocket on the Comms tab and quietly
+        /// look like a design choice rather than a gap.
         /// </summary>
         public static string IconKey(int i)
         {
@@ -186,7 +192,7 @@ namespace DragonScreen
             {
                 case 0: return "ic_tab_all";
                 case 1: return "ic_tab_crew";
-                case 2: return "ic_tab_all";        // ⚠ Comms — no harvested glyph. See the register.
+                case 2: return "ic_tab_comms";      // ⭐ S243: harvested and shipped. See below.
                 case 3: return "ic_tab_prop";
                 case 4: return "ic_tab_mech";
                 case 5: return "ic_tab_power";

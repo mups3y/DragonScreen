@@ -28381,3 +28381,83 @@ does read as a full replacement of all 37 shells — but the route from here to 
 lot of live coverage is retired in one commit, and that is not a builder's call.
 
 **Commits:** `20f0805` ([[S241]]) · this one. **No `git push`.**
+
+---
+
+### S243 [O] The three shell pages, the Comms glyph, and two corrected claims — **DONE 2026-09-09 — appended BESIDE the originals per `BOB-16`; the ninth glyph is shipped and its "NOT harvested" claim corrected in place; 46 + 80 + 39 checks, 10 of 10 mutants killed. ⛔ NO GAUGE, on the owner's instruction** — [overseer PROMPT 2, 2026-09-09; branch `rebuild/base-screens`]
+- 🟢 **`BOB-16` — DO NOT TOUCH THE EXISTING PAGES.** *"Retiring the safety net in the middle of a rebuild
+  is exactly when you need it most."* Four ints **appended**: `VehicleComms = 36`, `ShellCover = 37`,
+  `ShellVehicle = 38`, `ShellSuitCheck = 39`; `PageCount` 36 → 40. ⛔ Cover stays 0, Vehicle 15,
+  SuitCheck 16, CrewGate 35 — and `ShellPageTest` asserts each original still renders a full page, so a
+  shell quietly replacing one would show as an emptied display list.
+- ⭐ **Reachable from the MENU GRID ONLY**, which needed no code: `MenuPage` lists every page that is not
+  Menu, a placeholder or an alias, so the append put them on the grid and `previewdiff` shows exactly one
+  existing page changed — **`ui_menu.png`** — which is the proof that reachability landed where intended
+  and nowhere else.
+- ⭐⭐ **`BOB-17` SOLVED — THE NINTH GLYPH EXISTED ALL ALONG.** `ic_tab_comms.png` (48×48 RGBA, 802 bytes,
+  md5 `493b93b1`, ink 44.8 %) copied to `art/cover/` **byte-identical** and verified so; `IconKey(2)`
+  points at it and ⛔ **the `ic_tab_all` fallback is gone** — keeping it would have drawn a duplicate
+  rocket that read as a design choice rather than a gap. Visible in `ui_shellvehicle.png`: the wifi glyph
+  is plainly distinct from the rocket.
+- ⛔ **TWO CLAIMS CORRECTED IN PLACE (C1.16 — quoted verbatim, not deleted):**
+  `docs/reference/NASA_REFERENCE_ART.md:264` and `pure/VehicleTabBar.cs` both asserted *"its Comms wifi
+  glyph was NOT harvested"* and *"T9's eight tabs are confirmed-real"*. ⭐ **The distinction recorded
+  beside them is the useful part:** the paragraph was **TRUE ABOUT THE REPOSITORY** when written and
+  **FALSE AS A STATEMENT OF FACT** — the glyph was cut 2026-09-08 and simply never reached
+  `plugin/GameData/`. ⚠ `VehicleTabBar` itself is **not changed**: it still draws the flying build's
+  eight-tab strip, per `BOB-16`. Only the claim was wrong, and only the claim was corrected.
+- ⛔ **NO GAUGE, AND IT IS PINNED SO.** Owner, 2026-09-09: *"we have not discussed placement of the gauges
+  yet, just the design — bob should not touch these yet."* `TheWindowIsEmptyOnPurpose` asserts **no
+  `ArcBand` falls inside the content area** and that the tab icons are plain white — ⭐ so a later chat
+  cannot quietly fill the window before that conversation happens, and the empty window reads as an
+  instruction followed rather than an oversight.
+- ⭐⭐ **THE LOAD-BEARING CHECK IS `ThePopupIsWiredNotAbsent`.** *"Draws nothing"* and *"is not
+  connected"* produce byte-identical display lists, so the test **drives a real callout in and watches
+  the pop-up appear**. ⭐ And the wiring turned out to need no new code at all: `BottomBar.Draw` already
+  ends in `BarEvent.Draw(…, s.Event, …)` (`BottomBar.cs:542`), which returns on `BarCallout.None`, and
+  the marker is drawn centrally for every page at `FigmaUI.cs:302`. **Re-implementing either would have
+  drawn it twice** — the shell calls the bar and stops.
+- ⚠ **`VehicleComms = 36` IS A RESERVED INT, NOT A PAGE.** Its content is specified by no prompt, so it
+  stays a **placeholder** — the codebase's own documented pattern for *"the enum values are kept … they
+  just don't get a card until a real Build case lands"*. ⛔ Inventing content would be §1.4 invention.
+  Raised as `BOB-18`.
+
+#### ⭐ FOUR RATCHETS MOVED, EACH WITH ITS REASON — none re-pinned silently
+
+| ratchet | was → is | why |
+|---|---|---|
+| `FigmaUINavTest` spread/letterbox | 17/19 → **20/20** | the three shells take `BarFit.Stretch` (their bodies use `w/RefW`); `VehicleComms` letterboxes as a placeholder |
+| `LegibilityFloorTest.BarTextDraws` | 27 → **30** | three shells each draw the bar, so each adds its CURRENT STATE caption |
+| `CrewPressTest` CVR namespace | 199 → **203** | four new page-scoped control ids |
+| `CrewPressTest.PinUiPage` | 36 → **40** | the four appended members |
+
+⚠ **AND ONE BASELINE THAT IS A FINDING, NOT A FORMALITY.** `LegibilityFloorTest`'s three new rows were
+**dumped by `PrintBaselines`, not typed off a screen**: `ShellCover` 0/0, `ShellSuitCheck` 0/0 — and
+**`ShellVehicle` 9/9**. ⛔ Those nine are its nine **tab captions at 12.3 design px**, recorded rather
+than explained away. It is a ratchet baseline, not an approval: the 12.3 is the owner's locked design and
+`S153a-Q1` was answered on the glass at 2560 with *"Text is fine"* ([[S194]]), so the tension between the
+locked type size and this file's floor is **known and owner-touched, not introduced here**. If a later
+task raises the captions, that number must fall and say why.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** |
+| `ShellPageTest` (new) | **46 checks, 0 failed** |
+| `BaseScreenTest` | **80 checks, 0 failed** |
+| `DisplayListTriTest` | **39 checks, 0 failed** |
+| `harnesscheck` | **ok**, 178 clean report lines |
+| `--tricheck` (gated, [[S241]]) | 12 raster checks at both sizes, inside `test` |
+| `previewdiff` | **1 changed (`ui_menu.png`), 3 NEW (the three shells), 129 unchanged** |
+| **mutation** | **10 mutants, 10 KILLED, 0 SURVIVED** |
+
+⭐ **The shells are PREVIEWABLE, and that was a deliberate addition.** They were rendering nowhere, so the
+owner could not judge layout, palette or legibility without a restart — which defeats the preview-first
+rule. Added to `PreviewMain`'s render list: `ui_shellcover.png`, `ui_shellvehicle.png`,
+`ui_shellsuitcheck.png` at 2560×1406, 52 / 80 / 52 commands.
+⭐ **Inspected, not assumed:** `ui_shellvehicle.png` shows the full-bleed border with both bottom
+chamfers, the notched window with true-45 bevels, nine tabs with the Comms wifi glyph distinct from the
+rocket, the selector under "All", the live bar, and an empty content area.
+
+**Commit:** this one. **No `git push`.**

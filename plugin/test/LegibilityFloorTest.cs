@@ -2022,6 +2022,17 @@ public static class LegibilityFloorTest
         // instructs. 18/18: the procedure's own body sits well above the floor — the count is the
         // caution card's five 26-design-px lines, the auto-gates card's three, and the bar.
         B(UiPage.CrewGate,          18, 18),   // S213
+        // ⭐⭐ S243 - THE REBUILD'S THREE SHELLS, DUMPED BY `PrintBaselines`, NOT TYPED OFF A SCREEN.
+        // ⚠ `ShellVehicle`'s NINE below-floor draws are its nine TAB CAPTIONS at 12.3 design px, and
+        // they are recorded rather than explained away. This is a RATCHET BASELINE, not an approval:
+        // the 12.3 comes from the owner's locked design, and `S153a-Q1` was answered on the glass at
+        // 2560 with *"Text is fine"* ([[S194]]) - so the tension between the locked type size and this
+        // file's floor is KNOWN and owner-touched, not a defect this task introduced. ⛔ If a later
+        // task raises the captions, this number must fall and say why.
+        // ⭐ The two NON-ICON shells are 0/0 - an empty window draws only its page name, which clears.
+        B(UiPage.ShellCover,          0,   0),
+        B(UiPage.ShellVehicle,        9,   9),
+        B(UiPage.ShellSuitCheck,      0,   0),
     };
 
     static FloorBaseline B(UiPage p, int below, int belowDense)
@@ -2315,7 +2326,10 @@ public static class LegibilityFloorTest
     /// </summary>
     // ⭐ S213: 26 -> 27. "4.100 Mission Sequence" is a new page and it DRAWS THE BAR, which is
     // what this number counts. It moved in a line that says why, which is what the check asks for.
-    const int BarTextDraws = 27;
+    // ⚠ S243: 27 -> 30. Three bar text draws, one per new shell - `ShellCover`, `ShellVehicle`
+    // and `ShellSuitCheck` each draw the bottom bar, so each contributes its CURRENT STATE caption
+    // to the census. ⛔ The number moves in a line that says why, which is this file's own rule.
+    const int BarTextDraws = 30;
 
     // ---- 9. THE OWNER'S TWO-FLOOR POLICY, AS ARITHMETIC (S153) ----------------------------------
     static void TheTwoFloorsAreBothRatios()

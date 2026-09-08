@@ -4010,7 +4010,10 @@ public static class FigmaUINavTest
         // ⭐ S213: 16 -> 17. "4.100 Mission Sequence" draws its body with `sx = w/RefW`, so it SPREADS
         // like the other procedure screens. A page that landed in the letterbox half by accident would
         // have read 16/20 here, which is exactly what this count exists to catch.
-        Check("17 page-views spread, 19 letterbox", spread == 17 && boxed == 19,
+        // ⚠ S243: 17/19 -> 20/20. The three rebuild shells take `BarFit.Stretch` because their
+        // bodies are drawn with `BaseScreen.Sc(w) = w/RefW` (+3 spread), and `VehicleComms` is a
+        // reserved int with no Build case yet, so it letterboxes as a placeholder (+1 boxed).
+        Check("20 page-views spread, 20 letterbox", spread == 20 && boxed == 20,
               spread + " spread, " + boxed + " letterboxed");
 
         // *** S172's SECOND defect, the one that reads as broken: the bar's first rule CONTINUES the

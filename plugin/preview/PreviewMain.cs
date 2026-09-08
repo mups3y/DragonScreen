@@ -976,7 +976,12 @@ public static class PreviewMain
             foreach (UiPage up in new[] { UiPage.Cover, UiPage.Menu, UiPage.PhaseDeport, UiPage.Hud, UiPage.SuitCheck, UiPage.Vehicle, UiPage.VehicleMech, UiPage.Cabin, UiPage.AudioVideo, UiPage.VrioTest,
                                           UiPage.VehicleCrew, UiPage.VehiclePropulsion, UiPage.VehiclePower, UiPage.VehicleAvionics, UiPage.VehicleGnc, UiPage.VehicleThermal,
                                           UiPage.ManualChute, UiPage.Docking, UiPage.Rendezvous, UiPage.DeorbitBurnPrep, UiPage.EntryProcedure,
-                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent, UiPage.NavOrbitPlot, UiPage.CrewGate })
+                                          UiPage.SystemsTree, UiPage.SystemsPid, UiPage.Ascent, UiPage.NavOrbitPlot, UiPage.CrewGate,
+                                          // ⭐ S243: the rebuild's three shells. ⛔ PREVIEWABLE IS THE POINT -
+                                          // the owner judges layout, palette and legibility from these PNGs
+                                          // and spends a restart only on what needs the capsule, so a shell
+                                          // that cannot be rendered here cannot be judged at all.
+                                          UiPage.ShellCover, UiPage.ShellVehicle, UiPage.ShellSuitCheck })
             {
                 DisplayList udl = new DisplayList(600);
                 FigmaUI.Build(udl, up, CW, CH, ps, MapProjection.Default());

@@ -369,6 +369,13 @@ namespace DragonScreen
                 // S213: "4.100 Mission Sequence" draws with `sx = w/RefW` like the other
                 // procedure screens, so its bar spreads with it.
                 case UiPage.CrewGate:
+                // ⭐ S243: the rebuild's three shells draw their bodies with `BaseScreen.Sc(w) = w/RefW`
+                // — the same stretched map — so their bars spread with them. ⛔ Chosen from the body's
+                // own scale, not copied: a letterboxed bar under a stretched body is the mismatch this
+                // table exists to prevent.
+                case UiPage.ShellCover:
+                case UiPage.ShellVehicle:
+                case UiPage.ShellSuitCheck:
                 case UiPage.Audio:
                 case UiPage.AudioVideo:
                 case UiPage.SuitCheck:

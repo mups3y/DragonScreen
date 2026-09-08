@@ -261,10 +261,26 @@ severity), exactly as `ic_check` is already drawn.
 45x44 — so each is centred on a square canvas of its own longer side and drawn with the same scalar on
 both axes. A glyph-bearing asset that is only ever drawn square cannot be stretched.
 
-⚠ **The source strip has NINE tabs and this build's has EIGHT.** Its Overview/Life/Comms map onto this
-build's All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; **its Comms wifi glyph was
-NOT harvested** — there is no Comms tab to put it on, and T9's eight tabs are confirmed-real and are not
-changed to suit an icon.
+⚠ ⛔ **SUPERSEDED IN PLACE 2026-09-09 (S243, owner ruling). THE PARAGRAPH BELOW IS KEPT VERBATIM BECAUSE
+C1.16 FORBIDS DELETING IT, AND BOTH OF ITS CLAIMS ARE NOW WRONG.** It read:
+
+> ⚠ **The source strip has NINE tabs and this build's has EIGHT.** Its Overview/Life/Comms map onto this
+> build's All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; **its Comms wifi glyph was
+> NOT harvested** — there is no Comms tab to put it on, and T9's eight tabs are confirmed-real and are not
+> changed to suit an icon.
+
+⛔ **WHAT IS WRONG WITH IT, ON BOTH COUNTS:**
+1. **"T9's eight tabs are confirmed-real … and are not changed to suit an icon"** — the OWNER HAS
+   OVERRIDDEN this. The rebuild's strip has **NINE** tabs, and the sheet's own tab row shows nine
+   clusters with the ninth captioned "Comms". The eight-tab claim described this build, not the source,
+   and was never a statement about reality.
+2. **"its Comms wifi glyph was NOT harvested"** — ⭐ **it was.** The overseer cut it on 2026-09-08; it
+   simply never reached `plugin/GameData/`, so the repo looked like the glyph did not exist. It is
+   shipped by S243 and is the last row of the table below.
+
+⚠ **The distinction is worth keeping**: this paragraph was TRUE ABOUT THE REPOSITORY when written and
+FALSE AS A STATEMENT OF FACT, which is exactly the failure mode C1.16 exists to make visible rather than
+tidy away.
 
 | shipped file | our tab | source rect (x, y, w x h) | canvas | ink % | md5 | bytes |
 |---|---|---|---:|---:|---|---:|
@@ -276,6 +292,13 @@ changed to suit an icon.
 | `ic_tab_avionics.png` | Avionics | (1377, 1307) 45x44 | 51x51 | 36.1 % | `9ca12838` | 518 |
 | `ic_tab_gnc.png` | GNC | (1491, 1307) 45x44 | 51x51 | 21.6 % | `d097eb45` | 731 |
 | `ic_tab_thermal.png` | Thermal | (1606, 1308) 43x42 | 49x49 | 42.5 % | `f489929f` | 578 |
+| `ic_tab_comms.png` | Comms | (940, 1309) 42x42 | 48x48 | 44.8 % | `493b93b1` | 802 |
+
+⭐ **The ninth row was added by S243, 2026-09-09.** Cut by the same recipe as the other eight —
+tab ground `(26,28,72)`; alpha = per-channel excess over ground / (255 − ground), max channel,
+threshold **0.20** for the ink rect; rescaled so the icon's own 99th percentile hits full alpha;
+RGB forced white; centred on a square canvas of **max(w,h) + 6**. ⭐ That recipe was PROVED by
+re-cutting `mech`, `crew` and `thermal` **bit-exact** before it was trusted for a ninth.
 
 ⚠ **They are UPSCALED on the glass and the number is here rather than hidden:** drawn at 84 design units
 on a 2112-unit frame, they render at **56 device px at the shipped 2560x1406** against a 45-51 px canvas —

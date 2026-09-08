@@ -196,10 +196,20 @@ namespace DragonScreen
         /// stretch a glyph however the strip is later resized. It is the same construction `ic_eye`
         /// already ships with (S181's own trap-1 table records its ink filling 0.688 of its box).
         ///
-        /// ⚠ AND THE MOCK HAS NINE TABS WHERE THIS STRIP HAS EIGHT. Its Overview/Life/Comms become this
-        /// build's All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; its Comms wifi
-        /// glyph was NOT harvested, because this strip has no Comms tab to put it on (T9's eight tabs
-        /// are confirmed-real from the clean designer mockup and are not changed to suit an icon).
+        /// ⚠ ⛔ SUPERSEDED IN PLACE 2026-09-09 (S243, owner ruling). KEPT VERBATIM (C1.16). It read:
+        ///     "⚠ AND THE MOCK HAS NINE TABS WHERE THIS STRIP HAS EIGHT. Its Overview/Life/Comms become
+        ///      this build's All/Crew, so `ic_tab_all` is its rocket and `ic_tab_crew` its person; its
+        ///      Comms wifi glyph was NOT harvested, because this strip has no Comms tab to put it on
+        ///      (T9's eight tabs are confirmed-real from the clean designer mockup and are not changed
+        ///      to suit an icon)."
+        /// ⛔ BOTH CLAIMS ARE NOW WRONG. The owner has OVERRIDDEN the eight-tab ruling — the rebuild's
+        /// strip (`pure/BaseScreenTabbed.cs`) has NINE, and the sheet's own tab row has nine clusters
+        /// with the ninth captioned "Comms". And the wifi glyph WAS harvested (2026-09-08); it simply
+        /// never reached `plugin/GameData/`, so the repo looked as though it did not exist. It ships as
+        /// `ic_tab_comms.png` and is the ninth row of `NASA_REFERENCE_ART.md`'s manifest.
+        /// ⚠ THIS CLASS IS NOT CHANGED. It still draws the EIGHT-tab strip the flying build uses, and
+        /// `BOB-16`'s ruling is that the existing pages keep their classes and their tests until the
+        /// owner calls the replacement. Only the CLAIM above was wrong, and only it is corrected.
         /// </summary>
         static void Icon(DisplayList dl, int i, float cx, float cy, float s, Rgba c)
         {

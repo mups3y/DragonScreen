@@ -84,7 +84,24 @@ namespace DragonScreen
         // could engage the autopilot or clear a gate — the owner found it by trying to fly. Built in the
         // real 4.0xx procedure grammar (`VrioTestPage` 4.700, `SuitCheckPage` 4.011) on his ruling of
         // 2026-09-07, quoted in full in `pure/CrewGatePage.cs`. Appended, never renumbered.
-        CrewGate = 35
+        CrewGate = 35,
+
+        // ---- ⭐⭐ S243 - THE REBUILD's PAGES. APPENDED, NEVER RENUMBERED. ----
+        // The rebuild (`pure/BaseScreen.cs` / `BaseScreenTabbed.cs`) draws the owner's locked shell.
+        // ⛔ THE EXISTING PAGES ARE NOT TOUCHED, AND THAT IS A RULING, NOT AN OVERSIGHT. `BOB-16`,
+        // answered 2026-09-09: stripping Cover / SuitCheck / Vehicle would retire eighteen test files
+        // of live coverage in one commit - *"retiring the safety net in the middle of a rebuild is
+        // exactly when you need it most"* - and the owner's own plan is *"separate build until it is
+        // complete and then full replacement"*, where the replacement is ONE deliberate act at the END,
+        // on his word. So these are NEW ints beside the old ones; at replacement day the routing moves
+        // and the old classes retire together, marked SUPERSEDED in place (C1.16).
+        // ⚠ Reachable from the MENU GRID ONLY for now - the same footing `DeorbitBurnPrep` and
+        // `EntryProcedure` already have. ⛔ No existing nav entry is re-pointed at them.
+        /// <summary>⚠ The ninth tab's destination. The int is RESERVED here; its content is not
+        /// specified by any prompt yet, so it stays a PLACEHOLDER rather than being invented (§1.4).
+        /// See the register - raised as `BOB-18`.</summary>
+        VehicleComms = 36,
+        ShellCover = 37, ShellVehicle = 38, ShellSuitCheck = 39
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -107,7 +124,7 @@ namespace DragonScreen
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
         public const int Commands = 380;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
 
-        public const int PageCount = 36;   // S213 appended CrewGate
+        public const int PageCount = 40;   // S243 appended VehicleComms + the three rebuild shells
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -149,7 +166,10 @@ namespace DragonScreen
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
             "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY",
             "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH", "NAV / ORBIT PLOT",
-            "MISSION SEQUENCE"
+            "MISSION SEQUENCE",
+            // S243: the rebuild's pages. The three shells name themselves after the page they
+            // will replace, so the Menu grid reads as a pair while both exist.
+            "VEHICLE — COMMS", "COVER (SHELL)", "VEHICLE OVERVIEW (SHELL)", "SUIT LEAK CHECK (SHELL)"
         };
 
         public static string Name(UiPage p)
@@ -253,6 +273,15 @@ namespace DragonScreen
                 // draws comes off `PageState`, which `VesselData` already fills from `CrewProcedureOps` —
                 // the data was live all along; only a screen to show it on was missing.
                 case UiPage.CrewGate:    CrewGatePage.Build(dl, w, h, s, ctl.GateNumber, ctl.AutoGates); break;
+                // ⭐ S243. The rebuild's shells. ⛔ The content area is EMPTY ON PURPOSE - the owner
+                // adds real content one page at a time afterwards, and that sequencing is the plan.
+                // ⛔ The gauge is NOT here either: its design is approved but its PLACEMENT is not
+                // discussed and its thresholds are unsourced (owner, 2026-09-09: *"we have not
+                // discussed placement of the gauges yet, just the design - bob should not touch these
+                // yet"*). An empty window here is an instruction followed, not an oversight.
+                case UiPage.ShellCover:     ShellPage.Build(dl, w, h, s, UiPage.ShellCover); break;
+                case UiPage.ShellSuitCheck: ShellPage.Build(dl, w, h, s, UiPage.ShellSuitCheck); break;
+                case UiPage.ShellVehicle:   ShellPage.BuildTabbed(dl, w, h, s, ctl.ShellTab); break;
                 case UiPage.VehicleCrew:       VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Crew, s, ctl.Alerts); break;
                 case UiPage.VehiclePropulsion: VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Propulsion, s, ctl.Alerts); break;
                 case UiPage.VehiclePower:      VehicleSubsystemPage.Build(dl, w, h, VehicleSubsystemPage.Sub.Power, s, ctl.Alerts); break;
@@ -308,6 +337,7 @@ namespace DragonScreen
                 case UiPage.SystemsTree: case UiPage.SystemsPid: case UiPage.Ascent:
                 case UiPage.NavOrbitPlot:
                 case UiPage.CrewGate:
+                case UiPage.ShellCover: case UiPage.ShellVehicle: case UiPage.ShellSuitCheck:
                     return false;
                 default:
                     return true;
