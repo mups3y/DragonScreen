@@ -28203,3 +28203,103 @@ So the honest state is a clean stop at Gate 0 with an unmodified tree, not a par
 
 **`S236` has TWO `### S236` headings in this file.** A number collision, in addition to the two this
 builder already hit (`S228`, `S229` — see `Q: BOB-7`). Not fixed here; flagged because the rate is rising.
+
+---
+
+### S240 [O] `DrawKind.Tri` — the FILLED counterpart of `Line`, and the primitive [[S239]] stopped for — **DONE 2026-09-09 — one enum value (byte 5, appended), one pure helper that owns the only rule two rasterisers could have answered differently, two renderer branches in ONE commit, and a raster proof at both sizes. 33 headless checks + 12 raster checks; 18 of 18 mutants killed across BOTH gates. ⛔ NO PAGE, NO OTHER ENUM AND NO ASSET WAS TOUCHED** — [overseer PROMPT 0, 2026-09-09; branch `rebuild/base-screens`; unblocks [[S239]] / Prompt 1]
+- 🟢 **AUTHORITY.** [[S239]]'s Gate-0 stop was accepted and its three questions answered. `BOB-12`: the
+  corners must be **true arcs** (owner, verbatim: *"I want the same softened corners not pointy angles"*)
+  — ⭐ but they need no new primitive, because `pure/BarEvent.cs:397` already has a working `RoundRect`
+  from three `Rect`s plus four `ArcBand` quarter-discs. `BOB-10`: **(b), geometry drawn by code, not
+  tiles** — the `bar_cap` precedent *downscales* (132×105 → 88×70) where ours would *upscale* (a ~49 px
+  chamfer at 2560, ~90 px notch bevels), and an upscaled hard 45° edge goes visibly soft. `BOB-11`: owner,
+  verbatim — *"what ever gets us closest to the design I locked in for both screens"* — built as its own
+  task first, because a renderer-contract change hidden inside a three-page build cannot be told apart
+  from a geometry bug when preview and glass disagree.
+
+#### ⭐ WHAT WAS ADDED — AND WHY A TRIANGLE AND NOT A QUAD
+
+- **`DrawKind.Tri = 5`**, appended. ⛔ The byte is persisted in a `DrawCmd`; nothing was renumbered.
+- **`DisplayList.Tri(x0,y0,x1,y1,x2,y2,colour)`**, packing `A,B` = p0 · `C,D` = p1 ·
+  `StartDeg,EndDeg` = p2. ⚠ Those last two fields are named for `ArcBand`; this file's own rule is that
+  the fields *"mean different things per kind"*, and they carry a POINT here, not an angle.
+- **`ScreenPainter.DrawTri`** — one `GL.TRIANGLES` primitive.
+- **`PreviewMain.FillTriPreview`** — one `FillPolygon`. ⭐ Filled, not stroked: an outline would land the
+  edge by the PEN's rule and the interior by the FILL's, which is exactly how a triangle butted against a
+  `Rect` seams. One filled polygon uses the same rule `FillRectangle` two lines above uses.
+
+⭐⭐ **A TRIANGLE BECAUSE `DrawCmd` HAS SIX FLOATS.** A triangle needs exactly six and fits with no new
+field; a quad needs eight and would widen every command in the list — text, images, rects, all of them —
+to serve one shape, touching every renderer, every test and every page. Two triangles make a quad for the
+price of one command.
+
+#### ⭐⭐ THE ONE DECISION THAT COULD HAVE DIVERGED, MADE ONCE, IN THE PURE LAYER
+
+**A degenerate triangle is rejected by `DisplayList.Tri`, not by either renderer.** ⛔ *"No pixels"* and
+*"a hairline"* are both defensible readings of a collinear polygon, and GDI+ and GL need not agree on
+which. Dropping the command removes the question entirely — and puts it where a headless test can hold
+it. Neither renderer second-guesses it, and a test asserts that neither does.
+
+#### ⛔ THE TWO RENDERERS — AND THE TRANSPOSITION THAT IS INVISIBLE
+
+⭐⭐ **A REAL FINDING, AND IT CHANGED THE TEST.** The prompt asked for *"swap two vertices; a test must
+fail"*. **Swapping two vertices of a triangle yields the same three points and therefore the same
+shape** — GDI+ does not care about winding for a simple polygon, and the GL painter forces `_Cull Off`
+(`ScreenPainter.cs:1356`, whose own header says a flipped Y would otherwise *"silently cull every filled
+shape"*). ⛔ **So a vertex swap is a genuine no-op in BOTH rasterisers and no picture can catch it.** It
+is caught at the PACKING level instead, by `DisplayListTriTest`.
+
+**What IS visible is a MIS-PAIRING** — reading `(A,C)` and `(B,D)` as the points instead of `(A,B)` and
+`(C,D)`. That builds a different triangle, and `--tricheck` measures the difference (centroid x **184.8
+vs 47.0** at the preview frame, **227.4 vs 47.1** at the glass). ⭐ So the source pin is demonstrably
+guarding something, rather than pinning a distinction without a difference.
+
+#### ⭐ VERIFICATION — AND WHAT IT CANNOT REACH
+
+| instrument | result |
+|---|---|
+| `python plugin/build.py test` | **ALL SUITES PASSED** |
+| `DisplayListTriTest` (new) | **33 checks, 0 failed** |
+| `python plugin/build.py harnesscheck` | **ok**, 174 clean report lines |
+| `python plugin/build.py previewdiff` | **2 changed render inputs**, then **130 unchanged, 0 changed** |
+| `DragonScreenPreview.exe --tricheck` (new) | **12 checks, 0 failed**, at 1920×1054 **and** 2560×1405 |
+| ⭐ **mutation** | **18 mutants, 18 KILLED, 0 SURVIVED**, across **both** gates |
+
+⭐ **THE `previewdiff` RESULT IS THE CORRECT ONE AND IT IS NOT VACUOUS.** This commit changes no page, so
+`0 changed` is the expected answer — **and 2 changed render inputs were detected first**, so the
+comparison actually ran (S168's refusal had real input). That is itself the evidence that the primitive
+is **inert until a page uses it**.
+
+**The raster proof, through the REAL preview path:** a right triangle covers its analytic area (115,261
+vs 115,200 px at the preview frame; 204,882 vs 204,800 at the glass — inside 0.05%); a `Tri` sharing an
+edge with a `Rect` leaves **0 gap px and 0 overdrawn px** at both sizes; a degenerate triangle produces
+**0 commands and 0 pixels**; and a mis-pairing is measurably different.
+
+⛔ **WHAT IS NOT PROVEN, STATED PLAINLY: the GL painter is rasterised by nothing.**
+`ScreenPainter.DrawTri` needs Unity and cannot run in any headless process. `build.py test` compiles
+`src/pure` + `test` only, so no rasteriser is reachable from the headless suite at all. The GL half's
+agreement is held by a **source pin** (`BothRenderersUnpackTheSamePairing`) that reads both files and
+fails if the pairing drifts — ⛔ **a source check, not a raster check**, and that is this task's honest
+limit. The first page that uses a `Tri` on the glass is what closes it.
+
+#### ⚠ TWO THINGS MY OWN CHECKS CAUGHT, RECORDED BECAUSE THEY ARE THE POINT OF HAVING THEM
+
+1. ⭐ **The raster check went red on its first run — 260 overdrawn px, every sampled pixel.** Cause: my
+   test used `new Rgba(255,255,255,128)`, and `Rgba` is **floats 0..1**, so it clamped to opaque and the
+   overdraw probe was measuring nothing. **A defect in the check, not the primitive** — and it only
+   surfaced because the check was built able to fail. That is S75's shape (a tint judged from an
+   assumption instead of from a render).
+2. ⭐ **The degeneracy guard rejected my own test fixture.** `(1,2) (3,4) (5,6)` all lie on `y = x+1`.
+   The guard was right and the fixture was wrong — the correct way round.
+
+#### ⛔ SCOPE — WHAT WAS NOT TOUCHED
+
+No page. No `UiPage` append. No base screen. No geometry from Prompt 1. No asset. `DrawKind` is the only
+enum changed. ⚠ The two stale claims [[S239]] raised — `VehicleTabBar.cs:201` /
+`NASA_REFERENCE_ART.md:265` (*"eight tabs are confirmed-real"*) and `BottomBar.cs:65` (`S153a-Q1` *"is
+OPEN"*) — remain **raised and untouched**, as instructed.
+
+⚠ **`--tricheck` is not wired into any build gate**, so it runs only when invoked
+(`plugin/build/DragonScreenPreview.exe --tricheck`). Left that way deliberately — the prompt's scope is
+"one enum value, one helper, two renderer branches" and adding a gate is a build-harness change. Raised
+as `Q: BOB-15`.

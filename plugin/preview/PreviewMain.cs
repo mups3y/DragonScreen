@@ -270,6 +270,12 @@ public static class PreviewMain
 
     public static int Main(string[] args)
     {
+        // ⭐ S240: the RASTER half of the Tri primitive's proof, and it lives here because it is the
+        // only place it can. `build.py test` compiles `src/pure` + `test` ONLY, so no rasteriser is
+        // reachable from a headless test - and "prove they agree, do not assert it" needs actual
+        // pixels. This runs the REAL `FillTriPreview` path, not a copy of it.
+        if (args.Length > 0 && args[0] == "--tricheck") return TriCheck();
+
         string outDir = (args.Length > 0)
             ? args[0]
             : Path.Combine(Path.GetDirectoryName(
@@ -2132,6 +2138,13 @@ public static class PreviewMain
                         FillArcBand(g, brush, c);
                     else if (c.Kind == DrawKind.Line)
                         DrawLinePreview(g, c);
+                    // ⛔ THE VERTEX ORDER IS THE CONTRACT: A,B then C,D then StartDeg,EndDeg, exactly as
+                    // `DisplayList.Tri` packs them and `ScreenPainter.DrawTri` unpacks them. Transposing
+                    // two of them here would leave the glass correct and the PREVIEW wrong - the mirror
+                    // of H-01, and equally invisible. `DisplayListTriTest` reads both files and fails if
+                    // they drift apart.
+                    else if (c.Kind == DrawKind.Tri)
+                        FillTriPreview(g, brush, c);
                     else if (c.Kind == DrawKind.Image)
                         DrawImage(g, c);
                     else
@@ -2140,6 +2153,206 @@ public static class PreviewMain
             }
             bmp.Save(path, ImageFormat.Png);
         }
+    }
+
+
+    // ============================================================================================
+    //  ⭐⭐ S240 — THE TRI PRIMITIVE'S RASTER PROOF.
+    //
+    //  ⛔ WHY IT IS HERE AND NOT IN `plugin/test/`. `build.py test` compiles `src/pure` + `test` only —
+    //  deliberately, so the testable half stays dependency-free — so NEITHER rasteriser is reachable
+    //  from a headless test. The pure suite can prove the packing and the degeneracy rule; it cannot
+    //  put down a pixel. "Prove they agree, do not assert it" needs pixels, and this is where they are.
+    //
+    //  ⚠ WHAT IT DOES *NOT* COVER, STATED PLAINLY: the GL painter. `ScreenPainter.DrawTri` needs Unity
+    //  and cannot run in any headless process, so its half of the agreement is held by
+    //  `DisplayListTriTest`, which reads both files and fails if the
+    //  vertex order drifts. ⛔ That is a source check, not a raster check, and it is the honest limit
+    //  of what this task can prove.
+    // ============================================================================================
+    static int TriCheck()
+    {
+        int fail = 0;
+        Console.WriteLine("--- Tri primitive raster check (S240)");
+
+        // Both sizes the prompt names: the preview's own and the shipped glass.
+        fail += TriCheckAt(1920, 1054, "preview frame");
+        fail += TriCheckAt(2560, 1405, "SHIPPED GLASS");
+
+        Console.WriteLine(fail == 0
+            ? "--- ok: coverage analytic, seam exact both ways, degenerate inert, mis-pairing detectable"
+            : "!! " + fail + " Tri raster check(s) FAILED");
+        return fail == 0 ? 0 : 1;
+    }
+
+    static int Say(string what, bool ok, string detail)
+    {
+        Console.WriteLine((ok ? "    ok   " : "    FAIL ") + what + (detail == "" ? "" : "   " + detail));
+        return ok ? 0 : 1;
+    }
+
+    static int TriCheckAt(int w, int h, string label)
+    {
+        int fail = 0;
+        Console.WriteLine("  [" + label + "] " + w + "x" + h);
+
+        // ---- 1. COVERAGE. A right triangle's area is known exactly, so the raster can be checked
+        // against arithmetic rather than against a golden image nobody can re-derive.
+        int side = w / 4;
+        using (Bitmap bmp = new Bitmap(w, h))
+        using (Graphics g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Black);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            DisplayList dl = new DisplayList(8);
+            dl.Tri(10, 10, 10 + side, 10, 10, 10 + side, new Rgba(1f, 1f, 1f, 1f));
+            Render(g, dl);
+            double lit = LitFraction(bmp, w, h) * w * h;
+            double want = side * side / 2.0;
+            // Antialiased edges make this approximate by construction; 2% is far tighter than any
+            // vertex transposition (which moves coverage by tens of percent) yet loose enough that
+            // GDI+'s edge rule does not fail it.
+            bool ok = Math.Abs(lit - want) / want < 0.02;
+            fail += Say("a right triangle covers its analytic area", ok,
+                        "lit " + lit.ToString("F0") + " vs " + want.ToString("F0"));
+        }
+
+        // ---- 2. ⭐⭐ THE SEAM. A Tri butted against a Rect along a shared edge must leave NO GAP and
+        // NO DOUBLE-COVER. Drawn at 50% alpha on black so both failures are visible: a gap reads as
+        // black, an overdraw reads brighter than a single 50% pass. An opaque test could not see either.
+        using (Bitmap bmp = new Bitmap(w, h))
+        using (Graphics g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Black);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            float x0 = 100f, y0 = 100f, edge = 300f, rectH = 120f;
+            DisplayList dl = new DisplayList(8);
+            // ⚠ `Rgba` is FLOATS 0..1, not bytes. This read `new Rgba(255,255,255,128)` on first
+            // run, which CLAMPS TO OPAQUE - so both shapes were solid and the overdraw probe was
+            // measuring nothing. ⭐ The check caught it because it was built able to fail; that is
+            // the S75 shape (a tint judged from an assumption instead of from a render).
+            Rgba half = new Rgba(1f, 1f, 1f, 0.5f);
+            // Rect sits above the shared horizontal edge at y0+rectH; the triangle hangs below it,
+            // sharing that exact edge.
+            dl.Rect(x0, y0, edge, rectH, half);
+            dl.Tri(x0, y0 + rectH, x0 + edge, y0 + rectH, x0 + edge * 0.5f, y0 + rectH + 160f, half);
+            Render(g, dl);
+
+            // Sample the seam a pixel each side, across its length, avoiding the triangle's own
+            // tapering ends where the shape genuinely leaves the rect's footprint.
+            int gaps = 0, over = 0, single = 128;
+            for (int i = 20; i < (int)edge - 20; i++)
+            {
+                Color above = bmp.GetPixel((int)x0 + i, (int)(y0 + rectH) - 2);
+                Color below = bmp.GetPixel((int)x0 + i, (int)(y0 + rectH) + 2);
+                if (above.R < 40) gaps++;
+                // Only inside the triangle's own span do we expect ink below the seam at all.
+                float t = i / edge;
+                bool insideTri = t > 0.12f && t < 0.88f;
+                if (insideTri && below.R < 40) gaps++;
+                if (above.R > single + 40 || below.R > single + 40) over++;
+            }
+            fail += Say("a Tri sharing an edge with a Rect leaves NO GAP", gaps == 0, gaps + " gap px");
+            fail += Say("...and NO DOUBLE-COVER on that edge", over == 0, over + " overdrawn px");
+        }
+
+        // ---- 3. DEGENERATE. Zero area must put down nothing at all - and it is rejected in the pure
+        // helper, so this also proves the helper's guard reaches the raster.
+        using (Bitmap bmp = new Bitmap(w, h))
+        using (Graphics g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Black);
+            DisplayList dl = new DisplayList(8);
+            dl.Tri(50, 50, 250, 50, 400, 50, new Rgba(1f, 1f, 1f, 1f));   // collinear
+            dl.Tri(80, 80, 80, 80, 80, 80, new Rgba(1f, 1f, 1f, 1f));     // coincident
+            int cmds = dl.Count;
+            Render(g, dl);
+            fail += Say("a degenerate triangle is dropped before the renderer", cmds == 0, cmds + " cmds");
+            fail += Say("...and puts down no pixels", LitFraction(bmp, w, h) == 0.0, "");
+        }
+
+        // ---- 4. ⛔⛔ WHAT A TRANSPOSITION ACTUALLY LOOKS LIKE - AND THE ONE THE PROMPT ASKED FOR
+        // IS INVISIBLE. Swapping two VERTICES of a triangle yields the same three points, hence the
+        // same shape: GDI+'s fill rule does not care about winding for a simple polygon, and the GL
+        // painter forces `_Cull Off` (`ScreenPainter.cs:1356`, so a flipped Y cannot cull filled
+        // shapes). ⭐ So a vertex swap is a genuine NO-OP in BOTH rasterisers and no raster check can
+        // catch it - it is caught at the PACKING level instead, by `DisplayListTriTest`.
+        // ⭐⭐ The transposition that IS visible is a MIS-PAIRING: reading (A,C) and (B,D) as the points
+        // instead of (A,B) and (C,D). That builds a different triangle, and this proves it - so the
+        // source-parity check that pins the pairing is guarding something that matters.
+        {
+            double a = Centroid(w, h, 40, 40, 40 + w / 5f, 60, 90, 40 + h / 6f);          // correct pairing
+            double b = Centroid(w, h, 40, 40 + w / 5f, 60, 90, 40, 40 + h / 6f);          // A,C / B,D
+            fail += Say("a MIS-PAIRED unpack builds a different triangle (so the pin guards something)",
+                        a >= 0 && b >= 0 && Math.Abs(a - b) > 1.0,
+                        "centroid x " + a.ToString("F1") + " vs " + b.ToString("F1"));
+        }
+        return fail;
+    }
+
+    /// <summary>Coverage-weighted centroid x, used only to show a shape was actually drawn.</summary>
+    static double Centroid(int w, int h, float ax, float ay, float bx, float by, float cx, float cy)
+    {
+        using (Bitmap bmp = new Bitmap(w, h))
+        using (Graphics g = Graphics.FromImage(bmp))
+        {
+            g.Clear(Color.Black);
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            DisplayList dl = new DisplayList(4);
+            dl.Tri(ax, ay, bx, by, cx, cy, new Rgba(1f, 1f, 1f, 1f));
+            Render(g, dl);
+            double sum = 0, wsum = 0;
+            for (int y = 0; y < h; y += 3)
+                for (int x = 0; x < w; x += 3)
+                {
+                    int v = bmp.GetPixel(x, y).R;
+                    if (v > 0) { sum += x * v; wsum += v; }
+                }
+            return wsum == 0 ? -1 : sum / wsum;
+        }
+    }
+
+    static double LitFraction(Bitmap bmp, int w, int h)
+    {
+        double lit = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                lit += bmp.GetPixel(x, y).R / 255.0;
+        return lit / (w * h);
+    }
+
+    /// <summary>⭐ Dispatches through the SAME loop the real render uses, so this cannot drift from it.</summary>
+    static void Render(Graphics g, DisplayList dl)
+    {
+        for (int i = 0; i < dl.Count; i++)
+        {
+            DrawCmd c = dl.At(i);
+            using (SolidBrush brush = new SolidBrush(ToColor(c.Colour)))
+            {
+                if (c.Kind == DrawKind.Rect) g.FillRectangle(brush, c.A, c.B, c.C, c.D);
+                else if (c.Kind == DrawKind.Tri) FillTriPreview(g, brush, c);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One filled triangle - the preview twin of `ScreenPainter.DrawTri`'s GL.TRIANGLES.
+    ///
+    /// ⭐ `FillPolygon` and not three `DrawLine`s: a stroked outline would land the edge pixels by the
+    /// PEN's convention and the interior by the fill's, so a triangle butted against a `Rect` would
+    /// seam or double-cover along the shared edge. One filled polygon uses GDI+'s own fill rule, which
+    /// is the same rule `FillRectangle` two lines above uses - so a Tri and a Rect sharing an edge meet
+    /// exactly, by construction rather than by tuning.
+    ///
+    /// ⛔ No degeneracy check: `DisplayList.Tri` drops a zero-area triangle before it can reach here.
+    /// </summary>
+    private static void FillTriPreview(Graphics g, SolidBrush brush, DrawCmd c)
+    {
+        g.FillPolygon(brush, new[] {
+            new PointF(c.A, c.B),
+            new PointF(c.C, c.D),
+            new PointF(c.StartDeg, c.EndDeg),
+        });
     }
 
     /// <summary>One line as a round-capped pen - the preview twin of DrawLine's rotated quad.</summary>

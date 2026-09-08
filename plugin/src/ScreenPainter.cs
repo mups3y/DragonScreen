@@ -1639,6 +1639,7 @@ namespace DragonScreen
                 if (c.Kind == DrawKind.Rect) DrawRect(c);
                 else if (c.Kind == DrawKind.ArcBand) DrawArcBand(c);
                 else if (c.Kind == DrawKind.Line) DrawLine(c);
+                else if (c.Kind == DrawKind.Tri) DrawTri(c);
                 else if (c.Kind == DrawKind.Image)
                 {
                     DrawImage(c);
@@ -1811,6 +1812,31 @@ namespace DragonScreen
             GL.Vertex3(x1 + px, y1 + py, 0f);
             GL.Vertex3(x1 - px, y1 - py, 0f);
             GL.Vertex3(x0 - px, y0 - py, 0f);
+            GL.End();
+        }
+
+        /// <summary>
+        /// One filled triangle - the GL twin of the preview's `FillPolygon`.
+        ///
+        /// ⛔ THE VERTEX ORDER IS THE CONTRACT AND IT IS NOT ARBITRARY. `A,B` then `C,D` then
+        /// `StartDeg,EndDeg`, exactly as `DisplayList.Tri` packs them and exactly as
+        /// `PreviewMain` unpacks them. Transposing two of them here would leave the preview correct and
+        /// the glass wrong, and nothing in a PNG diff would catch it - which is H-01's shape, where the
+        /// preview and the shipped panel disagreed and no instrument noticed.
+        /// `DisplayListTriTest.BothRenderersUnpackTheSameOrder` reads both files and fails if they drift.
+        ///
+        /// ⭐ NO DEGENERACY CHECK HERE, ON PURPOSE. `DisplayList.Tri` drops a zero-area triangle before
+        /// it ever reaches a renderer, so both painters can assume a real triangle and neither has to
+        /// have an opinion about collinear points. See that helper's docstring for why that decision
+        /// lives in the pure layer.
+        /// </summary>
+        private static void DrawTri(DrawCmd c)
+        {
+            GL.Begin(GL.TRIANGLES);
+            GL.Color(Tint(c.Colour));
+            GL.Vertex3(c.A, c.B, 0f);
+            GL.Vertex3(c.C, c.D, 0f);
+            GL.Vertex3(c.StartDeg, c.EndDeg, 0f);
             GL.End();
         }
 

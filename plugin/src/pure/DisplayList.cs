@@ -41,7 +41,23 @@ namespace DragonScreen
         /// <summary>Straight line. A=x0 B=y0 C=x1 D=y1, StartDeg=stroke width. A real primitive (a
         /// rotated quad in the GL painter, a pen in the preview) so a track can be a solid line rather
         /// than a row of dots - the one shape a Rect cannot make because it is not axis-aligned.</summary>
-        Line = 4
+        Line = 4,
+        /// <summary>
+        /// Filled triangle. A=x0 B=y0, C=x1 D=y1, StartDeg=x2 EndDeg=y2 - the three vertices, in the
+        /// same coordinate space and the same top-left origin as Rect.
+        ///
+        /// The FILLED counterpart of Line's argument: it is the one shape a Rect cannot make because it
+        /// is not axis-aligned. Line can STROKE a diagonal; nothing before this could FILL beside one.
+        /// The locked base-screen design needs two such fills - the outer border's 45 degree chamfer at
+        /// each bottom corner, and the icon window's trapezoidal notch - and every other shape in that
+        /// design decomposes into triangles plus existing Rects.
+        ///
+        /// ⛔ A TRIANGLE AND NOT A QUAD, AND THE REASON IS THE STRUCT. `DrawCmd` carries exactly six
+        /// floats (A, B, C, D, StartDeg, EndDeg). A triangle needs exactly six and fits with no new
+        /// field; a quad needs eight and would force a struct change that touches every renderer, every
+        /// test and every page. Two triangles make a quad and cost one extra command.
+        /// </summary>
+        Tri = 5
     }
 
     /// <summary>
@@ -272,6 +288,42 @@ namespace DragonScreen
             c.Kind = DrawKind.Line;
             c.A = x0; c.B = y0; c.C = x1; c.D = y1;
             c.StartDeg = width;
+            c.Colour = colour;
+            Add(c);
+        }
+
+        /// <summary>
+        /// A filled triangle at any angle - the FILLED counterpart of <see cref="Line"/>, and the one
+        /// shape a <see cref="Rect"/> cannot make because it is not axis-aligned. Drawn as a single
+        /// `GL.TRIANGLES` primitive by the GL painter and as `FillPolygon` by the preview, so both put
+        /// down the same solid area.
+        ///
+        /// PACKING: `A,B` = p0 · `C,D` = p1 · `StartDeg,EndDeg` = p2. ⚠ The last two fields are named
+        /// for the ArcBand kind that first needed them - this file's own rule is that the fields "mean
+        /// different things per kind", and they carry a POINT here, not an angle.
+        ///
+        /// ⛔ A QUAD WAS REJECTED, deliberately: `DrawCmd` has six floats, a triangle needs exactly six
+        /// and a quad needs eight. Adding two fields to carry a fourth vertex would widen every command
+        /// in the list - text, images, rects, all of them - to serve one shape, and would touch every
+        /// renderer, every test and every page. Two triangles make a quad for the price of one command.
+        ///
+        /// ⭐ A DEGENERATE TRIANGLE IS REJECTED HERE, NOT IN THE RENDERERS, and that is the point: it is
+        /// the one decision about this shape that could be made two different ways by two rasterisers,
+        /// so it is made ONCE, in the pure layer, where a headless test can hold it. Zero area covers no
+        /// pixels in any correct rasteriser, but "no pixels" and "a hairline" are both defensible
+        /// readings of a collinear polygon and GDI+ and GL need not agree on which. Dropping the command
+        /// removes the question.
+        /// </summary>
+        public void Tri(float x0, float y0, float x1, float y1, float x2, float y2, Rgba colour)
+        {
+            // Twice the signed area. Zero means collinear (which includes all three points coincident).
+            float area2 = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+            if (area2 == 0f || float.IsNaN(area2)) return;
+            DrawCmd c = new DrawCmd();
+            c.Kind = DrawKind.Tri;
+            c.A = x0; c.B = y0;
+            c.C = x1; c.D = y1;
+            c.StartDeg = x2; c.EndDeg = y2;
             c.Colour = colour;
             Add(c);
         }

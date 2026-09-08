@@ -129,6 +129,14 @@ public static class TestMain
         bad += Suite(HarnessTest.Run);
 
         bad += Suite(LayoutTest.Run);
+        // ⭐⭐ S240. The `Tri` primitive - the FILLED counterpart of `Line`, added because the locked
+        // base-screen design needs two fills no existing DrawKind can make (the border's 45-degree
+        // chamfers and the icon window's notch). S239 stopped Prompt 1 at Gate 0 over exactly this.
+        // ⛔ Its load-bearing check is `BothRenderersUnpackTheSamePairing`: the two rasterisers are
+        // dispatched separately and a mis-pairing would leave one right and the other wrong with
+        // nothing to show for it - which is H-01's shape. Pixels are proved separately by
+        // `DragonScreenPreview.exe --tricheck`, because no rasteriser is reachable from this build.
+        bad += Suite(DisplayListTriTest.Run);   // S240: Tri packing, degeneracy, and the two-renderer pin
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)
