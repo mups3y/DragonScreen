@@ -28563,3 +28563,188 @@ is used, only its subject is gone.
 build, against the spec.
 
 **Commit:** this one. **No `git push`.**
+
+---
+
+### S245 [O] The NON-ICON base page, its bar, and the fit — **DONE 2026-09-09 — three new files, ten assets harvested, §11's NON-ICON column asserted in BOTH spaces, 12 mutants raised and 12 killed. ⛔ Nothing became reachable** — [overseer PROMPT_2_NONICON_BASE_PAGE + `SPEC_BASE_SCREENS.md` v1, 2026-09-09; branch `rebuild/base-screens`]
+
+- ⛔ **BUILT FROM THE SPEC AND NOTHING ELSE (§0).** `BottomBar.cs`, `CoverPage.cs`,
+  `VehicleOverviewPage.cs` and `FigmaUI`'s page bodies were **not opened**. 🟢 OWNER, 2026-09-09,
+  verbatim: *"he should only reference what you tell him too regarding building the shells how you tell
+  him too. not the old builds."* ⭐ The two things worth having from the old build — the rounded-rectangle
+  construction and the one-source rule for a moving element — were taken from §0, where the spec writes
+  them out for exactly this reason.
+- ⭐ **THE SPEC'S OWN AUDIT RUNS CLEAN FIRST.** `Desktop/BOB/audit_spec.py` — which derives every
+  expected value from `reference_gen.py`, never from the spec — reports **98 passed, 0 FAILED**. That was
+  run before a line was written, because a spec that disagrees with its own generator is a stop (§0).
+- ⛔ **NOTHING BECAME REACHABLE (§10.2).** No `UiPage` value, no `Titles` row, no `Build` case, no
+  routing, no `PageAction`, no hit map. ⭐ **`PageCount` is still 36** and the four ratchets [[S244]]
+  returned to pre-[[S242]] are all untouched — this commit adds renderers.
+
+#### ⭐ WHAT WAS BUILT — three files, named so nothing can be confused with the scrapped work
+
+| file | what it holds |
+|---|---|
+| `plugin/src/pure/BaseBar.cs` | `BaseFit` (§2's one-factor fit) + `BaseBar` — §8's ten tiles, two 1px rules, §9's pop-up, and the §0(a) rounded rectangle both pages call |
+| `plugin/src/pure/BasePageNoIcon.cs` | §5 border · §6 NON-ICON window · §3 grounds · §2 fit · then `BaseBar` |
+| `plugin/test/BasePageNoIconTest.cs` | §11's NON-ICON column in DESIGN space — **148 checks** |
+
+⭐ **`BaseFit` LIVES IN `BaseBar.cs` AND THAT IS A DELIBERATE CHOICE, NOT AN ACCIDENT.** The prompt fixes
+the file list at three; the fit is needed by both base pages AND by the bar, and `BaseBar` is the file
+both pages share (*"Prompt 3 reuses it unchanged"*). ⛔ Putting the one mapping in the one shared file is
+what stops a second copy of `min(w/1920, h/1054)` appearing — and a second copy is how a per-axis scale
+gets reintroduced later without anyone deciding to.
+
+#### ⭐⭐ THE PATHS ARE HELD AS THE SPEC'S OWN TEXT, AND THAT IS THE SUITE'S LOAD-BEARING IDEA
+
+`BasePageNoIcon.OuterBorderPath` and `.WindowPath` are §5 and §6 **verbatim**, as `const string`.
+⛔ **Nothing in the draw path parses them** — the drawing has its own numbers. The TEST parses them and
+makes the two agree: every extreme, both corner radii, both 45-degree chamfers. ⭐ So the page is pinned
+against the specification's own characters by two independent expressions of it, rather than by a suite
+that derives its expectation from the value under test — which is [[S176]]'s finding and is why
+[[S220]]'s two mutants survived.
+
+#### ⭐⭐ A REAL RENDERING DEFECT WAS FOUND AND FIXED, AND NO DESIGN-SPACE TEST COULD HAVE SEEN IT
+
+⛔ **TWO ANTIALIASED FILLS OF THE SAME COLOUR THAT MERELY ABUT DO NOT ADD UP TO ONE.** Where their shared
+edge lands mid-pixel each covers part of that row — 0.33 and 0.67, say — and the compositor gives
+`1 − (1−0.33)(1−0.67) = 0.78`, not 1. The row keeps 22 % of whatever was underneath.
+
+⚠ **MEASURED, NOT FEARED.** The first render carried a line across the WHOLE PAGE at design y 13 —
+**rgb(45,46,53) against `#070810`'s rgb(7,8,16), a 15 % step**, because the colour showing through was
+the white stroke beneath it. The window fill carried a fainter one at design y 29.5, rgb(23,27,46)
+against rgb(26,31,53). ⛔ **The display list was correct throughout.** Every design-space assertion
+passed. It was only visible in pixels.
+
+⭐ **THE FIX IS `BaseBar.Seam` — an overlap of ONE DESIGN PIXEL**, applied only where the overlapping
+region is provably INSIDE the shape: a band pushed into the middle of its own rectangle, a quarter-disc
+swept `asin(1/r)` past its own end, and two narrow rects carrying the chamfers' overlap against the
+bottom band (they stop one pixel short of the bottom edge, which is exactly where the chamfer reaches
+them). ⛔ **No edge of any shape moves.**
+⛔ **IT IS NEVER APPLIED TO AN ALPHA FILL.** Two 0.55 whites overlapping composite to 0.80, so §6's
+window RING is drawn as butted bands and quarter-annuli with no overlap at all — it wears an invisible
+1px notch at each of its eight junctions rather than a visible bright one.
+
+#### ⭐ TWO PLACES THIS BUILD CHOSE WHAT THE SPEC DOES NOT SAY — recorded, asserted, and raised
+
+1. ⭐ **THE GROUND IS PAINTED OVER THE WHOLE DEVICE SURFACE**, not only inside the mapped frame. §2
+   leaves the spare pixels' colour unstated and at 2560x1419 that is a **6.83 px band top and bottom**.
+   Painting them the page ground is the only option that renders IDENTICALLY in both renderers: unpainted
+   they would show GDI+'s clear colour in the preview (`#020738`) and GL's on the glass. ⛔ That is a
+   silent two-renderer divergence, which is the failure this project keeps paying for. **Asserted in
+   `--basecheck`**, so the choice is visible and a change to it fails there rather than on the glass.
+   One `Rect` to change if the owner wants black bands. → `BOB-27`
+2. ⭐ **THE BORDER'S 3px STROKE IS TWO OFFSET REGIONS** — the path outset by 1.5 in white, then inset by
+   1.5 in `#070810` — rather than separate edge bands. The border has 45-degree chamfer joins and butted
+   bands leave a notch at a mitre that an offset region cannot leave. ⭐ The offset of a 45-degree edge is
+   `d·(√2−1)` along its neighbours, which is what keeps the chamfer a TRUE 45 degrees at every stroke
+   offset and not only on the path itself. The WINDOW has no chamfers, so its 2px stroke IS a ring —
+   which is also what lets its 0.55 alpha composite over the right two grounds, the outer half over
+   `#070810` (measured rgb(143,144,147)) and the inner half over `#1A1F35` (rgb(152,154,164)), exactly as
+   a centred SVG stroke does.
+
+#### ⭐ §11's DEVICE-SPACE TABLE — MEASURED, at BOTH shipped sizes
+
+⛔ A headless suite cannot put down a pixel, so §11's second table needed a rasteriser:
+**`DragonScreenPreview.exe --basecheck`**, a gate in `build.py test` beside [[S241]]'s `--tricheck`, and
+it renders through `Paint` — **the REAL render loop**, extracted by this task so the probe reads the
+pixels the preview actually writes. ⛔ Not the reduced two-branch dispatcher that serves `--tricheck`:
+that one draws Rects and Tris and would have silently skipped every ArcBand and every Image on this page.
+
+| §11 probe, column x=1280 | expected | **measured** |
+|---|---:|---:|
+| first white (border top) | y 0..3 | **0** |
+| `#070810` begins | y 4 | **4** |
+| window line | y 25..27 | **25** |
+| `#1A1F35` begins | y 28 | **28** |
+| white (border bottom) | y 1304 | **1304** |
+| row 1360, thin white vertical | x 1094 | **1094** (peak 198) |
+| row 1360, thin white vertical | x 1452 | **1452** (peak 255) |
+
+⭐ **EVERY ROW EXACT, NOT MERELY WITHIN ±1.** And at **2560x1419** every probe converts back to the same
+DESIGN number within 0.13 px: `#070810` 3.00/3.13 · window line 18.75/18.88 · ground 21.00/21.13 ·
+border bottom 978.23/978.13 · rule 1 820.47/820.50 · rule 2 1089.03/1089.00. ⛔ Neither size was forced
+to the other.
+
+⚠ **ONE §11 ROW CANNOT BE ASSERTED AS WRITTEN, AND IT IS RAISED RATHER THAN QUIETLY LOOSENED.** §11 says
+*"white means all three channels > 200"*. A 1-DESIGN-px rule is 1.33 device px wide, and at a fractional
+offset it covers at most 75 % of any one device pixel: **rule 1 peaks at 198**. The probe asserts the
+peak's POSITION within ±1 and PRINTS the peak value. → `BOB-25`
+
+#### ⭐⭐ THE INSTRUMENT IS MADE TO FAIL ON PURPOSE BEFORE IT IS TRUSTED
+
+⚠ The overseer's own coverage check reported *"zero unaccounted pixels"* and went on reporting zero
+**with every mask removed**. So `--basecheck` ends by deleting part of its own input — the border's white
+band and both rules are painted out of a finished render — and requires the same comparison to report
+faults. It does: `first white 0 → 1304 ; rules 1094/1452 → −1/−1`, 3 numbers moved, 3 faults. ⛔ A probe
+that still passed with its subject deleted would make the green above meaningless.
+
+#### ⭐⭐ MUTATION — 12 RAISED, 12 KILLED, 0 SURVIVED
+
+| # | mutant | killed by |
+|---|---|---|
+| M1 | ⭐ **the fit: `min` → width-only** (the prompt names this one) | `BasePageNoIconTest` (4 checks) |
+| M2 | ⭐ **the margin back to the SUPERSEDED `#14152C`** (the prompt names this one) | suite **+** `--basecheck` |
+| M3 | border coordinate: chamfer foot 38 → 39 | suite (path-vs-code + both 45° tris) |
+| M4 | window coordinate: top 19.5 → 20.5 | suite **+** `--basecheck` |
+| M5 | bar coordinate: right rule 1088.6 → 1089.6 | suite **+** `--basecheck` (measured 1454) |
+| M6 | one tile moved one pixel: `b_nav0` left 13.4 → 14.4 | suite |
+| M7 | tile ORDER: `r_iss` / `r_count` swapped | suite (6 checks) |
+| M8 | window stroke opacity 0.55 → opaque | suite |
+| M9 | ⭐ **the seam overlap removed** | **`--basecheck` ONLY** |
+| M10 | the pop-up disconnected — draws nothing whatever is driven in | suite (6 checks) |
+| M11 | the bar draws a ground of its own (the old bar's habit) | suite (3 checks) |
+| M12 | the chamfer offset sign flipped (mitres break at the stroke) | suite |
+
+⭐⭐ **M9 IS THE ONE THAT JUSTIFIES THE WHOLE RASTER GATE.** Remove the seam overlap and the design-space
+suite reports **148 checks, 0 failed** — the display list is still correct. Only the pixels are wrong.
+⭐ **M6 EXISTS BECAUSE IT WOULD HAVE SURVIVED.** §11's table does not probe a tile's left edge and neither
+does the device check, so the ten tile positions were pinned by nothing until a literal table typed from
+§8.1 — not read from `BaseBar`'s own arrays — was added to the suite. That is the [[S181]] idiom.
+⚠ **A trap this run walked into and is worth writing down:** `build.py harnesscheck` runs whatever
+`DragonScreenTest.exe` is on disk. After the mutation sweep that binary was the LAST MUTANT, and
+`harnesscheck` correctly refused with *"the CLEAN run is already failing"*. Rebuild before believing it.
+
+#### ⭐ THE TEN ASSETS — harvested, and every one verified
+
+⛔ **They are NOT in the repo** (§8.2) — they were supplied in `Desktop/BOB/bar_assets/` and are
+**harvested byte-identical** into `plugin/GameData/DragonScreen/art/cover/` (md5 compared, all ten
+match), with a provenance row each in `docs/reference/NASA_REFERENCE_ART.md` beside the tab icons.
+
+⭐ **THE STOP CONDITION WAS NOT MET.** The prompt: *"if any of them carries a baked background, STOP"*.
+None does — **all four corners of all ten are `(0,0,0,0)`**, 45–86 % of each file is fully transparent,
+and **not one opaque pixel in any of the ten is within 30 of `#111B52`**.
+⭐ §8.2's *"55–89 % alpha-varying"* holds exactly under the reading "not fully opaque": measured
+**56.4 – 89.5 %**.
+⚠ **ONE CORRECTION, MEASURED:** the prompt also said *"near-white opaque pixels"*. **False for two of the
+ten.** `r_spx` and `r_iss` have opaque pixels averaging rgb(31,237,243) and rgb(70,238,243) — **CYAN**,
+because the SPX/ISS badges and the countdown block are cyan ink in the design. ⭐ Confirmed by eye on a
+composite over `#1A1F35` before it was accepted: it is artwork, not residue, and it is not a baked
+background, so it is not the stop. Recorded so nobody "fixes" the cyan to white later.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** — `BasePageNoIconTest` **148 checks, 0 failed** |
+| `--basecheck` (new gate in `test`) | ok at 2560x1405 **and** 2560x1419; ratios identical; probes provably able to fail |
+| `--tricheck` | 12 raster checks at both sizes, unchanged |
+| `harnesscheck` | **ok**, fault named, exit 1, **176** clean report lines (174 + this suite's two) |
+| `previewdiff HEAD` | ⭐ **0 existing pages changed, 2 NEW, 0 removed** (of 130 compared) |
+| tool selftests | SELFTEST OK, 13 sections, 406 report lines |
+| mutation | **12 raised, 12 killed, 0 survived** |
+
+⭐ **0 EXISTING PAGES CHANGED IS THE NUMBER THAT MATTERS:** nothing the owner flies moved. The two new
+renders are `ui_basenoicon_screen1.png` and `ui_basenoicon_screen2.png` — both shipped SHAPES, because
+screen 2 is 0.98 % narrower and its ~7px band only exists in a render.
+*(The `kenney_ui_scifi is now EMPTY` warning is the standing [[S207]]/[[S218]] line, not this one's.)*
+
+#### ⚠ QUESTIONS RAISED — `BOB-25` … `BOB-29`, in the commit message, harvest format
+
+`BOB-25` §11's ">200 white" against a 1px rule that can only reach 198 · `BOB-26` §10's *"never a picture
+of a number"* against §8.1's `r_count` / `r_spx` / `b_state`, which are pictures of numbers and text, and
+§11 pins the count at ten · `BOB-27` the letterbox colour §2 does not state · `BOB-28` the repo renders
+**2560x1406 / 1420**, the spec says **1405 / 1419** · `BOB-29` §4 assigns diagonals to `Tri` but does not
+say what STROKES one.
+
+**Commit:** this one. **No `git push`.**

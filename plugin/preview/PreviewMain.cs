@@ -275,6 +275,11 @@ public static class PreviewMain
         // reachable from a headless test - and "prove they agree, do not assert it" needs actual
         // pixels. This runs the REAL `FillTriPreview` path, not a copy of it.
         if (args.Length > 0 && args[0] == "--tricheck") return TriCheck();
+        // ⭐⭐ S245: the NON-ICON base page's DEVICE-space half of spec §11, for the same reason
+        // and by the same route - a headless suite cannot put down a pixel, and §11's second table
+        // is which ROW the border lands on at the shipped size. It renders through `Paint`, the
+        // real loop, and it is made to fail on purpose before it is trusted.
+        if (args.Length > 0 && args[0] == "--basecheck") return BaseCheck();
 
         string outDir = (args.Length > 0)
             ? args[0]
@@ -968,6 +973,26 @@ public static class PreviewMain
                                   + " commands   no feed: the six attitude readouts must all dash");
             }
             ps.Steps.NoseConeOpen = savedNose;
+        }
+
+        // ---- ⭐⭐ S245: THE NON-ICON BASE SCREEN. Rendered on its OWN, not through `FigmaUI` ----
+        // ⛔ It has no `UiPage` value and no routing, deliberately (spec §10.2): this commit adds a
+        // RENDERER, and nothing on the page is reachable or clickable. It is previewed anyway because
+        // CLAUDE.md makes the PNG the surface layout and palette are judged from, and a page nobody can
+        // look at is a page nobody can reject.
+        // ⭐ BOTH shipped sizes, because they are different SHAPES: screen 2 is 0.98 % narrower, so the
+        // frame is width-limited there and leaves a ~7px band top and bottom that only a render shows.
+        {
+            foreach (ScreenSpec sc in new[] { Screens[0], Screens[1] })
+            {
+                DisplayList bdl = new DisplayList(BasePageNoIcon.Commands + 8);
+                BasePageNoIcon.Draw(bdl, sc.W, sc.H);
+                if (bdl.Overflowed) Console.WriteLine("  WARNING base page OVERFLOWED");
+                string path = Path.Combine(outDir, "ui_basenoicon_screen" + sc.Index + ".png");
+                Render(bdl, sc.W, sc.H, path);
+                Console.WriteLine("  " + path + "   " + sc.W + "x" + sc.H + "   " + bdl.Count
+                                  + " commands   (§11's device table is checked by --basecheck)");
+            }
         }
 
         // ---- Figma UI navigation: dispatcher + placeholder + shared back chevron ----
@@ -2115,6 +2140,23 @@ public static class PreviewMain
     private static void Render(DisplayList dl, int w, int h, string path)
     {
         using (Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+        {
+            Paint(bmp, dl);
+            bmp.Save(path, ImageFormat.Png);
+        }
+    }
+
+    /// <summary>
+    /// The REAL render loop, onto a caller-owned bitmap.
+    ///
+    /// ⭐ EXTRACTED BY S245 so `--basecheck` can PROBE THE PIXELS THE PREVIEW ACTUALLY WRITES rather
+    /// than a second loop that looks like it. ⚠ The reduced two-branch `Render(Graphics, DisplayList)`
+    /// further down serves `--tricheck`, which draws nothing but Rects and Tris; running a page through
+    /// THAT would silently skip every ArcBand and every Image and report on a picture nobody ships.
+    /// ⛔ There is one loop that renders a page, and this is it.
+    /// </summary>
+    private static void Paint(Bitmap bmp, DisplayList dl)
+    {
         using (Graphics g = Graphics.FromImage(bmp))
         {
             // AntiAlias because the screen runs MSAA x4. Not identical, but a hard-edged preview of
@@ -2151,7 +2193,6 @@ public static class PreviewMain
                         DrawText(g, brush, c);
                 }
             }
-            bmp.Save(path, ImageFormat.Png);
         }
     }
 
@@ -2310,6 +2351,308 @@ public static class PreviewMain
                 }
             return wsum == 0 ? -1 : sum / wsum;
         }
+    }
+
+    // ============================================================================================
+    //  ⭐⭐ S245 — THE NON-ICON BASE PAGE'S DEVICE-SPACE PROOF (`SPEC_BASE_SCREENS.md` §11).
+    //
+    //  ⛔ WHY IT IS HERE AND NOT IN `plugin/test/`. Same reason `--tricheck` is: `build.py test`
+    //  compiles `src/pure` + `test` only, so no rasteriser is reachable from the headless suite.
+    //  `BasePageNoIconTest` proves the DESIGN-space column exactly — it can read every command the
+    //  page emitted — but it cannot put down a pixel, and §11's second table is pixels: which ROW the
+    //  border's white band starts on at 2560x1405, where `#070810` begins, where the window line is.
+    //
+    //  ⭐ IT RENDERS THROUGH `Paint`, THE REAL LOOP. Not the reduced two-branch dispatcher below that
+    //  serves `--tricheck`: that one draws Rects and Tris and would silently skip every ArcBand and
+    //  every Image on this page, then report on a picture nobody ships.
+    //
+    //  ⚠ AND THE INSTRUMENT IS MADE TO FAIL ON PURPOSE BEFORE IT IS TRUSTED (`BaseCheckFalsifies`).
+    //  The overseer's own coverage check reported "zero unaccounted pixels" and went on reporting zero
+    //  with EVERY MASK REMOVED — it was measuring nothing. So this one is run against a render with
+    //  its border and its rules erased, and it must report faults. A probe that still passes with its
+    //  subject deleted is decorative.
+    // ============================================================================================
+
+    /// <summary>§11's probes down column x=1280, in device rows. -1 means "never found".</summary>
+    struct BaseProbe
+    {
+        public int FirstWhite, MarginTop, WindowLine, GroundTop, BorderBottom;
+        public int RuleA, RuleB;
+        public int RulePeakA, RulePeakB;
+        public Color BandTop;              // the letterbox row, where there is one
+    }
+
+    static bool PxWhite(Color c) { return c.R > 200 && c.G > 200 && c.B > 200; }
+    static bool PxIs(Color c, int r, int g, int b)
+    {
+        return Math.Abs(c.R - r) <= 2 && Math.Abs(c.G - g) <= 2 && Math.Abs(c.B - b) <= 2;
+    }
+    static bool PxMargin(Color c) { return PxIs(c, 7, 8, 16); }      // #070810
+    static bool PxGround(Color c) { return PxIs(c, 26, 31, 53); }    // #1A1F35
+
+    /// <summary>
+    /// Walk one column and one row and report what is actually there. ⛔ Nothing here knows what it
+    /// is SUPPOSED to find - the expectations live in the caller, so a probe cannot quietly agree
+    /// with the page by construction.
+    /// </summary>
+    static BaseProbe ProbeBasePage(Bitmap bmp, int w, int h)
+    {
+        BaseProbe p = new BaseProbe();
+        p.FirstWhite = p.MarginTop = p.WindowLine = p.GroundTop = p.BorderBottom = -1;
+        p.RuleA = p.RuleB = p.RulePeakA = p.RulePeakB = -1;
+
+        int x = 1280;
+        p.BandTop = bmp.GetPixel(x, 2);
+
+        int y = 0;
+        while (y < h && !PxWhite(bmp.GetPixel(x, y))) y++;
+        if (y < h) p.FirstWhite = y;
+        while (y < h && PxWhite(bmp.GetPixel(x, y))) y++;          // through the border's top band
+        while (y < h && !PxMargin(bmp.GetPixel(x, y))) y++;
+        if (y < h) p.MarginTop = y;
+        while (y < h && PxMargin(bmp.GetPixel(x, y))) y++;
+        if (y < h) p.WindowLine = y;                                // the window's 0.55 stroke begins
+        while (y < h && !PxGround(bmp.GetPixel(x, y))) y++;
+        if (y < h) p.GroundTop = y;
+
+        // The bottom border is the LAST white run in the column - found by walking up from the foot,
+        // so a stray bright pixel higher up cannot be mistaken for it.
+        int b = h - 1;
+        while (b >= 0 && !PxWhite(bmp.GetPixel(x, b))) b--;
+        while (b >= 0 && PxWhite(bmp.GetPixel(x, b))) b--;
+        if (b >= 0 && b + 1 < h) p.BorderBottom = b + 1;
+
+        // §11's last row: the two 1px rules, across a row inside the bar.
+        //
+        // ⚠ THE SEARCH WINDOW IS IN DESIGN SPACE, and that is not fussiness. A device-pixel window
+        // that looked right at 2560x1405 swept a DIFFERENT design row at 2560x1419 and caught the
+        // `b_state` tile's own lettering, which reads as a third and fourth "rule". Design x 812..1096
+        // is the gap between `b_state` (ends 807.9) and `b_point` (starts 1103.1), and it holds both
+        // rules at every size.
+        // ⚠ A 1-design-px rule is 1.33 device px wide, so at a fractional offset NEITHER rule can
+        // reach 255 - one of them peaks at 198 here. They are found as PEAKS above the ground and the
+        // peak VALUE is printed, because "white means > 200" cannot be met by a sub-pixel feature and
+        // an assertion that says otherwise would fail for the wrong reason.
+        BaseFit ff = BaseFit.For(w, h);
+        int row = (int)Math.Round(ff.Y(1020.2f));
+        int xLo = (int)Math.Floor(ff.X(812f)), xHi = (int)Math.Ceiling(ff.X(1096f));
+        var peaks = new System.Collections.Generic.List<int>();
+        var vals = new System.Collections.Generic.List<int>();
+        int xi = xLo;
+        while (xi < xHi)
+        {
+            if (bmp.GetPixel(xi, row).R > 100)
+            {
+                int best = xi, bestV = bmp.GetPixel(xi, row).R;
+                while (xi < xHi && bmp.GetPixel(xi, row).R > 100)
+                {
+                    if (bmp.GetPixel(xi, row).R > bestV) { bestV = bmp.GetPixel(xi, row).R; best = xi; }
+                    xi++;
+                }
+                peaks.Add(best); vals.Add(bestV);
+            }
+            else xi++;
+        }
+        if (peaks.Count > 0) { p.RuleA = peaks[0]; p.RulePeakA = vals[0]; }
+        if (peaks.Count > 1) { p.RuleB = peaks[1]; p.RulePeakB = vals[1]; }
+        if (peaks.Count > 2) { p.RuleA = -2; }      // more than two brights on that row: report it
+        return p;
+    }
+
+    static Bitmap RenderBasePage(int w, int h)
+    {
+        DisplayList dl = new DisplayList(BasePageNoIcon.Commands + 8);
+        BasePageNoIcon.Draw(dl, w, h);
+        Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(bmp)) g.Clear(Color.Magenta);   // unpainted = obvious
+        Paint(bmp, dl);
+        return bmp;
+    }
+
+    static int SayAt(string what, int got, double want, double tol, string extra)
+    {
+        bool ok = got >= 0 && Math.Abs(got - want) <= tol;
+        Console.WriteLine((ok ? "    ok   " : "    FAIL ") + what
+                          + "   measured " + got + "  expected " + want.ToString("F2")
+                          + (extra == "" ? "" : "   " + extra));
+        return ok ? 0 : 1;
+    }
+
+    static int BaseCheckAt(int w, int h, string label)
+    {
+        int fail = 0;
+        BaseFit f = BaseFit.For(w, h);
+        Console.WriteLine("  [" + label + "] " + w + "x" + h
+                          + "   k = " + f.K.ToString("F5")
+                          + "   x-offset " + f.OffX.ToString("F2")
+                          + "   y-offset " + f.OffY.ToString("F2"));
+
+        using (Bitmap bmp = RenderBasePage(w, h))
+        {
+            BaseProbe p = ProbeBasePage(bmp, w, h);
+
+            // ⭐ EVERY EXPECTATION IS THE DESIGN NUMBER MAPPED THROUGH §2's FIT - so the SAME row of
+            // this table serves both shipped sizes, which is what "every ratio must be identical"
+            // means operationally. §11's own literal device values for 2560x1405 are checked below.
+            fail += SayAt("first white (border top)", p.FirstWhite,
+                          Math.Max(0.0, f.Y(1f - 1.5f)), 1.0, "");
+            fail += SayAt("#070810 begins", p.MarginTop, f.Y(1f + 1.5f), 1.0, "");
+            fail += SayAt("window line", p.WindowLine, f.Y(19.5f - 1f), 1.0, "");
+            fail += SayAt("#1A1F35 begins", p.GroundTop, f.Y(19.5f + 1f), 1.0, "");
+            fail += SayAt("white (border bottom)", p.BorderBottom, f.Y(979f - 1.5f), 1.0, "");
+            fail += SayAt("thin white vertical, rule 1", p.RuleA, f.X(820.2f + 0.5f), 1.0,
+                          "peak " + p.RulePeakA);
+            fail += SayAt("thin white vertical, rule 2", p.RuleB, f.X(1088.6f + 0.5f), 1.0,
+                          "peak " + p.RulePeakB);
+
+            // ⭐⭐ NO HAIRLINE ANYWHERE IN EITHER FLAT FIELD. Two antialiased fills of the SAME colour
+            // that merely abut leave the row where they meet at ~78 % coverage, and the 22 % that shows
+            // through reads as a line the full width of the page. This build carried exactly that at
+            // design y 13 - rgb(45,46,53) against #070810 - until `BaseBar.Seam` was added. ⛔ It is
+            // measured here rather than trusted, because it is invisible to every design-space test.
+            {
+                int bad = 0, worst = 0, worstY = -1;
+                for (int y = p.MarginTop + 2; y < p.WindowLine - 2; y++)
+                {
+                    Color c = bmp.GetPixel(1280, y);
+                    int dev = Math.Max(Math.Abs(c.R - 7), Math.Max(Math.Abs(c.G - 8), Math.Abs(c.B - 16)));
+                    if (dev > 2) { bad++; if (dev > worst) { worst = dev; worstY = y; } }
+                }
+                for (int y = p.GroundTop + 2; y < (int)f.Y(940f); y++)
+                {
+                    Color c = bmp.GetPixel(1280, y);
+                    int dev = Math.Max(Math.Abs(c.R - 26), Math.Max(Math.Abs(c.G - 31), Math.Abs(c.B - 53)));
+                    if (dev > 2) { bad++; if (dev > worst) { worst = dev; worstY = y; } }
+                }
+                Console.WriteLine((bad == 0 ? "    ok   " : "    FAIL ")
+                                  + "no same-colour seam in the margin field or the window field"
+                                  + (bad == 0 ? "" : "   " + bad + " row(s), worst " + worst
+                                                     + "/255 at y " + worstY));
+                if (bad != 0) fail++;
+            }
+
+            // ⚠ THE LETTERBOX. §2 leaves the spare pixels' colour unstated and this build paints them
+            // the page ground, so that both renderers put down the same thing. Asserted, so the
+            // choice is visible and any change to it fails here rather than on the glass. (`BOB-27`)
+            bool band = f.OffY > 1.5f;
+            Console.WriteLine("    " + (band
+                ? "note: " + f.OffY.ToString("F2") + "px letterbox band, painted the page ground "
+                  + "rgb(" + p.BandTop.R + "," + p.BandTop.G + "," + p.BandTop.B + ")"
+                : "note: no letterbox band at this size (spare height " + f.OffY.ToString("F2") + "px)"));
+            if (band)
+            {
+                bool ok = PxGround(p.BandTop);
+                Console.WriteLine((ok ? "    ok   " : "    FAIL ")
+                                  + "the letterbox band is the page ground, not a renderer clear colour");
+                if (!ok) fail++;
+            }
+
+            if (w == 2560 && h == 1405)
+            {
+                // ⛔ §11's DEVICE-SPACE TABLE, VERBATIM, at the size it is written for. Tolerance ±1.
+                Console.WriteLine("    -- §11's own device-space numbers, as written --");
+                fail += SayAt("§11 first white           y 0..3", p.FirstWhite, 0.0, 1.0, "");
+                fail += SayAt("§11 #070810 begins        y 4", p.MarginTop, 4.0, 1.0, "");
+                fail += SayAt("§11 window line           y 25..27", p.WindowLine, 25.0, 1.0, "");
+                fail += SayAt("§11 #1A1F35 begins        y 28", p.GroundTop, 28.0, 1.0, "");
+                fail += SayAt("§11 white (border bottom) y 1304", p.BorderBottom, 1304.0, 1.0, "");
+                fail += SayAt("§11 row 1360, vertical at x 1094", p.RuleA, 1094.0, 1.0, "");
+                fail += SayAt("§11 row 1360, vertical at x 1452", p.RuleB, 1452.0, 1.0, "");
+            }
+        }
+        return fail;
+    }
+
+    /// <summary>
+    /// ⭐⭐ THE INSTRUMENT, MADE TO FAIL ON PURPOSE. Part of the probe's INPUT is deleted - the
+    /// border's white band and both 1px rules are painted out of the finished render - and the same
+    /// comparison must then report faults. ⛔ If it still passes, it is reading nothing, and the green
+    /// above means nothing either.
+    /// </summary>
+    static int BaseCheckFalsifies(int w, int h)
+    {
+        Console.WriteLine("  [falsification] the same probes over a render with its border and rules ERASED");
+        BaseFit f = BaseFit.For(w, h);
+        int faults = 0, moved = 0;
+        using (Bitmap bmp = RenderBasePage(w, h))
+        {
+            BaseProbe before = ProbeBasePage(bmp, w, h);
+            using (Graphics g = Graphics.FromImage(bmp))
+            using (SolidBrush margin = new SolidBrush(Color.FromArgb(7, 8, 16)))
+            using (SolidBrush ground = new SolidBrush(Color.FromArgb(26, 31, 53)))
+            {
+                g.FillRectangle(margin, 0, 0, w, (int)f.Y(6f));          // the border's top band
+                g.FillRectangle(ground, (int)f.X(810f), (int)f.Y(985f),
+                                (int)f.S(290f), (int)f.S(60f));                  // both rules
+            }
+            BaseProbe after = ProbeBasePage(bmp, w, h);
+
+            if (after.FirstWhite != before.FirstWhite) moved++;
+            if (after.RuleA != before.RuleA) moved++;
+            if (after.RuleB != before.RuleB) moved++;
+
+            if (Math.Abs(after.FirstWhite - Math.Max(0.0, f.Y(1f - 1.5f))) > 1.0) faults++;
+            if (Math.Abs(after.RuleA - f.X(820.7f)) > 1.0) faults++;
+            if (Math.Abs(after.RuleB - f.X(1089.1f)) > 1.0) faults++;
+
+            Console.WriteLine("    erased: first white " + before.FirstWhite + " -> " + after.FirstWhite
+                              + " ;  rules " + before.RuleA + "/" + before.RuleB
+                              + " -> " + after.RuleA + "/" + after.RuleB);
+        }
+        bool ok = faults >= 3 && moved >= 3;
+        Console.WriteLine((ok ? "    ok   " : "    FAIL ")
+                          + "deleting the input moves the numbers AND fails the comparison ("
+                          + moved + " moved, " + faults + " faults)");
+        return ok ? 0 : 1;
+    }
+
+    /// <summary>
+    /// §11: "At 2560x1419 every ratio must be identical." Both probes are converted BACK into design
+    /// space and required to land on the same design number. ⛔ Never force one size to the other.
+    /// </summary>
+    static int BaseRatiosAgree()
+    {
+        Console.WriteLine("  [ratios] the same design numbers, measured at both shipped sizes");
+        int fail = 0;
+        BaseFit f1 = BaseFit.For(2560, 1405), f2 = BaseFit.For(2560, 1419);
+        using (Bitmap a = RenderBasePage(2560, 1405))
+        using (Bitmap b = RenderBasePage(2560, 1419))
+        {
+            BaseProbe p1 = ProbeBasePage(a, 2560, 1405), p2 = ProbeBasePage(b, 2560, 1419);
+            fail += RatioSay("#070810 begins", p1.MarginTop, f1, p2.MarginTop, f2, false);
+            fail += RatioSay("window line", p1.WindowLine, f1, p2.WindowLine, f2, false);
+            fail += RatioSay("#1A1F35 begins", p1.GroundTop, f1, p2.GroundTop, f2, false);
+            fail += RatioSay("white (border bottom)", p1.BorderBottom, f1, p2.BorderBottom, f2, false);
+            fail += RatioSay("rule 1", p1.RuleA, f1, p2.RuleA, f2, true);
+            fail += RatioSay("rule 2", p1.RuleB, f1, p2.RuleB, f2, true);
+        }
+        return fail;
+    }
+
+    static int RatioSay(string what, int m1, BaseFit f1, int m2, BaseFit f2, bool horizontal)
+    {
+        double d1 = horizontal ? (m1 - f1.OffX) / f1.K : (m1 - f1.OffY) / f1.K;
+        double d2 = horizontal ? (m2 - f2.OffX) / f2.K : (m2 - f2.OffY) / f2.K;
+        // ±1 DEVICE px is the spec's tolerance; in design space that is 1/k, and the looser k governs.
+        bool ok = m1 >= 0 && m2 >= 0 && Math.Abs(d1 - d2) <= 1.0 / f1.K;
+        Console.WriteLine((ok ? "    ok   " : "    FAIL ") + what
+                          + "   1405 -> design " + d1.ToString("F2")
+                          + "   1419 -> design " + d2.ToString("F2"));
+        return ok ? 0 : 1;
+    }
+
+    static int BaseCheck()
+    {
+        int fail = 0;
+        Console.WriteLine("--- NON-ICON base page: spec §11's device-space table, measured off the render (S245)");
+        fail += BaseCheckAt(2560, 1405, "SCREEN 1/3");
+        fail += BaseCheckAt(2560, 1419, "SCREEN 2");
+        fail += BaseRatiosAgree();
+        fail += BaseCheckFalsifies(2560, 1405);
+        Console.WriteLine(fail == 0
+            ? "--- ok: §11's device table holds at both shipped sizes, ratios identical, probes provably able to fail"
+            : "!! " + fail + " base-page device check(s) FAILED");
+        return fail == 0 ? 0 : 1;
     }
 
     static double LitFraction(Bitmap bmp, int w, int h)

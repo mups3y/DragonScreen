@@ -442,6 +442,7 @@ def tool_tests():
     column_writer_check()
     preview_diff_selftest()   # S168: the before/after harness's own classifier + render gate
     tri_raster_check()        # S241 (BOB-13): the Tri primitive's only pixel-level evidence
+    base_page_check()         # S245: the NON-ICON base page's device-space table (spec section 11)
 
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
@@ -797,6 +798,40 @@ def tri_raster_check():
             print('    ' + line.strip() if not line.startswith('    ') else line)
     if p.returncode != 0:
         sys.exit('TRI RASTER CHECK FAILED (exit %d)' % p.returncode)
+
+
+def base_page_check():
+    """
+    S245: run the NON-ICON base page's DEVICE-SPACE proof as part of `test`.
+
+    WHY IT IS A GATE, and it is the same argument as `tri_raster_check` above. `build.py test`
+    compiles `src/pure` + `test` only, so no rasteriser is reachable from the headless suite:
+    `BasePageNoIconTest` can read every command the page emitted and prove the DESIGN-space column of
+    the spec's section 11 exactly, but it cannot put down a pixel. Section 11's second table is
+    pixels - which ROW the border's white band starts on at 2560x1405, where #070810 begins, where
+    the window line lands - and this is the only thing that can read them.
+
+    IT ALSO CATCHES WHAT NO DESIGN-SPACE TEST CAN SEE. Two antialiased fills of the same colour that
+    merely abut leave the row where they meet at about 78 % coverage, and the 22 % that shows through
+    reads as a hairline the full width of the page. This build carried one until `BaseBar.Seam` was
+    added. The display list was correct throughout; only the render was wrong.
+
+    IT BUILDS THE PREVIEW FIRST, for the same reason the Tri check does: a stale exe reports on code
+    that is no longer there, which is the S130 shape.
+
+    It renders the page twice, at both shipped sizes, and probes; it does NOT write any PNG.
+    """
+    print("--- base page device check (S245: spec section 11's device-space table)")
+    exe = compile_preview()
+    if not exe or not os.path.exists(exe):
+        sys.exit('BASE PAGE CHECK: the preview binary was not built')
+    p = subprocess.run([exe, '--basecheck'], capture_output=True, text=True)
+    out = (p.stdout or '') + (p.stderr or '')
+    for line in out.splitlines():
+        if line.strip():
+            print('    ' + line.strip() if not line.startswith('    ') else line)
+    if p.returncode != 0:
+        sys.exit('BASE PAGE CHECK FAILED (exit %d)' % p.returncode)
 
 
 def preview_diff_selftest():

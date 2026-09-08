@@ -137,6 +137,14 @@ public static class TestMain
         // nothing to show for it - which is H-01's shape. Pixels are proved separately by
         // `DragonScreenPreview.exe --tricheck`, because no rasteriser is reachable from this build.
         bad += Suite(DisplayListTriTest.Run);   // S240: Tri packing, degeneracy, and the two-renderer pin
+        // ⭐⭐ S245. The NON-ICON BASE SCREEN, built from `SPEC_BASE_SCREENS.md` and nothing else.
+        // ⛔ It is a RENDERER: no `UiPage` value, no routing, no `PageAction`, `PageCount` unchanged.
+        // Its load-bearing check is that the spec's own §5/§6 PATH STRINGS are parsed here and made to
+        // agree with the geometry the page emitted - two independent expressions of one design, rather
+        // than a suite deriving its expectation from the value under test (S176's finding).
+        // ⚠ Design space only. §11's DEVICE-space table is pixels, and no rasteriser is reachable from
+        // this build; `DragonScreenPreview.exe --basecheck` holds that half and is a gate in `test`.
+        bad += Suite(BasePageNoIconTest.Run);
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)

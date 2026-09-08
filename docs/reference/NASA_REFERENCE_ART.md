@@ -304,3 +304,65 @@ re-cutting `mech`, `crew` and `thermal` **bit-exact** before it was trusted for 
 on a 2112-unit frame, they render at **56 device px at the shipped 2560x1406** against a 45-51 px canvas —
 about **1.15x**. That is the best available from any render of this page in the repository, and it is far
 better than the 1.87x the smaller file would have given.
+
+---
+
+## ⭐⭐ THE TEN BASE-SCREEN BAR TILES (S245, 2026-09-09) — harvested, not cut here
+
+⛔ **These are NOT the shipped `bar_*` set, and the difference is the whole reason they exist.**
+`bar_nav_0..4`, `bar_label_current_state`, `bar_label_pointing_mode`, `bar_value_pointing_mode` and
+`bar_comm_block` — nine of the eleven tiles the OLD bar draws — are **FULLY OPAQUE with `#111B52`
+baked in**, 83,746 design px² of it, 10.4 % of that bar's box. ⛔ **A tint cannot repair one:** a tint
+is a MULTIPLY in both renderers (`PreviewMain.TintedAsset`'s ColorMatrix and `ScreenPainter`'s
+`GL.Color` modulation), so it can only DARKEN, and `#111B52` → `#1A1F35` needs the **red channel to
+RISE**. ⭐ That measurement is this build's own, made in the discarded S244 working copy; the
+base-screen spec §8.2 carries it and credits it, and the re-cuts below exist because of it.
+
+**Provenance.** Cut by the overseer from the CLEAN `Component 48.png` export (⛔ **not** the shipped
+copy, which carries S147's erase), crop rows 132..232, keyed off the `#111B52` ground by
+**un-compositing with alpha recovery** — `alpha = (c − bg) / (255 − bg)` per channel, max channel —
+**verified lossless, max error 1/255**. ⭐ They were supplied beside the spec in `Desktop/BOB/bar_assets/`
+and **harvested byte-identical** into `art/cover/` by S245; the md5 column below is of the shipped copy
+and was compared against the supplied file, all ten identical.
+
+⭐ **VERIFIED ON HARVEST, EVERY FILE, AND THE STOP CONDITION WAS NOT MET.** The prompt's refusal
+condition was *"if any of them carries a baked background, STOP"*. None does: **all four corners of all
+ten files are `(0,0,0,0)`**, 45–86 % of each file is FULLY TRANSPARENT, and **not one opaque pixel in
+any of the ten is within 30 (sum-of-channels) of `#111B52`**. They composite correctly on `#1A1F35`.
+
+⚠ **ONE CORRECTION TO THE PROMPT'S WORDING, MEASURED RATHER THAN ASSUMED.** It said the tiles must be
+*"alpha-varying with near-white opaque pixels"*. The first half holds exactly — the "alpha-varying"
+share below is 56.4–89.5 %, which is §8.2's *"55–89 %"* under the reading "not fully opaque". ⛔ The
+second half is **false for two of the ten**: `r_spx` and `r_iss` have opaque pixels averaging
+rgb(31,237,243) and rgb(70,238,243) — **CYAN**, because the SPX/ISS badges and the countdown block are
+cyan ink in the design itself. ⭐ Confirmed by eye on a composite over `#1A1F35` before it was accepted:
+it is artwork, not residue. ⛔ It is NOT a baked background, so it is not the stop condition — recorded
+here so nobody "fixes" the cyan to white later.
+
+| shipped file | design left, top | design w x h | canvas | alpha-varying | opaque ink | md5 | bytes |
+|---|---|---|---:|---:|---|---|---:|
+| `b_nav0.png` | 13.4, 997.4 | 69.5 x 56.6 | 124x101 | 76.7 % | near-white | `7ba35873` | 7660 |
+| `b_nav1.png` | 102.0, 997.4 | 35.9 x 56.6 | 64x101 | 83.5 % | near-white | `668af6c0` | 1661 |
+| `b_nav2.png` | 176.5, 997.4 | 28.0 x 56.6 | 50x101 | 74.7 % | near-white | `9e471983` | 1372 |
+| `b_nav3.png` | 243.2, 997.4 | 40.3 x 56.6 | 72x101 | 56.4 % | near-white | `3233ef39` | 1125 |
+| `b_nav4.png` | 316.0, 997.4 | 38.1 x 56.6 | 68x101 | 79.0 % | near-white | `289a272c` | 2151 |
+| `b_state.png` | 615.2, 997.4 | 192.7 x 56.6 | 344x101 | 89.5 % | near-white | `d9b8488a` | 6340 |
+| `b_point.png` | 1103.1, 997.4 | 85.2 x 56.6 | 152x101 | 87.7 % | near-white | `918ebae9` | 3897 |
+| `r_spx.png` | 1429.2, 998.5 | 191.2 x 35.9 | 272x51 | 81.0 % | ⚠ **cyan** | `0c5bea0f` | 5666 |
+| `r_iss.png` | 1669.0, 998.5 | 94.2 x 35.9 | 134x51 | 83.5 % | ⚠ **cyan** | `e9d4b6b1` | 3381 |
+| `r_count.png` | 1807.5, 998.5 | 99.1 x 35.9 | 141x51 | 86.3 % | near-white | `84cef3a8` | 2616 |
+
+⭐ **THEY ARE DOWNSCALED ON THE GLASS, AND THE NUMBER IS HERE RATHER THAN HIDDEN** — the opposite of
+the tab icons above, which are upscaled. `b_nav0` is 124 px wide and is drawn at 69.5 design units on a
+1920 frame, which is **92.6 device px at the shipped 2560x1405** — about **0.75x**, so the artwork has
+pixels to spare at every size the mod ships. `r_spx` is 272 px drawn at 254.9 device px, **0.94x**.
+⚠ Each file's own aspect is asserted against the box §8.1 draws it into (`BasePageNoIconTest`, read out
+of the PNG's IHDR): a transposed width and height would place the tile correctly and stretch the art,
+which no position check can see.
+
+⛔ **`b_nav0` CARRIES THE NAV SELECTION MARKER BAKED IN** — a solid `#FFFFFF` bar at design left 17.3,
+width 61.7, top 1043.9, height 10.1, flush to the frame's bottom edge at 1054. ⭐ For the SHELL it is
+STATIC, under nav 0, exactly as baked: the base screens have no navigation wired, so there is nothing
+for it to follow. ⚠ **KNOWN FUTURE WORK:** when navigation is wired the marker must come OUT of the tile
+and become a drawn `Rect` at that geometry, with the DRAW rectangle and the HIT rectangle from **one
+expression**, so neither can move without the other.
