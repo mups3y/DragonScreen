@@ -28135,3 +28135,71 @@ stretching `frame58/59/66` to the panel is QC **C-04**, they are glyph-bearing r
 report lines still present"*); `previewdiff` **35 changed / 95 unchanged / 130 compared**, and the changed
 set is exactly the letterboxed renders — cross-checked name by name against the pre-change measurement.
 Bar extent re-measured on the fresh render: **124 of 124 real pages at x 0..w**.
+
+---
+
+### S239 [O] Rebuild: the two base screens — **HELD 2026-09-09 — ⛔ BLOCKED AT GATE 0 BEFORE ANY CODE: the locked geometry needs a FILLED-POLYGON primitive that `DisplayList` does not have, and the codebase's only existing answer for such a shape is the very thing this rebuild forbids** — [overseer PROMPT 1 of 2, 2026-09-09; branch `rebuild/base-screens` off `377332a`]
+- **Branch created, no code written.** `git checkout -b rebuild/base-screens` at `377332a`, tree clean.
+  ⛔ Nothing was built, because the prompt's own rule applies: *"If any instruction here conflicts with
+  something you find in the repo, STOP and raise it. Do not reconcile it yourself."*
+
+#### ⭐ GATE 0 READ-BACK — all four items found, one pointer drifted
+
+- `docs/BUILD_PLAN.md:2233` **C1.5** and `:2311` **C1.16** — quoted verbatim in the report.
+- `pure/BottomBar.cs:54-56` — the PRIMITIVES / LAYERED TILES / TYPED split, quoted verbatim.
+- `pure/BottomBar.cs:70` — quoted verbatim. ⚠ **It is mid-sentence.** The block that actually governs the
+  marker opens at **`:68`** (*"⛔ THE HIT MAP AND THE MARKER MOVE WITH THE DRAW OR NOT AT ALL"*) and runs
+  to `:77`. Nothing missing; the pointer is one sentence off and is recorded rather than silently fixed.
+- `pure/FigmaUI.cs:21` — `public enum UiPage`; **current highest `CrewGate = 35`**, `PageCount = 36`
+  (`:110`). So `VehicleComms = 36` would be a clean append.
+
+#### ⛔⛔ THE BLOCKER — FIVE PRIMITIVES, AND THE LOCKED GEOMETRY NEEDS A SIXTH
+
+`DisplayList` (`pure/DisplayList.cs:31-45`) declares exactly **five** `DrawKind`s: `Rect`, `ArcBand`,
+`Text`, `Image`, `Line`. They are dispatched in **two** renderers that must agree —
+`src/ScreenPainter.cs:1639-1642` (the game) and `preview/PreviewMain.cs:2129-2135` (the PNGs).
+⛔ **There is no filled polygon and no path fill.**
+
+The locked geometry needs two filled shapes none of the five can make:
+1. **The outer border**, filled `#14152C` — `… L 1919 942 L 1882 979 L 38 979 L 1 942 …` is a
+   **45° chamfer at each bottom corner**. A `Line` can STROKE a diagonal; nothing can FILL beside one.
+2. **The ICON content window**, filled `#1A1F35` — `… L 1453.5 960.5 L 1386 893 L 534 893 L 466.5 960.5 …`
+   is a **trapezoidal notch** with two 45° bevels, and the prompt states the bevels are true 45°.
+⚠ The **rounded corners** (outer r=12, window r=10, pop-up r=2.5) are the same problem one size down.
+
+⭐ **AND THE CODEBASE ALREADY HAS AN ANSWER FOR THIS — IT IS THE ONE THE PROMPT FORBIDS.**
+`pure/BottomBar.cs:153`: *"The two rounded frame corners, cut as **tiles** because they are the only
+CURVES in the [bar]"* — shipped as `art/cover/bar_cap_left.png` / `bar_cap_right.png`. So the established
+precedent for a shape the primitives cannot make is **a baked PNG**, and this prompt says
+*"⛔ A shell made of baked pictures defeats the entire exercise."*
+
+⭐ **There is also precedent for the OTHER answer.** `DisplayList.cs`'s own `Line` docstring says it is
+*"A real primitive (a rotated quad in the GL painter, a pen in the preview) so a track can be a solid
+line rather than a row of dots — the one shape a Rect cannot make because it is not axis-aligned."*
+**A primitive has been added before, for exactly this reason, implemented in both renderers.**
+
+#### ⛔ WHY NOTHING ELSE IN PROMPT 1 COULD BE BUILT AROUND IT
+
+The prompt says to raise a question and *"move on to work that does not depend on the answer"*. ⚠ On
+inspection, **nothing in Prompt 1 qualifies**:
+- Both bases are the blocked geometry itself.
+- All three pages sit on those bases.
+- The `UiPage.VehicleComms = 36` append is **not** self-contained: the last append (`CrewGate = 35`,
+  `fc0c0aa`) touched **13 files**, including both renderers and a full page body — and a page body needs
+  a base to sit on. Appending the enum without a page would leave the exhaustiveness gates to satisfy
+  with a page that cannot yet be drawn.
+So the honest state is a clean stop at Gate 0 with an unmodified tree, not a partial build.
+
+#### ⚠ TWO PRE-EXISTING CONFLICTS, VERIFIED AND RAISED (NOT FIXED, as instructed)
+
+- **The eight-vs-nine tab claim.** `pure/VehicleTabBar.cs:201` — *"T9's eight tabs are confirmed-real
+  from the clean designer mockup and are not changed to suit an icon"* — and
+  `docs/reference/NASA_REFERENCE_ART.md:265` says the same, both noting the source strip has **nine**
+  with an unharvested Comms wifi glyph. The owner has overridden this to nine. ⛔ Both left untouched.
+- **`pure/BottomBar.cs:65`** still says `S153a-Q1` *"is OPEN and the owner's"*. It was **ANSWERED
+  2026-09-07** (owner, on the glass at 2560: *"Text is fine"*), recorded by [[S194]]. ⛔ Left untouched.
+
+#### ⚠ ALSO NOTICED, NOT ACTED ON (C1.1)
+
+**`S236` has TWO `### S236` headings in this file.** A number collision, in addition to the two this
+builder already hit (`S228`, `S229` — see `Q: BOB-7`). Not fixed here; flagged because the rate is rising.
