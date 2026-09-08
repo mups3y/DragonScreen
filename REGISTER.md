@@ -28332,3 +28332,52 @@ as `Q: BOB-15`.
 - **Verified:** `build.py test` **ALL SUITES PASSED**, `DisplayListTriTest` **39 checks, 0 failed**, and
   the new gate printing **12 ok lines at 1920×1054 and 2560×1405**. `build.py preview` still renders 130
   pages after the refactor.
+
+---
+
+### S242 [O] The two base screens — the locked shell, drawn by code — **DONE 2026-09-09 for the BASES; ⚠ THE ENUM APPEND AND THE THREE PAGES ARE NOT BUILT and are handed to a fresh chat (C1.7)** — [overseer PROMPT 1 v2, 2026-09-09; branch `rebuild/base-screens`]
+- **Built:** `pure/BaseScreen.cs` (NON-ICON: ground, full-bleed border, content window) and
+  `pure/BaseScreenTabbed.cs` (ICON: the notched window + nine tabs + the sliding selector + the hit map).
+  `test/BaseScreenTest.cs` — **80 checks**.
+- ⛔ **NOTHING IS BAKED, AND IT IS ENFORCED RATHER THAN PROMISED.** `NothingIsBaked` renders both shells
+  and counts `Image` commands: the NON-ICON shell draws **zero**, the ICON shell exactly **nine** — the
+  tab icons, which are pictures and are meant to be. The border, the chamfers, the window, the notch
+  bevels and the selector are all geometry.
+- ⭐ **THE FOUR 45° DIAGONALS USE `Tri`** ([[S240]]) — two border chamfers, two notch bevels — and the
+  rounded corners use `ArcBand(cx,cy,0,r,…)`, the `BarEvent.RoundRect` construction **reused, not
+  reinvented**, so this codebase has one rounded rectangle and not two.
+- ⭐⭐ **THE LOAD-BEARING CHECK IS `DrawAndHitShareOneSource`.** It renders the strip, finds **the
+  selector the draw actually put down**, and asserts that selector's own centre is a hit on that tab —
+  comparing the DRAWING against the HIT MAP rather than both against one constant, which is the only
+  version that catches them drifting *together*. `BottomBar.cs:68-77` is why: *"Changing one without the
+  other slides every nav icon's touch target off its icon on all 35 pages, silently."* Nine tabs is that
+  trap with nine chances, and `TabRect(i)` is the single source both go through.
+- ⭐ **THE TRUE-45 PROPERTY IS TESTED AS A PROPERTY, not as coordinates:** rise == run, for both the
+  border chamfer (37 == 37) and the notch bevel (67.5 == 67.5). A coordinate typo that kept the shape
+  plausible but not square is exactly what that catches.
+- ⭐ **THE TAB STACK IS DERIVED FROM `Shelf`**, never written as literals — move the shelf and the whole
+  stack moves. ⚠ Mutant 02 reverted it to v1's **914** and the suite killed it.
+- **Verified:** `build.py test` **ALL SUITES PASSED** · `BaseScreenTest` **80 checks, 0 failed** ·
+  `harnesscheck` **ok, 176 clean lines** · `previewdiff` **2 changed render inputs → 0 pages changed**
+  ⭐ which is the CORRECT result and worth stating: **no page routes to the bases yet**, so the shells
+  are inert until the next chat wires them. · **15 mutants, 15 KILLED, 0 SURVIVED**.
+- ⚠ **THE COMMS TAB HAS NO ICON, AND IT IS NOT INVENTED.** `NASA_REFERENCE_ART.md:265` records that the
+  ninth tab's wifi glyph *"was NOT harvested"* because the old eight-tab strip had nowhere to put it.
+  `IconKey(2)` returns `ic_tab_all` so the slot draws something recognisable, with the gap named in the
+  code and here — ⛔ rather than silently filling it with a wrong picture (§1.4).
+
+#### ⛔ WHAT IS **NOT** BUILT, AND THE QUESTION THE NEXT CHAT NEEDS ANSWERED FIRST
+
+Items 3 and 4 of the prompt — `UiPage.VehicleComms = 36` / `PageCount` 36 → 37, and the three pages —
+are **not built**. ⛔ Not for want of time alone: they turn on a question this chat will not answer on
+its own authority (`Q: BOB-16`).
+
+**The three named pages already exist, with content, and are asserted on by 18 test files**
+(`CoverPage` 8, `SuitCheckPage` 4, `VehicleSubsystemPage` 6). `FigmaUI.Build` dispatches each page to a
+class that draws its own background AND its content — **there is no shared shell step to swap out.** So
+"three pages on those bases, content area deliberately empty" means replacing those bodies, and every
+existing assertion about their content then fails. ⚠ **3 + 34 = 37 = the new `PageCount`**, so the plan
+does read as a full replacement of all 37 shells — but the route from here to there decides whether a
+lot of live coverage is retired in one commit, and that is not a builder's call.
+
+**Commits:** `20f0805` ([[S241]]) · this one. **No `git push`.**
