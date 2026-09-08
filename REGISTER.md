@@ -28303,3 +28303,32 @@ OPEN"*) — remain **raised and untouched**, as instructed.
 (`plugin/build/DragonScreenPreview.exe --tricheck`). Left that way deliberately — the prompt's scope is
 "one enum value, one helper, two renderer branches" and adding a gate is a build-harness change. Raised
 as `Q: BOB-15`.
+
+---
+
+### S241 [O] `BOB-13` + `BOB-15` answered: the Tri raster check is a build gate, and the degenerate drop is counted — **DONE 2026-09-09 — `--tricheck` now runs inside `build.py test` (12 raster checks at both sizes, every run), and `DisplayList.DegenerateTrisDropped` makes the refusal visible. 39 headless checks. ⛔ No page, no enum, no geometry touched** — [overseer PROMPT 1 v2, 2026-09-09; branch `rebuild/base-screens`]
+- 🟢 **`BOB-13` — YES, wire it in.** *"You are right that a check nobody runs rots, and it is the only
+  pixel-level evidence the primitive has."* Added `tri_raster_check()` beside `preview_diff_selftest()`.
+  ⭐ **It compiles the preview binary first** rather than running whatever exe is lying around — a stale
+  binary would report on code that is no longer there, which is the S130 shape (a green that was true
+  once). ⚠ It does **not** render any page: it draws into throwaway bitmaps, so it is cheap enough to
+  sit in `test`, which is the whole point of gating it.
+- ⭐ **ONE REFACTOR, AND IT AVOIDS A SECOND COPY.** `build_preview()` compiles *and* renders 130 pages,
+  and `test` needs only the compile. The compile is now `compile_preview()`, called by both. ⛔ The
+  alternative — a second `compile_cs` invocation in the gate — would have duplicated the
+  `System.Drawing`-by-full-path-under-`-nostdlib` flags, which is exactly the detail that drifts.
+- 🟢 **`BOB-15` — COUNT THE DROP.** *"Your instinct is right and it outranks the `Line` precedent: this
+  project's three worst defects were all silent."* `DisplayList.DegenerateTrisDropped` follows
+  `Overflowed`'s precedent, **not** `Line`'s. ⛔ It resets on `Clear()`, or a per-frame counter climbs
+  forever and reads as a worsening fault when nothing changed. ⚠ A **count**, not a flag: a generator
+  that clamps two vertices together at the end of a sweep legitimately produces one, so the number is
+  what informs, not its presence.
+- 🟢 **`BOB-14` — THE CLOSURE PATH IS NAMED, NOT BUILT** (as instructed). `ScreenPainter.Capture()`
+  (`ScreenPainter.cs:1303`) reads the render target back inside `OnPostRender` and writes
+  `KSP/DragonScreen_capture/screen<N>.png` at the real glass size, one-shot on a keypress. ⭐ **So the GL
+  half's closure is: capture a page on the glass and diff it against
+  `plugin/build/preview/<same page>.png`.** ⛔ Recorded here so [[S240]]'s source pin is not mistaken for
+  the final answer — the GL rasteriser is still exercised by nothing.
+- **Verified:** `build.py test` **ALL SUITES PASSED**, `DisplayListTriTest` **39 checks, 0 failed**, and
+  the new gate printing **12 ok lines at 1920×1054 and 2560×1405**. `build.py preview` still renders 130
+  pages after the refactor.

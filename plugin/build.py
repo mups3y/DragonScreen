@@ -441,6 +441,7 @@ def tool_tests():
     part_name_source_check()
     column_writer_check()
     preview_diff_selftest()   # S168: the before/after harness's own classifier + render gate
+    tri_raster_check()        # S241 (BOB-13): the Tri primitive's only pixel-level evidence
 
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
@@ -766,6 +767,36 @@ def preview_diff(baseref='HEAD'):
             subprocess.run(['git', 'worktree', 'remove', '--force', tree],
                            capture_output=True, text=True, cwd=ROOT)
             shutil.rmtree(work, ignore_errors=True)
+
+
+def tri_raster_check():
+    """
+    S241 (BOB-13): run the `Tri` primitive's RASTER proof as part of `test`.
+
+    ⭐ WHY IT IS A GATE. `build.py test` compiles `src/pure` + `test` only, so NEITHER rasteriser is
+    reachable from the headless suite - `DisplayListTriTest` can prove the packing and the degeneracy
+    rule, and pin the two renderers against each other by SOURCE, but it cannot put down a pixel.
+    `--tricheck` is the only pixel-level evidence the primitive has, and BOB-13's answer was that a
+    check nobody runs rots.
+
+    ⛔ IT BUILDS THE PREVIEW FIRST. The check lives inside the preview binary because that is the only
+    place a rasteriser exists headlessly; running a stale exe would report on code that is no longer
+    there, which is the S130 shape (a green that was true once).
+
+    ⚠ It does NOT render any page - it draws triangles into throwaway bitmaps at 1920x1054 and at the
+    shipped 2560x1405. Cheap enough to sit in `test`, which is the whole point.
+    """
+    print("--- Tri raster check (S241: the primitive's only pixel-level evidence)")
+    exe = compile_preview()
+    if not exe or not os.path.exists(exe):
+        sys.exit('TRI RASTER CHECK: the preview binary was not built')
+    p = subprocess.run([exe, '--tricheck'], capture_output=True, text=True)
+    out = (p.stdout or '') + (p.stderr or '')
+    for line in out.splitlines():
+        if line.strip():
+            print('    ' + line.strip() if not line.startswith('    ') else line)
+    if p.returncode != 0:
+        sys.exit('TRI RASTER CHECK FAILED (exit %d)' % p.returncode)
 
 
 def preview_diff_selftest():
@@ -1153,6 +1184,30 @@ def part_name_source_check():
     print('    0 bare reads; PartNames.Of is the one source')
 
 
+def compile_preview():
+    """
+    Compile the preview binary WITHOUT rendering anything, and return its path.
+
+    ⭐ EXTRACTED FROM `build_preview` BY S241 so `test` can run `--tricheck` without also rendering 130
+    pages. ⛔ ONE compile invocation, called by both - a second copy of this command is a second thing
+    to keep in step, and the flags below (System.Drawing by full path under -nostdlib) are exactly the
+    kind of detail that drifts when duplicated.
+    """
+    src = sources('src/pure', 'preview')
+    if not src:
+        print('--- no preview sources'); return None
+    exe = os.path.join(HERE, 'build', 'DragonScreenPreview.exe')
+    os.makedirs(os.path.dirname(exe), exist_ok=True)
+    # System.Drawing is a .NET Framework assembly and is NOT in KSP's Managed folder, so under
+    # -nostdlib it has to be named by full path from the framework directory. Nothing here ships.
+    drawing = 'System.Drawing.dll'
+    if MODERN:
+        drawing = os.path.join(os.path.dirname(CSC_LEGACY), 'System.Drawing.dll')
+    run(compile_cs(exe, src, refs=[drawing], exe=True),
+        'preview renderer (%d source files)' % len(src))
+    return exe
+
+
 def build_preview():
     """
     Render the pages to PNG with the game closed.
@@ -1196,11 +1251,7 @@ def build_preview():
     os.makedirs(out, exist_ok=True)
     # System.Drawing is a .NET Framework assembly and is NOT in KSP's Managed folder, so under
     # -nostdlib it has to be named by full path from the framework directory. Nothing here ships.
-    drawing = 'System.Drawing.dll'
-    if MODERN:
-        drawing = os.path.join(os.path.dirname(CSC_LEGACY), 'System.Drawing.dll')
-    run(compile_cs(exe, src, refs=[drawing], exe=True),
-        'preview renderer (%d source files)' % len(src))
+    compile_preview()
     print('--- rendering pages')
     p = subprocess.run([exe, out], capture_output=True, text=True)
     print((p.stdout or '') + (p.stderr or ''))

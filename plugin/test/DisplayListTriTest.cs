@@ -69,6 +69,7 @@ public static class DisplayListTriTest
         TheKindIsAppendedNotRenumbered();
         ThePacking();
         DegeneracyIsRejectedInThePureLayer();
+        TheDropIsCounted();
         BothRenderersUnpackTheSamePairing();
         TheRasterProofExistsAndIsReachable();
 
@@ -157,6 +158,43 @@ public static class DisplayListTriTest
         // one, and the GL painter forces `_Cull Off` precisely so neither is dropped downstream.
         dl.Tri(0f, 0f, 0f, 10f, 10f, 0f, new Rgba(1f, 1f, 1f, 1f));
         Check("S240 ...and the opposite winding is accepted too", dl.Count == 3, "got " + dl.Count);
+    }
+
+    // ============================================================================================
+    //  3b. ⭐⭐ S241 (`BOB-15`) - THE DROP IS COUNTED, BECAUSE A SILENT DROP IS THIS PROJECT'S DEFECT
+    // ============================================================================================
+    static void TheDropIsCounted()
+    {
+        DisplayList dl = new DisplayList(8);
+        Check("S241 a fresh list has dropped nothing", dl.DegenerateTrisDropped == 0,
+              "got " + dl.DegenerateTrisDropped);
+
+        dl.Tri(0f, 0f, 10f, 0f, 20f, 0f, new Rgba(1f, 1f, 1f, 1f));    // collinear
+        Check("S241 ⭐ a dropped degenerate triangle is COUNTED, not silent",
+              dl.DegenerateTrisDropped == 1, "got " + dl.DegenerateTrisDropped);
+        dl.Tri(5f, 5f, 5f, 5f, 5f, 5f, new Rgba(1f, 1f, 1f, 1f));      // coincident
+        dl.Tri(0f, 0f, float.NaN, 1f, 2f, 3f, new Rgba(1f, 1f, 1f, 1f));  // NaN
+        Check("S241 ...and the count accumulates across drops", dl.DegenerateTrisDropped == 3,
+              "got " + dl.DegenerateTrisDropped);
+
+        // ⛔ NEGATIVE CONTROL. A counter that incremented on every Tri would pass the checks above and
+        // report a fault on every healthy page.
+        dl.Tri(0f, 0f, 10f, 0f, 0f, 10f, new Rgba(1f, 1f, 1f, 1f));    // real
+        Check("S241 ⛔ NEGATIVE CONTROL - a REAL triangle does not increment the count",
+              dl.DegenerateTrisDropped == 3 && dl.Count == 1,
+              "dropped " + dl.DegenerateTrisDropped + ", drawn " + dl.Count);
+
+        // ⛔ It must reset with the list, or a per-frame counter climbs forever and reads as a
+        // worsening fault when nothing has changed.
+        dl.Clear();
+        Check("S241 ⛔ the count resets on Clear, so it cannot leak across frames",
+              dl.DegenerateTrisDropped == 0, "got " + dl.DegenerateTrisDropped);
+
+        // ⚠ It is a COUNT and not a bool on purpose: a shape generator that clamps two vertices
+        // together at the end of a sweep legitimately produces one, so the number is what is
+        // informative, not its mere presence.
+        Check("S241 it is a count, not a flag", dl.GetType().GetProperty("DegenerateTrisDropped")
+              .PropertyType == typeof(int), "");
     }
 
     // ============================================================================================

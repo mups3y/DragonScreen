@@ -130,6 +130,25 @@ namespace DragonScreen
         /// </summary>
         public bool Overflowed { get; private set; }
 
+        /// <summary>
+        /// ⭐⭐ S241 (`BOB-15`) — HOW MANY DEGENERATE TRIANGLES WERE DROPPED. `Tri` refuses a zero-area
+        /// or NaN triangle (see its docstring for why that decision belongs in the pure layer); this is
+        /// the count, so the refusal is not SILENT.
+        ///
+        /// ⛔ IT DOES NOT FOLLOW `Line`'s PRECEDENT, DELIBERATELY. `Line` drops a `width &lt;= 0` stroke
+        /// and says nothing, and copying that was the obvious move. It is the wrong one here: this
+        /// project's three worst defects were all things that failed INVISIBLY — S75 a tint silently
+        /// ignored, S130 a silent false green, H-01 a preview at twice the shipped width. A page that
+        /// computes a collinear triangle by mistake would draw nothing and report nothing, and the
+        /// author would be looking for a colour bug. ⭐ This follows <see cref="Overflowed"/> instead,
+        /// which is the precedent for "we dropped something and we will say so".
+        ///
+        /// ⚠ A NON-ZERO COUNT IS NOT AUTOMATICALLY A FAULT. A shape generator that clamps two vertices
+        /// together at the end of a sweep legitimately produces one. It is a number to look at, not an
+        /// alarm — which is why it is a count and not a bool.
+        /// </summary>
+        public int DegenerateTrisDropped { get; private set; }
+
         public DisplayList(int capacity)
         {
             if (capacity < 1) capacity = 1;
@@ -142,6 +161,9 @@ namespace DragonScreen
 
         public void Clear()
         {
+            // ⛔ S241: reset with the list. A per-frame counter that never clears would climb
+            // forever and read as a worsening fault when nothing had changed.
+            DegenerateTrisDropped = 0;
             count = 0;
             Overflowed = false;
         }
@@ -318,7 +340,7 @@ namespace DragonScreen
         {
             // Twice the signed area. Zero means collinear (which includes all three points coincident).
             float area2 = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
-            if (area2 == 0f || float.IsNaN(area2)) return;
+            if (area2 == 0f || float.IsNaN(area2)) { DegenerateTrisDropped++; return; }
             DrawCmd c = new DrawCmd();
             c.Kind = DrawKind.Tri;
             c.A = x0; c.B = y0;
