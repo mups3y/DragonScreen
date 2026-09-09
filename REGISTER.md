@@ -30595,3 +30595,153 @@ drawing something over a locked page, which is the owner's call. ·
 conclusion, more headroom, wrong inputs. ·
 ⚠ `BOB-71` **stands**: §6 states S259 left **26,724** checks; I measure **24,922** at `09ae5e1` on the
 counter that has produced every figure in this register since S251.
+
+---
+
+### S261 [O] The painter never read the budget S260 raised — one named budget, read by the painter AND by the tests — **DONE 2026-09-10 — `FigmaUI.PainterBudget = 1437` REPLACES THE 524 THE PAINTER WAS ACTUALLY ALLOCATING. ALL SUITES PASSED (24,966 checks, up from 24,959), 7 mutants raised / 5 KILLED (two are honest limits and say so), previewdiff 0 of 140. ⛔ NOT INSTALLED — ready when the owner says.** — [overseer `PROMPT_PAINTER_BUDGET.md`, 2026-09-10; branch `rebuild/base-screens`]
+
+🟢 **OWNER, 2026-09-10.** He installed S260, opened the page in the capsule, and it drew the rail and
+two dials and then **stopped** — no vehicle, no right panel, no CONNECTIONS, no controls.
+
+#### ⭐⭐ THE S260 WARNING IS WHAT CAUGHT IT, AND IT PAID FOR ITSELF IN ONE FLIGHT
+
+```
+[WRN] [DragonScreen] display list OVERFLOWED on page VEHICLE OVERVIEW V2
+      at capacity 524 — the page drew only part of itself. (S260)
+```
+⭐ That turned *"the page is broken"* into *"it overflowed at 524"* in one read. ⛔ Without it this
+would have been hunted as a rendering or an asset bug — and `KSP.log` corroborates the mechanism
+exactly: it logs `loaded asset dragon_shadow_glow` and **never loads `dragon_crew_v3`**, because the
+vehicle command was dropped before the asset was ever requested. **It stays.**
+
+#### ⛔⛔ THE DEFECT — TWO CONSTANTS, AND THE PAINTER READ THE OTHER ONE
+
+```
+ScreenPainter.cs:265   new DisplayList(Pages.Commands + ChromeBar.Commands + 4)   = 524
+FigmaUI.Commands                                                                  = 1393  ⛔ never read
+the Vehicle Overview needs                                                        = 1385
+shortfall                                                                            869
+```
+⛔ **`ScreenPainter` was the ONLY page allocation in the shipped plugin** (its other, `:45`, is the
+8-command abort overlay) — verified here as well as by the overseer: `new DisplayList(` in
+`plugin/src/` returns exactly those two.
+
+#### ⛔⛔ THE ROOT CAUSE WAS A FALSE COMMENT, AND I INHERITED IT WITHOUT CHECKING IT
+
+`FigmaUI.cs:119` said, directly above `Commands`: *"The painter sizes its list to the max of this and
+the old model."* **There was no max. There never had been.**
+⛔ **My S260 register entry restated that claim as if I had verified it** — *"painter
+`new DisplayList(Pages.Commands + ChromeBar.Commands + 4)`, `FigmaUI.Commands = 380`, shortfall
+1005"* — and the two lines of that block contradict each other in plain sight. The prompt printed the
+correct line in its own evidence block; the comment supplied the wrong conclusion; **I read the
+comment and not the line.**
+
+#### ⛔⛔ AND MY OWN TEST WAS NAMED FOR THE RIGHT THING AND POINTED AT THE WRONG NUMBER
+
+`FigmaUINavTest.cs:1787` — *"the painter's budget covers the heaviest page, derived not typed"* —
+asserted `FigmaUI.Commands >= pageCost`. ⛔ **It passes no matter what the painter does.** The
+assertion was true, the arithmetic was sound, and the instrument was aimed at a number nothing
+allocates.
+⚠ **That is the third task running in the same failure class** — *a real measurement pointed at a
+question it cannot answer* — after S259's ink scan and S260's own first false-green check, and this
+time on the one check written to catch exactly this. **Fixing the constant without fixing the check
+would have left the hole open for the next page.**
+
+#### ⭐ THE FIX — ONE NAME, NOT TWO EXPRESSIONS
+
+```csharp
+// FigmaUI.cs
+public const int PainterBudget =
+    (Pages.Commands > Commands ? Pages.Commands : Commands) + ChromeBar.Commands + 4;
+
+// ScreenPainter.cs:274
+page = new DisplayList(FigmaUI.PainterBudget);
+```
+⭐ **The duplication WAS the bug**, so the requirement is structural, not arithmetical: ONE named
+constant that is simultaneously what the painter allocates and what the tests assert against. While
+they are two expressions they can drift apart again.
+⭐ **The max is load-bearing in both directions, and this was checked rather than assumed:**
+`ScreenPainter:1585-1590` draws `Pages.Build` **and** `ChromeBar.Build` into the SAME list on the
+legacy arm, while the Figma arm draws only `FigmaUI.Build`. `FigmaMode` can be either at runtime.
+⚠ A ternary, not `Math.Max` — a C# `const` cannot call a method.
+
+#### ⛔ THE FALSE SENTENCE IS DELETED, NOT MARKED SUPERSEDED — AND THAT IS DELIBERATE
+
+⚠ **C1.16 preserves superseded RULINGS AND NUMBERS. This was neither.** It was a statement of fact
+that had never been true, and a false claim left in a file is one the next reader has no reason to
+doubt — which is exactly how it survived S260, the QC checklist and a test named for the right thing.
+⭐ What it is replaced with says what the painter actually does and points at `PainterBudget`.
+⛔ **The painter's OLD expression, by contrast, IS marked superseded in place** at
+`ScreenPainter.cs:265` — that one is a real number that really was allocated, and C1.16 covers it.
+
+#### ⛔ THE 16 `FigmaUI.Commands` REFERENCES WERE SORTED, NOT BLANKET-REPLACED
+
+⭐ **The rule applied:** a test about **THE PAINTER** → `PainterBudget`; a test that a page fits the
+**FIGMA MODEL's** own worst case → keep `Commands`, which is the **tighter** number, so those tests
+are stricter. ⛔ Loosening them to `PainterBudget` would have weakened the suite.
+**Changed: two.** `:1788` (the assertion **and** its message string) and `:1923` (the printed
+summary, so every report quoting it quotes the real number). **The other 14 stay `Commands`.**
+
+#### ⭐⭐ THE CHECK THAT WOULD HAVE CAUGHT THIS — A STRING CHECK ON SOURCE, AND WHY IT IS RIGHT HERE
+
+```csharp
+string painterSrc = Live(ReadRepo("plugin", "src", "ScreenPainter.cs"));
+```
+⚠ **A source-text assertion is normally the wrong instrument.** Here it is the right one, and the
+reasoning is written into the test so nobody later "upgrades" it into something that stops answering
+the question:
+1. The question is **literally** *"does the painter's source read this name."* There is no behaviour
+   to observe that is not the name being read.
+2. ⛔ **No runtime assertion in the pure suite can see `ScreenPainter` at all** — it is Unity-bound and
+   outside the pure build (`build.py test` compiles `src/pure` + `test` only). **A rule that lives in
+   the glue is a rule no test can reach. That is how the 524 survived: it was never in a file the
+   suite could load.**
+⭐ Wrapped in **`Live()`** — line comments stripped first, because the superseded expression is
+sitting in a comment directly above the real line and **a commented-out call must not pass as a
+call.** Precedent: `AscentReadbackTest:527` reads `MechConductor.cs` the same way for the same reason.
+⭐ Three assertions: the painter reads `PainterBudget` exactly once · it is the ONLY page allocation
+there (overlay(8) the one legitimate other) · **and the file really was read**, so the first two
+cannot pass vacuously on an empty string.
+
+#### ⭐ AS BUILT, MEASURED — printed by the suite itself, not restated from intent
+
+```
+Pages.Commands          480
+ChromeBar.Commands       40
+FigmaUI.Commands       1393        (figma model's own worst case)
+FigmaUI.PainterBudget  1437  = max(480, 1393) + 40 + 4      ⛔ was 524
+Vehicle Overview drew  1328 commands   (worst-case cost 1385)
+margin over the page    109
+```
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,966** checks (S260 left 24,959 by my measure — `BOB-71`) |
+| ⛔⛔ **the guard proved to bite** | §6's required experiment, run: the painter pointed back at `Pages.Commands + ChromeBar.Commands + 4` turns the suite **RED** — `FAIL S261 the painter's SOURCE allocates FigmaUI.PainterBudget · occurrences 0` — then restored. **A guard I have not seen fail is not a guard.** |
+| mutation | **7 raised, 5 KILLED** — M1 the defect itself · M2 the call commented out with a literal beside it (`Live()` bites) · M3 a third allocation, a second budget returning · M6 `min` instead of `max`, which lands on **524, the owner's exact failure** · M7 the figma arm back at 380 |
+| ⚠ **M4 and M5 SURVIVED, and both are honest limits** | **M4** drops the `Pages.Commands` arm: today `Commands` 1393 > `Pages.Commands` 480, so the mutant and the original are **the same number** and no runtime observation can distinguish them. **M5** drops `+ ChromeBar.Commands + 4`: 1393 still covers both arms today, so the mutant is **tighter but not wrong**. ⛔ Stated rather than dressed up, and **the rule each exists for IS asserted** (`PainterBudget >= Pages.Commands + ChromeBar.Commands + 4`), so both fire on the day the legacy model overtakes the Figma one — the only day either could matter. ⚠ Inventing a headroom floor to kill M5 would assert a **decision** as if it were a **defect** (S256). |
+| `previewdiff HEAD` | ⭐ **0 of 140 changed** — as predicted. `PreviewMain` sizes its own lists and never used the painter's number. ⚠ **Not vacuous:** it detected `plugin/src/pure/FigmaUI.cs` as a changed render input and still found no page moved |
+| install | ⛔ **NOT DONE.** ⭐ **It is ready to install and that is the owner's call** — the live folder still holds the half-drawing build |
+
+#### ⛔ WHAT WAS **NOT** TOUCHED
+
+⛔ No change to the Vehicle Overview page, its assets, its geometry or its four constants — owner-locked
+and sealed. ⛔ No change to `Pages.Commands` or `ChromeBar.Commands` — correct for their own model.
+⛔ No change to the routing, the enum, `PageCount`, or `UiPage.Vehicle = 15`. ⛔ No new renderer
+capability, no cabin work. ⛔ Nothing else in `ScreenPainter` — the S260 overflow warning is unchanged.
+
+#### ⚠ RAISED
+
+`BOB-74` **FACT** — the `build.py` test harness **cannot read its own subprocess output when run from
+the Bash tool**: the test exe emits `§` as CP850 `0xF5`, Python decodes the pipe as UTF-8, both reader
+threads die with `UnicodeDecodeError`, and the run ends *"HARNESS CHECK FAILED (S167): the test report
+is not trustworthy."* ⭐ The S167 guard behaved correctly — it refused to report a result it could not
+read. Identical from PowerShell: **ALL SUITES PASSED**. ⛔ Not a code defect and not fixed here (C1.1);
+the harness would be more robust decoding with `errors='replace'`, as this task's own mutation script
+does. **Every figure in this entry is from PowerShell.**
+⚠ `BOB-62` **stands** — `previewdiff` again warns `assets\kenney_ui_scifi` is EMPTY.
+⚠ `BOB-71` **stands** — §6 of the prompt states S260/QC left **26,724** checks; I measure **24,959** at
+`a2e1274` on the counter that has produced every figure in this register since S251, and **24,966**
+now. ⛔ The delta is what matters and it is **+7**; the absolute disagreement is unresolved.

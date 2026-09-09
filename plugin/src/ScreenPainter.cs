@@ -261,8 +261,17 @@ namespace DragonScreen
             captureKey = key;
             fontName = font;
             label = "SCREEN " + screenIndex + "   " + width + "x" + height;
-            // Headroom over the worst page plus the chrome.
-            page = new DisplayList(Pages.Commands + ChromeBar.Commands + 4);
+            // ⛔⛔ S261 — ONE NAMED BUDGET, READ BY THE PAINTER AND BY THE TESTS.
+            // ~~`page = new DisplayList(Pages.Commands + ChromeBar.Commands + 4);`~~ — SUPERSEDED. That
+            // expression sized the list for the OLD page model alone (480 + 40 + 4 = 524) and never
+            // read `FigmaUI.Commands`, whatever the comment above `FigmaUI.Commands` claimed. When
+            // S260 routed the rebuilt Vehicle Overview — 1385 commands — this line handed it 524.
+            // `DisplayList.Add` does not grow and does not throw; it DROPS the command. On the glass
+            // the page drew the rail, two dials, and nothing after them.
+            // ⛔ DO NOT RE-INLINE THE ARITHMETIC HERE. The budget written in two places, drifting, IS
+            // the defect. `FigmaUI.PainterBudget` is the one name; the suite asserts this very line
+            // reads it.
+            page = new DisplayList(FigmaUI.PainterBudget);
 
             chrome = new ChromeState();
             chrome.Met = "T+ 00:00:00";

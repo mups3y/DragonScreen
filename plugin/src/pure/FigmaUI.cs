@@ -114,9 +114,20 @@ namespace DragonScreen
 
     public static class FigmaUI
     {
-        /// <summary>Worst-case commands any page here emits - the Cover's MAP camera view is now the
-        /// heaviest (CoverPage.Commands, its ground track a command per segment) - plus the back-chevron
-        /// overlay. The painter sizes its list to the max of this and the old model.</summary>
+        /// <summary>Worst-case commands any page in THIS (Figma) model emits - the rebuilt Vehicle
+        /// Overview is now the heaviest, ahead of the Cover's MAP camera view (CoverPage.Commands, its
+        /// ground track a command per segment) - plus the back-chevron overlay.
+        /// ⛔⛔ S261 — A SENTENCE STOOD HERE THAT WAS FALSE AND HAD NEVER BEEN TRUE: *"The painter
+        /// sizes its list to the max of this and the old model."* THERE WAS NO MAX. `ScreenPainter`
+        /// took `Pages.Commands + ChromeBar.Commands + 4` alone and never read this constant at all —
+        /// 524 allocated against a page needing 1385 — and on the glass the routed Vehicle Overview
+        /// drew the rail, two dials and nothing else.
+        /// ⚠ DELETED, NOT MARKED SUPERSEDED IN PLACE. C1.16 preserves superseded RULINGS AND NUMBERS;
+        /// this was neither. A false statement of fact left in the file is a claim the next reader
+        /// has no reason to doubt, which is exactly how it survived S260, the QC checklist and a test
+        /// named for the right thing.
+        /// ⛔ WHAT THE PAINTER ACTUALLY ALLOCATES IS `PainterBudget`, BELOW. When the question is
+        /// about the painter, assert against THAT — never against this.</summary>
         // ⛔⛔ S260 — ~~`public const int Commands = 380;`~~ SUPERSEDED IN PLACE (C1.16), AND THIS IS
         // THE ONE CHANGE WITHOUT WHICH ROUTING THE OVERVIEW WOULD HAVE FAILED **SILENTLY**.
         // The rebuilt page costs `VehicleOverviewContent.Commands + BasePageIcon.Commands` — the eight
@@ -136,6 +147,23 @@ namespace DragonScreen
         // lighter than that.
         const int OverviewCost = VehicleOverviewContent.Commands + BasePageIcon.Commands;
         public const int Commands = OverviewCost > 380 ? OverviewCost + 8 : 380;
+
+        /// <summary>⛔⛔ WHAT THE PAINTER ACTUALLY ALLOCATES — `ScreenPainter`'s ONE page list, the
+        /// only page allocation in the shipped plugin (the other, its 8-command abort overlay, is not
+        /// a page). BOTH page models plus the chrome, because `FigmaMode` can be either at runtime and
+        /// the same list is reused for whichever is drawn.
+        /// ⛔ S261 — WHY THIS EXISTS AS A NAME AND NOT AS ARITHMETIC IN TWO PLACES. The budget used to
+        /// be written twice: `Commands` here, and separately as the literal expression
+        /// `Pages.Commands + ChromeBar.Commands + 4` inside the painter's own `new DisplayList(...)`.
+        /// The two drifted, as two copies of one number do — the painter allocated 524 for a page
+        /// costing 1385, and `DisplayList.Add` DROPS what will not fit without erroring, so the
+        /// Vehicle Overview drew the rail, two dials and stopped, on the glass, in flight.
+        /// ⭐ THE DUPLICATION WAS THE BUG, so the fix is one name that is simultaneously what the
+        /// painter allocates AND what the tests assert against. While they are two expressions they
+        /// can drift again; while they are one name they cannot.
+        /// ⚠ A ternary rather than `Math.Max` — a C# `const` cannot call a method.</summary>
+        public const int PainterBudget =
+            (Pages.Commands > Commands ? Pages.Commands : Commands) + ChromeBar.Commands + 4;
 
         public const int PageCount = 37;   // S213 appended CrewGate; S260 appended VehicleOverviewV2
 

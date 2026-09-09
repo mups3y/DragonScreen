@@ -1783,10 +1783,23 @@ public static class FigmaUINavTest
         // ---- ⛔⛔ THE BUDGET. THE WHOLE REASON THIS TASK IS NOT A TWO-LINE CHANGE. ----------------
         // ⚠ ASSERTED AS AN INEQUALITY AGAINST THE DERIVATION, never against a literal 1385: the point
         // is that it stays true when a dial gains a dot, not that it is true today.
+        // ⛔⛔ S261 — THIS CHECK WAS NAMED FOR THE RIGHT THING AND POINTED AT THE WRONG NUMBER, SO IT
+        // WENT GREEN WHILE THE OWNER'S SCREEN DREW HALF A PAGE. It read `FigmaUI.Commands`, which the
+        // painter never consulted: `ScreenPainter` allocated `Pages.Commands + ChromeBar.Commands + 4`
+        // = 524. The assertion was true and the arithmetic was sound; the instrument was simply aimed
+        // at a number nothing allocates. ⚠ Same failure class as S259's ink scan and S260's own first
+        // false-green check — a real measurement pointed at a question it cannot answer, three tasks
+        // running, and here on the one check written to catch exactly this.
+        // ⛔ `PainterBudget` IS WHAT THE PAINTER ALLOCATES. Assert against it.
         int pageCost = VehicleOverviewContent.Commands + BasePageIcon.Commands;
-        Check("S260 ⛔⛔ the painter's budget covers the heaviest page, derived not typed",
+        Check("S261 ⛔⛔ THE PAINTER'S budget covers the heaviest page, derived not typed",
+              FigmaUI.PainterBudget >= pageCost,
+              "painter budget " + FigmaUI.PainterBudget + " vs page " + pageCost);
+        // ⭐ AND THE FIGMA MODEL'S OWN WORST CASE COVERS IT TOO. That is the TIGHTER number, so this is
+        // a stricter and separate claim. ⛔ NOT loosened to `PainterBudget` — that would weaken it.
+        Check("S260 ...and the Figma model's own worst case covers it as well (the tighter number)",
               FigmaUI.Commands >= pageCost,
-              "budget " + FigmaUI.Commands + " vs page " + pageCost);
+              "model budget " + FigmaUI.Commands + " vs page " + pageCost);
         // ⛔ AND IT IS NOT A COINCIDENCE OF THE OLD NUMBER: 380 could never have covered it.
         Check("S260 ...and the old 380 could not have — which is what made this silent",
               pageCost > 380, "page cost " + pageCost);
@@ -1807,6 +1820,57 @@ public static class FigmaUINavTest
         FigmaUI.Build(starved, UiPage.VehicleOverviewV2, VW, VH, st, MapProjection.Default());
         Check("S260 ⭐ ...and at the OLD 380 it DOES overflow — the falsification",
               starved.Overflowed, "380 was enough after all, so the check above proves nothing");
+
+        // ---- ⛔⛔ S261: THE LIST THE PAINTER ACTUALLY MAKES, AND THE FAILURE THE OWNER SAW --------
+        // ⚠ Everything above builds into a list THIS SUITE chose the size of. That is not the list the
+        // capsule uses, and the gap between the two is the entire defect.
+        DisplayList painter = new DisplayList(FigmaUI.PainterBudget);
+        FigmaUI.Build(painter, UiPage.VehicleOverviewV2, VW, VH, st, MapProjection.Default());
+        Check("S261 ⛔⛔ the page fits the list THE PAINTER allocates",
+              !painter.Overflowed, "capacity " + painter.Capacity + ", drew " + painter.Count);
+        // ⛔ THE NEGATIVE CONTROL IS THE EXACT NUMBER OUT OF HIS `KSP.log`: *"display list OVERFLOWED
+        // on page VEHICLE OVERVIEW V2 at capacity 524."* ⭐ Pinned as a LITERAL on purpose — this is
+        // not a derivation to be kept in step, it is the historical failure, and it has to stay
+        // reproducible even after `Pages.Commands` changes.
+        DisplayList asShipped = new DisplayList(524);
+        FigmaUI.Build(asShipped, UiPage.VehicleOverviewV2, VW, VH, st, MapProjection.Default());
+        Check("S261 ⭐ ...and at the 524 the painter DID allocate it overflows — his own failure",
+              asShipped.Overflowed, "524 was enough after all, so the check above proves nothing");
+        // ⛔ AND THE OLD PAGE MODEL IS STILL COVERED. `FigmaMode` can be OFF at runtime and the legacy
+        // pages then draw into this same one list, so the max is load-bearing, not decoration.
+        Check("S261 ⛔ the painter's budget still covers the OLD page model plus the chrome",
+              FigmaUI.PainterBudget >= Pages.Commands + ChromeBar.Commands + 4,
+              "painter " + FigmaUI.PainterBudget + " vs old model "
+              + (Pages.Commands + ChromeBar.Commands + 4));
+
+        // ---- ⛔⛔ S261: AND THE PAINTER'S SOURCE ACTUALLY READS THAT NAME ------------------------
+        // ⚠ YES, THIS IS A STRING CHECK ON SOURCE, WHICH IS NORMALLY THE WRONG INSTRUMENT. Here it is
+        // the right one, and the reasoning is written down so nobody later "upgrades" it into
+        // something that stops answering the question:
+        //   1. The question is LITERALLY "does the painter's source read this name". There is no
+        //      behaviour to observe that is not the name being read.
+        //   2. ⛔ NO RUNTIME ASSERTION IN THE PURE SUITE CAN SEE `ScreenPainter` AT ALL. It is
+        //      Unity-bound and outside the pure build — `build.py test` compiles `src/pure` + `test`
+        //      only — so a rule that lives in the glue is a rule no test can reach, except this way.
+        //      That is precisely how the 524 survived: it was never in a file the suite could load.
+        // ⭐ `Live()` strips line comments FIRST, because the superseded expression is sitting in a
+        // comment directly above the real line and a commented-out call must not pass as a call.
+        // Precedent: `AscentReadbackTest` reads `MechConductor.cs` the same way for the same reason.
+        string painterSrc = Live(ReadRepo("plugin", "src", "ScreenPainter.cs"));
+        int reads = CountOf(painterSrc, "new DisplayList(FigmaUI.PainterBudget)");
+        int allocs = CountOf(painterSrc, "new DisplayList(");
+        Check("S261 ⛔⛔ the painter's SOURCE allocates FigmaUI.PainterBudget",
+              reads == 1, "occurrences " + reads);
+        // ⛔ AND NOTHING ELSE THERE ALLOCATES A PAGE LIST. The 8-command abort overlay is the one
+        // legitimate other; a THIRD allocation would be a second budget, which is this whole defect.
+        Check("S261 ⛔ ...and it is the ONLY page allocation — the overlay(8) is the legitimate other",
+              allocs == 2 && CountOf(painterSrc, "new DisplayList(8)") == 1,
+              "total " + allocs + " allocations in ScreenPainter.cs");
+        // ⭐ AND THE READ IS PROVED NON-VACUOUS: a missing or empty file would make both pass-or-fail
+        // above meaningless, and `ReadRepo` returning "" would silently zero every count.
+        Check("S261 ...and the file really was read, so the two checks above are not vacuous",
+              painterSrc.Length > 10000 && painterSrc.Contains("class ScreenPainter"),
+              "read " + painterSrc.Length + " chars");
 
         // ---- THE ENUM AND THE TITLE TABLE ------------------------------------------------------
         Check("S260 PageCount is 37", FigmaUI.PageCount == 37, "" + FigmaUI.PageCount);
@@ -1920,13 +1984,55 @@ public static class FigmaUINavTest
 
         // ⭐ THE AS-BUILT NUMBERS, PRINTED. The checks above prove them; this line is so the report
         // can quote what was MEASURED rather than what was intended, without a second instrument.
-        Console.WriteLine("    [S260] budget " + FigmaUI.Commands + "   page " + real.Count
+        // ⛔ S261: THE PAINTER'S BUDGET IS PRINTED FIRST AND NAMED AS SUCH. The line used to report
+        // `FigmaUI.Commands` alone, so every report quoting it quoted a number nothing allocated.
+        Console.WriteLine("    [S261] PAINTER BUDGET " + FigmaUI.PainterBudget
+                          + "  = max(Pages " + Pages.Commands + ", Figma " + FigmaUI.Commands
+                          + ") + chrome " + ChromeBar.Commands + " + 4"
+                          + "   (was 524)   margin over page "
+                          + (FigmaUI.PainterBudget - real.Count));
+        Console.WriteLine("    [S260] figma-model budget " + FigmaUI.Commands + "   page " + real.Count
                           + " cmds (cost " + pageCost + ")   overflowed " + real.Overflowed
                           + "   PageCount " + FigmaUI.PageCount
                           + "   menu entries " + MenuPage.Entries.Length
                           + " rows " + ((MenuPage.Entries.Length + 2) / 3)
                           + " cell " + MenuPage.CellHeight.ToString("0.0")
                           + " vs label " + MenuPage.LabelSize);
+    }
+
+    /// <summary>S261 — the repo path of a source file, from the test exe's own location
+    /// (`plugin/build/DragonScreenTest.exe` → `../..`). Same shape as `AscentReadbackTest.Repo`.</summary>
+    static string ReadRepo(params string[] parts)
+    {
+        string p = System.IO.Path.GetDirectoryName(
+            System.Reflection.Assembly.GetExecutingAssembly().Location);
+        p = System.IO.Path.Combine(p, "..", "..");
+        for (int i = 0; i < parts.Length; i++) p = System.IO.Path.Combine(p, parts[i]);
+        return System.IO.File.ReadAllText(System.IO.Path.GetFullPath(p));
+    }
+
+    /// <summary>S261 — source with whole-line comments removed. ⛔ A TEXT ASSERTION MATCHES
+    /// COMMENTED-OUT CODE: without this, commenting the painter's allocation out would leave the
+    /// check green. Borrowed deliberately from `AscentReadbackTest.Live` / `AutoTargetTest.Live` —
+    /// the rule is the same one and six duplicated lines are cheaper than coupling three suites.</summary>
+    static string Live(string src)
+    {
+        string[] lines = src.Replace("\r\n", "\n").Split(new char[] { (char)10 });
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("//")) continue;
+            sb.Append(lines[i]).Append((char)10);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>S261 — non-overlapping occurrences of `needle` in `hay`.</summary>
+    static int CountOf(string hay, string needle)
+    {
+        int n = 0, i = hay.IndexOf(needle, StringComparison.Ordinal);
+        while (i >= 0) { n++; i = hay.IndexOf(needle, i + needle.Length, StringComparison.Ordinal); }
+        return n;
     }
 
     /// <summary>S260 — the overview drawn DIRECTLY with `ChecksComplete` forced, so the routed page
