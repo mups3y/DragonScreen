@@ -30745,3 +30745,152 @@ does. **Every figure in this entry is from PowerShell.**
 ⚠ `BOB-71` **stands** — §6 of the prompt states S260/QC left **26,724** checks; I measure **24,959** at
 `a2e1274` on the counter that has produced every figure in this register since S251, and **24,966**
 now. ⛔ The delta is what matters and it is **+7**; the absolute disagreement is unresolved.
+
+---
+
+### S262 [O] `install` shipped the wrong branch and said nothing — guard it, then reinstall — **DONE 2026-09-10 — `install` NOW NAMES ITS BRANCH EVERY RUN AND REFUSES A SURPRISE. ALL SUITES PASSED (24,979 checks, up from 24,966). THE GUARD WATCHED TO REFUSE TWICE, INCLUDING ON A REAL `master` CHECKOUT. REINSTALLED FROM `rebuild/base-screens`.** — [overseer `PROMPT_INSTALL_BRANCH_GUARD.md`, 2026-09-10; branch `rebuild/base-screens`]
+
+🟢 **OWNER, 2026-09-10, verbatim:** *"oops I think I fucked things up by clicking through github when I
+do not understand fully how it works."*
+⛔⛔ **HE DID NOT, AND THIS ENTRY EXISTS TO SAY SO IN THE RECORD.** He merged a pull request in GitHub
+Desktop, which checked the repo out to `master`. **`build.py install` then compiled and shipped
+whatever was checked out, without ever saying which branch that was.** ⭐ **The tool's silence is the
+defect.** Nothing he did was wrong and nothing was lost.
+
+#### 1. WHAT HAPPENED — reflog, verbatim
+
+```
+04:00:48  commit f6eb745   S261, on rebuild/base-screens
+04:15:55  checkout         rebuild/base-screens -> master     (GitHub Desktop, the PR merge)
+04:19:06  install          shipped MASTER's build into the game
+```
+⛔ It printed `ALL SUITES PASSED` and `--- ok`. **Both were true of the wrong code.**
+
+#### 2. ⭐ NOTHING WAS LOST — the first thing to say
+
+```
+rebuild/base-screens = f6eb745 = origin/rebuild/base-screens      IDENTICAL, and on GitHub
+```
+✅ S261 intact · ✅ tree clean · ✅ nothing reverted, stashed or discarded · ✅ QC's work untouched.
+⛔ **The repo was parked on the wrong branch. That was the whole of the damage.**
+
+#### 3. ⛔⛔ THE FIX — `install` NAMES ITS BRANCH, AND REFUSES A SURPRISE
+
+**One named constant, `EXPECT_BRANCH`, at the top of `build.py`** — ⚠ with a comment saying to change
+it when the rebuild lands, because *a branch name hardcoded in three places is a branch name that will
+be wrong in two of them.* Asserted as **exactly one definition** by the suite.
+
+⭐ **The PRINT is the half that would have prevented this on its own** — the owner reads this output,
+and had it said `master` he would have stopped. The refusal is the belt to that brace:
+```
+install: branch rebuild/base-screens @ f6eb745
+```
+⛔ **THE GUARD LIVES IN `install()`'s OWN BODY, NOT IN `__main__`** — the same reasoning the file
+already uses for `build_tests()`, whose comment says putting it there *"makes that impossible however
+install is invoked."* **A guard that only fires on one spelling of the command is not a guard.**
+
+⭐ **THE REFUSAL IS MEASURED, NOT ASSERTED.** The commit gap is computed live by
+`git rev-list --count <here>..<want>` every run. ⛔ A hardcoded sentence — *"master does not contain
+S240–S261"* — would be stale within a week; this is true whenever it prints.
+
+⚠ **`--branch <name>` DECLARES the branch you mean; it does not disable the check.** It is compared
+against reality, so `--branch rebuild/base-screens` while sitting on master still refuses. **An
+accident becomes a decision, and never a silent bypass.**
+⚠ **A dirty tree WARNS and never refuses.** Installing uncommitted work is routine while iterating in
+the capsule; **a guard that blocks legitimate work gets switched off, and then guards nothing.**
+⚠ **"git cannot answer" is REFUSED, and `--branch` cannot override it** — if the branch is unknown then
+no declared name can be checked against it, and shipping a build the script cannot identify is
+precisely the failure this exists to stop.
+
+#### 4. ⛔ THE ORPHAN REPORT — the check that would have caught `SeatSwap.cfg`
+
+`install` copies **in**; **it has never pruned.** So the wrong-branch install ADDED a master-only file
+to the live folder, and a correct reinstall would have LEFT IT THERE.
+⛔ **REPORTS ONLY, REMOVES NOTHING — and that is the task's instruction, not a shortcut.** Deleting
+from a live game folder is a far larger decision than a build script may take on its own: an orphan may
+be another mod's, a patch, or something the owner put there himself. **The owner decides; the tool's
+job is that he cannot fail to know.** Asserted in the suite by reading `report_orphans`'s **own body**
+for `os.remove` / `os.unlink` / `shutil.rmtree` / `os.rmdir`.
+⚠ **Scoped to that one body ON PURPOSE:** `build.py` *does* delete elsewhere (the previewdiff
+worktrees), so a file-wide "no deletes" assertion would have been a **false claim**.
+
+#### 5. ⭐⭐ THE GUARD WAS WATCHED TO REFUSE — TWICE, AND THE SECOND IS THE REAL SCENARIO
+
+**Test A — the refusal path, no branch switched** (`install --branch master`):
+```
+⛔⛔ INSTALL REFUSED - WRONG BRANCH.
+   on branch : rebuild/base-screens @ f6eb745
+   expected  : master
+   master has 1 commit(s) that rebuild/base-screens does not.
+   Nothing was copied.                                              exit 1
+```
+**Test B — a REAL `master` checkout, calling the REAL `install()`:**
+```
+⛔⛔ INSTALL REFUSED - WRONG BRANCH.
+   on branch : master @ cb8e5fa
+   expected  : rebuild/base-screens
+   rebuild/base-screens has 24 commit(s) that master does not.
+   Nothing was copied.
+```
+⭐⭐ **That is the exact message that would have stopped 2026-09-10.**
+
+⛔⛔ **AND THE TASK'S OWN INSTRUCTION FOR TEST B COULD NOT BE FOLLOWED LITERALLY — SAID PLAINLY RATHER
+THAN QUIETLY WORKED AROUND.** §6 said *"Check out `master`, run `install`."* ⛔ **`master`'s `build.py`
+has no guard** — `grep -c branch_guard` on it returns **0** — so a literal run would not have refused;
+it would have **shipped master into the game a second time**, which §6 itself forbids.
+⭐ **Run instead in a throwaway `git worktree` checked out to `master`** (a NAMED branch, so
+`rev-parse --abbrev-ref HEAD` really answers `master`, not `HEAD`), **with the guarded `build.py`
+copied in** — the real function, the real git, the real branch, and **the main working tree never
+touched and no branch switched under anyone.** Worktree removed afterwards.
+⭐ **Two independent safety nets, because this calls the real `install()`:** the guard refuses before
+any copy, **and** the worktree had never been built, so `install()`'s own *"build first — no DLL"* exit
+would have stopped it even had the guard failed. **Verified `False` before the call.**
+
+#### 6. ⛔ THE TEST — AND WHY A SOURCE-TEXT CHECK IS THE RIGHT INSTRUMENT HERE
+
+In **`HarnessTest.cs`**, *"the suite that tests the thing that runs the suites"* — the natural home,
+and `build.py` **is** the thing that runs the suites.
+1. **`build.py` IS PYTHON. This suite is C#.** It cannot execute it, import it, or observe its
+   behaviour at all. The choice is a source-text check or **no check**.
+2. ⛔ **A rule that lives only in the build tool is a rule no test can reach.** That is exactly how the
+   silent install survived: **it was never in a file the suite could load.**
+⭐ **`LivePy` strips `#`, not `//`.** ⛔ Reusing S261's C# `Live()` here would have left every Python
+comment standing and **passed on a file with no guard in it at all** — including on this very comment
+block. A new helper, and the reason is written down beside it.
+⭐ **`PyBody` reads a named function's OWN body**, so the question is *"is `branch_guard` called from
+inside `install`"* and not *"does the string appear somewhere in the file"* — **a `branch_guard` that
+is defined and never called is the exact shape of the S261 defect.** Proved non-vacuous: the extracted
+body is longer than 200 chars, shorter than the file, and does not contain `def install(`.
+
+#### 7. ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,979** checks (S261 left 24,966 by my measure — `BOB-71`) |
+| ⛔⛔ **guard watched to refuse** | **twice** — §5 above. Exit 1, `Nothing was copied`, both branches named, gap measured |
+| `previewdiff HEAD` | ⭐ **REFUSED as vacuous** — *"no render input differs between HEAD and the working tree, so '0 pages changed' would be arithmetic, not a measurement."* ⚠ **That is a STRONGER answer than "0 of 140 changed"**, and it is reported as what it is: the S168 guard proving this task touches nothing the preview reads, rather than 140 renders concluding nothing. `build.py` and `HarnessTest.cs` are not in `PREVIEW_INPUTS` |
+| reinstall | see the block below |
+
+#### 8. ⛔ NOT TOUCHED
+
+⛔ No change to `master`, to the PR, or to any branch but this one. ⛔ **No merge, no rebase, no branch
+created or deleted** — the owner's GitHub state is his and is doing no harm. ⛔ No change to the Vehicle
+Overview, the canon, the routing or `PainterBudget` — S261 is correct and assessed. ⛔ No cabin work.
+⛔ No QC findings work. ⛔ **`install` still does not prune, by instruction.**
+
+#### 9. ⚠ RAISED
+
+`BOB-75` **FACT** — **the guard refuses AFTER the full build, not before.** `__main__` runs
+`build_plugin()` + `build_tests()` and only then calls `install()`, so a wrong-branch install costs a
+full compile and a full suite run before it says no. ⭐ Correct and safe — nothing is copied — but it
+buries the refusal under ~2 minutes of output, and the S262 lesson is precisely that a message nobody
+sees is not a message. ⛔ **Not fixed here (C1.1, and §4 specified `install()`'s body):** the fix is a
+second early call in `__main__`, which needs the banner not to print twice.
+`BOB-76` **FACT** — `git worktree list` shows a worktree that is **not mine and not QC's main tree**:
+`…/5dc30a26-9cd9-44a8-8ce4-ca1d5efbf3db/scratchpad/wt`, detached at `9427fb4` — another session's,
+probably an interrupted `previewdiff`. ⛔ **Left alone and reported, not tidied** (the standing rule).
+⚠ `BOB-62` **stands** — `assets\kenney_ui_scifi` still empty.
+⚠ `BOB-71` **stands** — §6 states S261 left **26,776**; I measure **24,966** at `f6eb745` and
+**24,979** now, on the counter that has produced every figure in this register since S251. ⭐ The task
+itself names this *"two different aggregations, both rose; do not treat the mismatch as a defect"* —
+recorded on that basis. **The delta is +13.**

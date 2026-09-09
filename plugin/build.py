@@ -114,6 +114,22 @@ EXTRA_REFS = []
 MOD     = 'DragonScreen'
 OUT_DLL = os.path.join(HERE, 'GameData', MOD, MOD + '.dll')
 
+# ---------------------------------------------------------------- S262: WHICH BRANCH IS THIS?
+# ⛔⛔ THE BRANCH `install` IS ALLOWED TO SHIP WITHOUT BEING ASKED TWICE.
+#
+# ⚠ CHANGE THIS ONE CONSTANT WHEN THE REBUILD LANDS ON ANOTHER BRANCH. It is deliberately a single
+# named string in one place: a branch name hardcoded in three places is a branch name that will be
+# wrong in two of them. `python build.py install --branch <name>` is the escape for a deliberate
+# one-off, and it must NAME the branch, so an accident cannot become a silent bypass.
+#
+# ⛔ WHY THIS EXISTS. 2026-09-10: the owner merged a pull request in GitHub Desktop, which checked the
+# repo out to `master`. Three minutes later `install` compiled and shipped MASTER's build into the
+# game - a state 22 commits behind, predating S240 - and overwrote `DragonScreen.cfg` with master's.
+# It printed `ALL SUITES PASSED` and `--- ok`, and BOTH WERE TRUE OF THE WRONG CODE. Nothing in the
+# output named a branch, so there was nothing to notice.
+# ⭐ The accident was ordinary; a person clicked a button in a GUI. THE TOOL'S SILENCE IS THE DEFECT.
+EXPECT_BRANCH = 'rebuild/base-screens'
+
 # ---------------------------------------------------------------- the embedded MechJeb (T15a)
 # `plugin/mech/` is a VENDORED copy of MuMech/MechJeb2 at a pinned commit - see
 # `plugin/mech/VENDOR.md` for the pin, the exclusions and the two licence checks. It is
@@ -1387,7 +1403,107 @@ def _same(a, b):
         return False
 
 
+def _git_out(*args):
+    """One-shot git, stripped. '' when git cannot answer - which the caller must treat as UNKNOWN,
+    never as 'fine'. That distinction is the whole point of S262."""
+    try:
+        r = subprocess.run(['git'] + list(args), capture_output=True, text=True, cwd=ROOT)
+    except OSError:
+        return ''
+    return (r.stdout or '').strip() if r.returncode == 0 else ''
+
+
+def branch_guard():
+    """
+    ⛔⛔ S262 - SAY WHICH BRANCH IS BEING SHIPPED, AND REFUSE A SURPRISE.
+
+    ⭐ THE PRINT IS THE HALF THAT WOULD HAVE PREVENTED 2026-09-10 ON ITS OWN. The owner reads this
+    output; had it said `master` he would have stopped. The refusal is the belt to that brace.
+
+    ⛔ IT LIVES IN `install()`'s CALL PATH AND NOT IN `__main__`, for the same reason `build_tests()`
+    does: the file's own comment there says putting it here 'makes that impossible however install is
+    invoked'. A guard that only fires on one spelling of the command is not a guard.
+
+    ⚠ 'git cannot answer' is REFUSED, not waved through, and `--branch` cannot override it: if the
+    branch is unknown then no declared name can be checked against it, and shipping a build this
+    script cannot identify is precisely the failure S262 exists to stop.
+    """
+    branch = _git_out('rev-parse', '--abbrev-ref', 'HEAD')
+    sha = _git_out('rev-parse', '--short', 'HEAD')
+
+    # `--branch <name>` DECLARES the branch you mean to ship. It is checked AGAINST reality rather
+    # than replacing it, so `--branch rebuild/base-screens` while sitting on master still refuses.
+    want, explicit = EXPECT_BRANCH, False
+    if '--branch' in sys.argv:
+        i = sys.argv.index('--branch')
+        if i + 1 >= len(sys.argv):
+            sys.exit('⛔ --branch needs a branch name, e.g. --branch master')
+        want, explicit = sys.argv[i + 1], True
+
+    if not branch or not sha:
+        sys.exit('⛔ INSTALL REFUSED - git could not name the checked-out branch.\n'
+                 '   install will not ship a build it cannot identify (S262).\n'
+                 '   Nothing was copied.')
+
+    if branch != want:
+        # ⭐ MEASURED, NOT ASSERTED: how far the intended branch is ahead of this one. A hardcoded
+        # sentence ("master does not contain S240-S261") would be stale within a week; this is
+        # computed every run and is true whenever it prints.
+        ahead = _git_out('rev-list', '--count', branch + '..' + want)
+        gap = ('\n   %s has %s commit(s) that %s does not.' % (want, ahead, branch)) if ahead else ''
+        sys.exit('⛔⛔ INSTALL REFUSED - WRONG BRANCH.\n'
+                 '   on branch : %s @ %s\n'
+                 '   expected  : %s%s\n'
+                 '   Nothing was copied. Check out %s, or pass --branch %s if you truly mean it.'
+                 % (branch, sha, want, gap, want, branch))
+
+    dirty = [l for l in _git_out('status', '--porcelain').splitlines() if l.strip()]
+    print('install: branch %s @ %s%s' % (branch, sha, '   [--branch declared]' if explicit else ''))
+    if dirty:
+        # ⚠ WARN, NEVER REFUSE. Installing uncommitted work is legitimate and routine while
+        # iterating in the capsule; being told you are doing it is the whole requirement.
+        print('    ⚠ %d uncommitted change(s) in the tree - this ships WORKING-TREE state, not %s'
+              % (len(dirty), sha))
+        for l in dirty[:5]:
+            print('        %s' % l)
+        if len(dirty) > 5:
+            print('        ... and %d more' % (len(dirty) - 5))
+
+
+def report_orphans(src, dst):
+    """
+    ⛔ S262 - NAME WHAT IS IN THE GAME FOLDER THAT THIS BRANCH DID NOT PUT THERE, AND REMOVE NOTHING.
+
+    ⚠ THIS IS THE CHECK THAT WOULD HAVE CAUGHT `SeatSwap.cfg` - a master-only file the wrong-branch
+    install added, which a correct reinstall then LEFT BEHIND, because `install` copies in and has
+    never pruned.
+    ⛔ REPORTS ONLY. Deleting from a live game folder is a far larger decision than this script may
+    take on its own: an orphan may be another mod's, a patch, or something the owner put there. The
+    owner decides; the tool's job is that he cannot fail to know.
+    """
+    have = set()
+    for root, _, names in os.walk(src):
+        rel = os.path.relpath(root, src)
+        for n in names:
+            have.add(n if rel == '.' else os.path.join(rel, n))
+    orphans = []
+    for root, _, names in os.walk(dst):
+        rel = os.path.relpath(root, dst)
+        for n in names:
+            f = n if rel == '.' else os.path.join(rel, n)
+            if f not in have:
+                orphans.append(f)
+    if not orphans:
+        return
+    print('    ⚠ %d file(s) in the destination are NOT in this branch\'s build, and were NOT removed'
+          % len(orphans))
+    print('      (install copies in; it never prunes - delete by hand if unwanted)')
+    for f in sorted(orphans):
+        print('        %s' % f)
+
+
 def install():
+    branch_guard()
     dst = os.path.join(KSP, 'GameData', MOD)
     src = os.path.join(HERE, 'GameData', MOD)
     if not os.path.isfile(OUT_DLL):
@@ -1434,6 +1550,7 @@ def install():
                      '    Nothing was changed.' % (f, e))
         print('    installed %s' % f)
     print('--- installed to %s' % dst)
+    report_orphans(src, dst)
     print('    KSP needs a FULL RESTART to pick up a DLL change.')
 
 
