@@ -30327,3 +30327,142 @@ row) and **273** is built. Confirmed on the render: delta 0 at the shelf row. ·
 `BOB-71` **FACT** — §6 states S256 left **26,707** checks; I measure **24,905** at `1abf652` on the same
 instrument that produced every earlier figure in the register. I cannot reproduce 26,707 and did not
 try to match it; "count does not fall" was applied against my own consistent measure.
+
+---
+
+### S259 [O] Put the shadow layer back where it was baked — `BOB-70` settled — **DONE 2026-09-10 — S258's RESOLUTION WAS WRONG AND THE ASSERTION WAS NOT RELAXED TO ACCOMMODATE IT. ALL SUITES PASSED (24,922 checks, up from 24,918), 6/6 mutants killed incl. S258's own shipped state, previewdiff 6 of 140 and NONE flown. ⛔ NOT INSTALLED** — [overseer `PROMPT_SHADOW_ALIGN_FIX.md`, 2026-09-10; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim, 2026-09-10:** *"do it, you're like me and strive for perfection even if it's just
+a few pixels off."*
+
+#### ⛔⛔ WHAT S258 GOT RIGHT, AND WHAT IT GOT WRONG
+
+**Right:** the S258 prompt genuinely contradicted itself — §4 said `ShadowY = 271`, §5 said the fade
+reaches zero at 893, §6 demanded `ShadowY + ShadowH == 893.0`, and `271 + 620 = 891`. Raising it as
+`BOB-70` rather than correcting silently was the right move.
+**Wrong:** it resolved the contradiction by moving the **LAYER** to fit the box instead of the **BOX**
+to fit the layer, and shipped the effect **2 px low** (2.25 at the device-pixel step, k = 1.33333).
+
+#### ⚠⚠ THE MEASUREMENT WAS REAL AND POINTED AT A QUESTION IT CANNOT ANSWER
+
+S258 argued: *"the alpha ramp reaches 1/255 at the asset's own last row, therefore the last row is
+893."* ⛔ **That does not distinguish a ramp that ENDS there from one CUT there.** A smoothstep
+truncated 2 px early sits at `smoothstep(2/40) ≈ 0.7 %` of local — which rounds to **exactly 1/255**.
+⭐ **Same family as the `stagingEnabled` string search and S252's name-presence check:** an instrument
+that cannot tell the two answers apart returns the one you expected.
+⚠ And S258's confirming render check — *"delta 0 at design y 893"* — **did not discriminate either**:
+the fade was ~0 at the shelf under **both** placements, so a delta of 0 there was guaranteed.
+
+#### ⭐⭐ WHAT ACTUALLY DISCRIMINATES — measured by this session on BOTH files
+
+```
+old bake   last row with alpha>0 = 1859 of 1859   edge alpha 1   -> RAMP TRUNCATED AT THE EDGE
+new bake   last row with alpha>0 = 1859 of 1865   edge alpha 0   -> ZERO-CROSSING INSIDE THE FILE
+shared 1860 rows: alpha max diff 2/255 (pure resampling)  -> the SAME ramp, always 2 px short
+the 6 added rows: max alpha 0                            -> they carry nothing
+```
+⛔ And the layer was **GENERATED** at 271 — the vehicle silhouette is pasted in at an offset that only
+aligns there. That is a fact about how the file was made, not a reading of it.
+
+#### ⛔⛔ THE ASSERTION WAS **NOT** RELAXED — THAT IS THE POINT OF THE TASK
+
+`ShadowY + ShadowH == 893.0` states the design rule — *the effect stops at the shelf* — and weakening it
+to 891 would have pinned the sloppy bake as if it were the intent. ⭐ **That is precisely the failure
+S256 wrote up and this register already carries:** *"a check that asserts a defect is indistinguishable
+from one that asserts a decision."* **The ASSET was re-baked to reach the shelf**, so the rule now
+passes on the honest numbers `271 + 622`.
+
+#### ⭐ THE THREE WRITES
+
+| what | from | to |
+|---|---|---|
+| `art/cover/dragon_shadow_glow.png` | 2358 × 1860, md5 `3f3841c3…` | **2358 × 1866**, md5 **`18f75204ed8c9ff14d5a13b57079ab6f`** |
+| `ShadowY` | `273f` | **`271f`** |
+| `ShadowH` | `620f` | **`622f`** |
+
+⛔ `ShadowX = 567f` and `ShadowW = 786f` unchanged. ⛔ Nothing else in the file — not the vehicle
+constants, not the draw order, not `Shadow()` itself.
+
+#### ⭐⭐ THE CHECK WHOSE ABSENCE LET THIS SURVIVE REVIEW — added, and it kills S258
+
+§5 asked for it and it is the sharp one: **the box's aspect must equal the file's** — the layer is drawn
+at exactly 3× with no per-axis stretch (`786/622 == 2358/1866`, and `2358/786 == 1866/622 == 3.0`).
+⚠ At S258's 786 × 620 against a 2358 × 1860 file the two agreed — **which is exactly why it passed while
+being 2 px low: the box was self-consistent and simply in the wrong place.** It is the *re-baked* file
+that makes 786 × 622 the only box satisfying the aspect rule and the shelf rule at once.
+⛔ **Mutation M1 restores S258's exact shipped constants and the suite now KILLS it**, on both the
+aspect check and the new `ShadowY == 271` pin.
+
+#### ⭐ AS BUILT, MEASURED
+
+```
+dragon_shadow_glow.png   2358 x 1866 RGBA   md5 18f75204ed8c9ff14d5a13b57079ab6f
+                         peak alpha 224     bottom edge alpha 0   (old bake: 1)
+ShadowY 271.0   ShadowH 622.0   ShadowY + ShadowH = 893.0   ShadowX + ShadowW/2 = 960.0
+aspect  786/622 = 1.26367   file 2358/1866 = 1.26367        3x on both axes, exactly
+```
+**The two rows that must not move, against `4b57c19`:**
+
+| row | delta |
+|---|---|
+| the shelf line, design y 893 | **0** ✅ |
+| the bar band, design y 997.4 | **0** ✅ |
+
+**The ink bottom, scanned against the page ground `#1A1F35` across the effect's own x span:**
+
+| threshold | S258 (`4b57c19`) | S259 as built | shift |
+|---|---|---|---|
+| ≥2/255 | 890.75 | **888.50** | 2.25 |
+| ≥4/255 | 888.50 | **886.25** | **2.25** |
+| ≥6/255 | 886.25 | **884.00** | 2.25 |
+| ≥8/255 | 884.75 | **882.50** | 2.25 |
+
+⭐ **A clean, uniform 2.25 px shift upward** — exactly the *"2.0 true; 2.25 is the nearest device-pixel
+step at 1.33333"* the prompt describes.
+⚠ §5 asks for the ink to end at **885.8 (7.2 px clear)**. At threshold ≥4/255 I measure **886.25, i.e.
+6.75 px clear** — **within one device row (0.75 design px)**, and the threshold behind 885.8 is not
+stated. ⛔ Reported as consistent, **not** as identical.
+⚠ **A probe bug caught on the way, mine:** the first scan started at design y 893 and reported
+"0.00 px clear" for *both* renders — because **y 893 IS the shelf line**, whose own stroke runs
+892.25–894.5. The probe was measuring the shelf. Moved to start at 891.5. Same class as S248's five and
+S256's one; the page was right each time.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,922** checks (S258 left 24,918 by my measure — see `BOB-71`) |
+| `VehicleOverviewContentTest` | **293 checks, 0 failed** (was 289) |
+| mutation | **6 raised, 6 KILLED, 0 survived** — ⭐ **M1 is S258's exact shipped state (273/620)** and is now killed; M2 moved-not-grown; M3 grown-not-moved; M4 per-axis stretch; M5 the S256 lean; M6 a one-px nudge |
+| S258's own assertions | ⛔ **all untouched and still passing** — `518.147`, `852.647`, `40.354`, the side gaps, and the effect's index below every rail, dial and vehicle command |
+| `previewdiff HEAD` | **6 of 140 changed**, ⛔ **none flown** — the six `ui_overview_*` pages; `ui_baseicon_*` unchanged |
+| install | ⛔ **NOT DONE** — §7 forbids it; the owner is flight-testing |
+
+#### ⛔ THE SIX CHANGED PAGES, AND WHY NONE IS FLOWN
+
+`ui_overview_screen1/2` · `ui_overview_screen1_cabin` · `ui_overview_screen1_cabin_more` ·
+`ui_overview_screen1_systems_more` · `ui_overview_nofeed` — all rebuild pages.
+`VehicleOverviewContent` is referenced only from `plugin/preview/` and `plugin/test/`; no glue draws it
+and there is no `UiPage` routing. ⛔ The 134 unchanged pages include every screen the owner flies.
+
+#### ⭐ THE SPEC, CORRECTED IN PLACE (C1.16) — `SPEC_OVERVIEW_STATUS_ROWS.md` §8.6, outside the repo
+
+The wrong numbers are struck, not deleted, and the S258 paragraph is kept **whole** with a preface
+saying what was right, what was wrong, and — the part worth more than the number — **why the
+measurement could not answer the question**. The old md5 and the old 2358 × 1860 are kept struck beside
+the new ones.
+
+#### ⭐ WHAT WAS **NOT** TOUCHED
+
+⛔ No vehicle constant, no draw order, no dial, rail, row or connection. ⛔ No re-baking, re-colouring or
+re-blurring — the effect settings stay owner-ruled (46 % / ×2.00) and the render untrimmed. ⛔ No
+tab-strip work — `S256` is done. ⛔ No docking-cam work — `S255` stays tabled. ⛔ No MechJeb, craft dump,
+cfg or craft edit.
+
+#### ⚠ QUESTIONS RAISED — none new
+
+`BOB-70` is **CLOSED** by this task. ⚠ `BOB-71` (the check-count instrument) **stands, unchanged**: §5
+of this prompt states S258 left **26,720** checks; I measure **24,918** at `4b57c19` on the same counter
+that produced every earlier figure in this register (24,769 → 24,799 → 24,810 → 24,900 → 24,905 →
+24,918 → 24,922). ⛔ Still cannot reproduce the overseer's number, still not matching it; "count does
+not fall" is applied against my own consistent measure.

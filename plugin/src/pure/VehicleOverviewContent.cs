@@ -315,21 +315,47 @@ namespace DragonScreen
         //  fade and do not extend the layer past 893.
         //
         //  ⛔⛔ THE BOX IS SYMMETRIC ON 960 BY CONSTRUCTION (`960 ∓ 393`) AND ITS BOTTOM IS THE SHELF.
-        //  The asset is exactly 3× the design box (786×3 = 2358, 620×3 = 1860). The overseer's first
+        //  The asset is exactly 3× the design box (786×3 = 2358, ~~620×3 = 1860~~ S259: 622×3 = 1866,
+        //  and the suite now asserts that 3× relation as an ASPECT check — the one that would have
+        //  caught S258's 2 px from the other side). The overseer's first
         //  bake auto-trimmed to the alpha and came out 0.33 px lopsided; it was re-baked symmetric on
         //  purpose. ⛔ S256 took a 0.5 px lean out of the tab strip — do not re-introduce one here.
         //
-        //  ⚠⚠ `ShadowY` IS 273, NOT THE 271 THE S258 PROMPT'S §4 TABLE PRINTS, AND THE ASSET SETTLED
+        //  ⚠⚠ ~~`ShadowY` IS 273, NOT THE 271 THE S258 PROMPT'S §4 TABLE PRINTS, AND THE ASSET SETTLED
         //  IT. §4 says 271; §5 says the fade reaches "exactly 0 at y = 893.0"; §6 asks for a test that
         //  `ShadowY + ShadowH == 893.0` and reports the ink ending at 885.8, "7.2 px clear of the
         //  shelf". 271 + 620 = **891**, which contradicts all three. ⭐ MEASURED on the file by this
         //  session: the alpha ramp reaches 1/255 at the asset's own LAST ROW (3 at 1.3 px up, 16 at
         //  6.3 px up, peak 223 around 39.7 px up), so the asset's bottom edge IS design y 893.0 and
         //  `ShadowY = 893 − 620 = 273`. At 273 the perceptible ink ends 7.2 px clear, matching §6's own
-        //  measurement; at 271 it would be 9.2. ⛔ Reported as `BOB-70` rather than silently corrected.
+        //  measurement; at 271 it would be 9.2. ⛔ Reported as `BOB-70` rather than silently corrected.~~
+        //
+        //  ⛔⛔ S259 — SUPERSEDED IN PLACE (C1.16), AND THE REASONING ABOVE IS THE PART WORTH KEEPING,
+        //  BECAUSE IT IS WRONG IN AN INSTRUCTIVE WAY. The CONTRADICTION was real and raising it was
+        //  right. ⛔ THE RESOLUTION WAS NOT: `S258` moved the LAYER to fit the box instead of the BOX
+        //  to fit the layer, and shipped the effect 2 px low.
+        //  ⚠⚠ **THE MEASUREMENT WAS REAL AND POINTED AT A QUESTION IT CANNOT ANSWER.** "The ramp
+        //  reaches 1/255 at the last row" does NOT prove the ramp's zero is at that row: a smoothstep
+        //  cut 2 px early sits at `smoothstep(2/40) ≈ 0.7 %` of local, which rounds to exactly 1/255.
+        //  A near-zero edge is not a zero-crossing. ⭐ Same family as the `stagingEnabled` string
+        //  search and S252's name-presence check — an instrument that cannot distinguish the two
+        //  answers reports the one you expected.
+        //  ⭐⭐ THE FACT THAT DOES DISCRIMINATE, MEASURED BY S259 ON BOTH FILES:
+        //      old bake  last row with alpha>0 = 1859 of 1859   edge alpha 1   -> RAMP TRUNCATED
+        //      new bake  last row with alpha>0 = 1859 of 1865   edge alpha 0   -> ZERO INSIDE THE FILE
+        //  The shipped 1860 rows are the SAME ramp (alpha max diff 2/255, pure resampling), so the
+        //  ramp always wanted two more design px. And the layer was GENERATED at 271 — the vehicle
+        //  silhouette is pasted into it at an offset that only aligns there. That is a fact about how
+        //  the file was made, not a reading of it.
+        //  ⛔ THE ASSERTION `ShadowY + ShadowH == 893.0` WAS NOT RELAXED TO 891. Weakening it would
+        //  have pinned the sloppy bake as if it were the intent — exactly the failure S256 wrote up:
+        //  *"a check that asserts a defect is indistinguishable from one that asserts a decision."*
+        //  The ASSET was re-baked to reach the shelf, so the rule passes honestly. 🟢 OWNER, 2026-09-10:
+        //  *"do it, you're like me and strive for perfection even if it's just a few pixels off."*
+        //  ⭐ The 6 added rows carry alpha 0 — measured — so the approved look does not shift.
         // ==========================================================================================
         public const string ShadowAsset = "dragon_shadow_glow";
-        public const float ShadowX = 567f, ShadowY = 273f, ShadowW = 786f, ShadowH = 620f;
+        public const float ShadowX = 567f, ShadowY = 271f, ShadowW = 786f, ShadowH = 622f;
 
         // ==========================================================================================
         //  §2 / §7.3 / §7.4 — THE ROWS. ⛔ Every title names ITS OWN SOURCE and nothing more.

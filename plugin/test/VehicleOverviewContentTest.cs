@@ -748,16 +748,40 @@ public static class VehicleOverviewContentTest
         // overseer's first bake of this asset was 0.33 px lopsided and was re-baked on purpose.
         Near("S258 ⭐ the effect box is symmetric on 960",
              VehicleOverviewContent.ShadowX + VehicleOverviewContent.ShadowW / 2f, 960.0, 0.002);
-        // ⚠⚠ 273, NOT THE PROMPT'S 271 — the asset settled it. Its alpha ramp reaches 1/255 at its own
-        // LAST ROW, so the bottom edge IS design y 893.0, which is what §5's "reaching exactly 0 at
-        // y = 893.0" and §6's own "7.2 px clear" both require. 271 + 620 = 891 contradicts both.
-        // `BOB-70`.
-        Near("S258 ⛔ the effect reaches the shelf and stops there (bottom == 893.0)",
+        // ⚠⚠ ~~273, NOT THE PROMPT'S 271 — the asset settled it. Its alpha ramp reaches 1/255 at its
+        // own LAST ROW, so the bottom edge IS design y 893.0 … 271 + 620 = 891 contradicts both.~~
+        // ⛔⛔ S259 — SUPERSEDED IN PLACE (C1.16). ⭐⭐ THE ASSERTION ITSELF IS UNCHANGED, DELIBERATELY:
+        // it states the design rule — *the effect stops at the shelf* — and relaxing it to 891 would
+        // have pinned S258's sloppy bake as if it were the intent. That is precisely the failure S256
+        // wrote up: *"a check that asserts a defect is indistinguishable from one that asserts a
+        // decision."* ⭐ The ASSET was re-baked instead, so this now passes on `271 + 622` HONESTLY.
+        // ⚠ AND THE S258 REASONING ABOVE IS KEPT BECAUSE IT IS WRONG IN AN INSTRUCTIVE WAY: "the ramp
+        // reaches 1/255 at the last row" cannot tell a ramp that ENDS there from one CUT there — a
+        // smoothstep truncated 2 px early sits at ~0.7 % of local, which rounds to exactly 1/255.
+        // ⭐ What discriminates, measured on both files: the old bake's last row with alpha>0 was its
+        // own final row (edge alpha 1 — truncated); the new bake dies 6 rows before its edge (edge
+        // alpha 0). Same ramp either way — alpha max diff 2/255 across the shared 1860 rows.
+        Near("S259 ⛔ the effect reaches the shelf and stops there (bottom == 893.0)",
              VehicleOverviewContent.ShadowY + VehicleOverviewContent.ShadowH, 893.0, 0.002);
-        // ⭐ The asset is exactly 3x the design box by construction — 786x3 = 2358, 620x3 = 1860.
+        Near("S259 ...and it starts at 271, where the layer was GENERATED",
+             VehicleOverviewContent.ShadowY, 271.0, 0.002);
+        // ⭐ The asset is exactly 3x the design box by construction — 786x3 = 2358, 622x3 = 1866.
         Near("S258 the drawn box is the design box, not the file's pixels",
              shadow.C, VehicleOverviewContent.ShadowW, 0.002);
         Near("S258 ...and its height likewise", shadow.D, VehicleOverviewContent.ShadowH, 0.002);
+        // ⛔⛔ S259 — THE CHECK THAT WOULD HAVE CAUGHT S258 FROM THE OTHER SIDE, AND ITS ABSENCE IS
+        // WHY THE CONTRADICTION SURVIVED REVIEW. The layer is drawn at exactly 3x with no per-axis
+        // stretch, so the DESIGN BOX's aspect must equal the FILE's. At S258's 786x620 against a
+        // 2358x1860 file the two agreed — which is exactly why it passed while being 2 px low: the
+        // box was self-consistent and simply in the wrong place. It is the RE-BAKED file (2358x1866)
+        // that makes 786x622 the only box that satisfies both this and the shelf rule at once.
+        // ⚠ The file's pixels are typed here as literals, measured off the shipped PNG by S259 — an
+        // independent second expression, not a re-read of the constants.
+        Near("S259 ⭐⭐ the layer is drawn at exactly 3x — the box's aspect IS the file's",
+             VehicleOverviewContent.ShadowW / VehicleOverviewContent.ShadowH, 2358.0 / 1866.0, 1e-4);
+        Near("S259 ...and 3x is the literal scale, both axes, no per-axis stretch",
+             2358.0 / VehicleOverviewContent.ShadowW, 3.0, 1e-6);
+        Near("S259 ...both axes", 1866.0 / VehicleOverviewContent.ShadowH, 3.0, 1e-6);
         Check("S258 the effect is drawn at full white tint, so the asset's own alpha composites",
               shadow.Colour.R > 0.999f && shadow.Colour.G > 0.999f
               && shadow.Colour.B > 0.999f && shadow.Colour.A > 0.999f, "");
