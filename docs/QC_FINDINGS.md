@@ -7047,3 +7047,191 @@ tools  five measurement scripts, written to disk and run as files, never heredoc
 🟢 **`PROMPT_ALL_CHATS_NO_HEREDOC.md` adopted** (owner, 2026-09-10). Every file this session was written
 with the `Write` tool and every script run as a file. ⚠ The one heredoc attempted early in the session
 failed exactly as that prompt predicts — `unexpected EOF` — and was replaced with a written file.
+
+
+---
+
+# 🔬 THE DEFECT CHECKLIST — RUN COMPLETED — THE REMAINING 18 SECTIONS · 2026-09-10
+
+**Owner:** *"the pill is intended, keep it. run the remaining 18 sections"* — so **`QC-8` is CLOSED**
+(see F-7 above; the pill stands, and this report does not re-open it) and the run is now complete.
+⭐ **All 32 sections of PART 3 have a recorded result.** Rendered at HEAD `b2eaa46`, tree clean,
+nothing installed, nothing pushed.
+
+⚠ **TWO STANDING RULES ADOPTED THIS SESSION, and both were checked against what I had already done
+rather than merely acknowledged:**
+- **`PROMPT_ALL_CHATS_NO_HEREDOC.md`** — every script written with the `Write` tool and run as a file.
+- **`PROMPT_ALL_CHATS_NO_GIT_ADD_ALL.md`** — ⭐ **verified, not assumed:** both commits staged
+  `docs/QC_FINDINGS.md` **by name**, one file each; `plugin/build/preview/` is **gitignored**
+  (`.gitignore:19`) so rendering 140 pages dirtied **no tracked file**; the tree was clean before and
+  after. **No other chat's work was ever in reach.**
+
+---
+
+## 🔴 NEW DEFECTS FOUND IN THIS SECOND PASS
+
+### F-8 · **TIER 1** · §2 UNITS — the canon fixed the `LabelPx` trap in §3 and **left it standing in §5**
+
+The live `SPEC_PAGE_CANON.md` was corrected at **02:47**, 47 minutes after the 02:00 seal. §3 now reads:
+> `| tab label | **8.94** | ⛔⛔ LabelPx = 12.3 IS A FONT SIZE, NOT INK … Cap ink = 12.3 x 0.727 = 8.94 |`
+
+⛔⛔ **§5, line 155, still reads:** `labels       ink 12.3, box left = cx − 45.15, width 90.3, centred, top 947.7`
+
+**The same number, called INK, in the section that defines the shell every later page inherits.** §3 now
+says in bold that this is exactly wrong, and the correction did not travel one section.
+⭐ **This is the defect the brief opens with** — *"a cabin mock built from that row rendered its labels
+37 % too large"* — **still live, in the same file, one section down.**
+🟢 **The shipped render is right:** tab-label ink measures **9.00** design px (12 device rows), against
+`12.3 x 0.727 = 8.94`. It is the spec that is wrong, not the page.
+⚠ **§5's stack line is fine and must not be "fixed" with it:** `893 + 13.7 + 37 + 4 + 12.3 + 7.4 + 4.8 +
+5.3 = 977.5` uses 12.3 as a **line advance**, which is correct — 947.7 + 12.3 = 960.0, + 7.4 = **967.4**,
+the selector y. ⛔ **Only the word "ink" on line 155 is wrong.**
+
+### F-9 · **TIER 2** · §3 ANCHOR / §4 DERIVE — canon §6's rail formula has a spurious term
+
+> canon §6: *"title ink 13.06, **top = marker cy − 6.53 − ink**; status ink 13.06, 29.38 below the title."*
+
+```
+canon's formula   131.81 - 6.53 - 13.06 = 112.22
+shipped code      VehicleOverviewContent.cs:470  titleInkTop = cy - TitleTopAboveMarker = 125.28
+--overviewcheck   expects f.Y(125.28)
+measured render   ink top design 126.50
+```
+⛔ **The canon's formula is 13.06 design px — one whole ink height — too high.** A second page built
+from it puts its rail titles **17.4 device px** above where this page puts them. 🟢 The code and the
+check agree with each other and with the render; only the canon is wrong.
+
+### F-10 · **TIER 2** · §14 PROVENANCE — canon §3's dial row states a number its own rule does not produce
+
+> `| dial value | **30.01** design (0.314 × R) | measured; the largest ink on the page |`
+
+```
+canon 6:  top row R = 91.1        0.314 x 91.1 = 28.6054
+stated:   30.01                   -> the parenthetical rule is 1.40 design px short of the number
+measured: 29.25  (39 device rows, window x cx+-55, y cy+-18, well inside the R 91.1 ring)
+```
+⚠ **The row carries two provenances that disagree**, and §14 allows exactly one kind per number. The
+render sits between them and within ±1 device px of **the rule**, not of the stated value. ⛔ **The
+stated 30.01 is the outlier and it is the number a later page would copy.**
+
+### F-11 · **TIER 3** · §22 OVERFLOW — the tightest gap on the page is measured with convenient data
+
+The right panel's value is right-aligned on 1849.8; the bar track ends at `1538 + 187.8 = 1725.8`. Value
+and track share rows (value ink centre **148.10**, track **144.0..152.2**), so the clearance is
+horizontal and **ink-to-ink**:
+```
+row 0   value ink 1799.2..1848.0  width 48.8   gap to track 73.5 design px
+row 1   value ink 1799.2..1848.0  width 48.8   gap to track 73.5
+row 3   value ink 1764.0..1848.0  width 84.0   gap to track 38.2   <- tightest measured
+```
+⛔ **38.2 design px is about five or six more characters.** The suite's own CONNECTIONS check has the
+same shape — it reports *"tightest gap 188 device px = 141.03 design"* **on the fixture's strings**.
+⚠ **No fixture renders the longest case**, and §25 already establishes that `NET PWR` is **signed**, so a
+minus sign plus full scale is a real widest case that nothing exercises. ⭐ **A field that fits today's
+data and not tomorrow's is a defect today.**
+
+### F-12 · **TIER 3 / QUESTION** · §23 LEGIBILITY — one ink pair is below 3.0 against its own ground
+
+Contrast ratios computed against the ground each ink actually sits on:
+```
+status lit #FFFFFF on #1A1F35    16.26      marker GO #40C110        6.86
+label #FFFFFF on band #070810    19.98      marker CAUTION #EA7B15   5.69
+selected #1A1C48 on pill #FFFFFF 16.11      rail title #9499C3       5.89
+gauge caution #FFD733            11.63      accent #298BFE           4.82
+gauge emergency #E73030           3.77      tick alarm #D12C30       3.19
+status dim #555779 on #1A1F35     2.34   <- *** BELOW 3.0, AND IT IS TEXT ***
+panel track #2E304B               1.27      CONNECTIONS rule #3A3F63 1.60
+```
+🟢 **The track (1.27) and the hairline rule (1.60) are NOT defects** — a track and a hairline are meant
+to recede, and calling them findings would be the wrong instrument.
+⚠ **`status dim #555779` is different: it is the rail's status WORD.** At 2.34 it is the least legible
+text on the page. ⭐ It may well be deliberate — this file already records that the dim/unchecked state
+is *"deliberately not a severity"* — which is why it is **`QC-12`, a question, not a filed defect.**
+⚠ **Also worth the owner's eye:** the two ALARM colours (3.19 / 3.77) are the *least* legible severities,
+while nominal white is 16.26. **The most urgent state is the hardest to read.**
+
+---
+
+## ✅ CLEAN — the rest, each with the value that would have failed
+
+| § | result |
+|---|---|
+| **2 UNITS** | ⛔ **FOUND — see F-8.** The ink/font-size split is right in §3 and wrong in §5 |
+| **3 ANCHOR** | ⛔ **FOUND — see F-9 and F-5.** Line-top vs ink-top is correct in code (`InkLine` takes an ink centre) |
+| **4 DERIVE** | Re-derived, not read back: the tab stack `893+13.7+37+4+12.3+7.4+4.8+5.3 = 977.5` ✅; shelf pads **19.65 = 19.65** ✅; tab 4 cx `598.8+4×90.3 = 960.0` ✅; shelf centre `(534+1386)/2 = 960.0` ✅; window centre `(19.5+1900.5)/2 = 960.0` ✅; shadow `271+622 = 893.0` ✅ and `567+786/2 = 960.0` ✅; vehicle `334.5 + 2864×292/1614 = 852.6462`, shelf clear **40.3538 → 40.354** ✅. **Would have failed:** any sum missing its stated anchor |
+| **5 CONTRADICT** | ⛔ **FOUND — F-3, F-8, F-10.** Also logged, already known: `SPEC_GAUGES.md` §5.5 says top row y **212.0**, `SPEC_OVERVIEW_STATUS_ROWS.md` says **226.3**, a 14.3 px disagreement inside an owner-locked file — **already raised as `BOB-51`**, not re-filed here. ⚠ And in the brief itself: PART 4 asks for *"all twenty checklist sections"*; PART 3 lists **32** |
+| **6 SUPERSEDE** | **CLEAN.** All four specs' heading hierarchies are well-formed — **no skipped levels, no `##` inside a `###`**. `audit_overview.py`'s one numeric regex is anchored to a whole line with literal context and matches **exactly once, in live text**; `audit_gauges.py` and `mutate_overview.py` use **no regex at all**; **zero** ambiguous substring searches. ⚠ The spec carries **9 struck runs and 8 SUPERSEDED markers**, so this is earned, not lucky. **Would have failed:** a second match, or a match inside `~~…~~` |
+| **7 INSTRUMENT** | ⛔ **FOUND — five, listed above as I-1..I-5**, two of them my own |
+| **8 FALSIFY** | **CLEAN, and mutated by MORE than the tolerance** (the brief's weak-mutant trap): vehicle height `518.147→519.900` **KILLED**; bottom `852.647→854.400` **KILLED**; shelf clearance `40.354→38.600` **KILLED**; ⭐ shadow height `622.0→620.0` — **the exact S258 defect — KILLED**. 4/4, against a 62-pass baseline. **Would have failed:** any survivor |
+| **9 REUSE** | ⭐ **CLEAN, and proved by pixel identity rather than by reading the code.** In the shell band (design y 893..1054) the Overview vs its own base page differ by **0 px of 9,372 across the shelf (x 534..1386)**, 0 at x 372..534 and 0 at x 1386..1713. Every difference is the page's own controls (x 68..372 and MORE at x 1713..1852). **The shell is REUSED, not re-derived** — the failure mode of case C cannot be present |
+| **12 EDGES** | **CLEAN.** Thickness sampled at 40 points along each rule: shelf **3/3/3, 0 gaps**; CONNECTIONS rule **1/1/1, 0 gaps**; window rule **4/4/4**; outer border **4/4/4**. **Uniform end to end, no join, no step, no gap.** ⭐ This is the check that would have caught case C's 5-row reconstruction with its two visible joins. **Would have failed:** any thickness variation or any gap |
+| **13 CONSISTENCY** | ⛔ **PARTLY FOUND — F-8, F-9, F-10.** The full ladder, re-derived from the render at the correct 1406 fit (±1 device px = ±0.75 design is the quantisation limit): |
+
+```
+role                     canon   measured    diff   verdict
+page title               23.67     24.75    +1.08   OUT
+dial value (PPO2)        30.01     29.25    -0.76   OUT  (matches the RULE 28.61, not the stated 30.01)
+panel value              16.50     16.50    +0.00   exact
+control label SYSTEMS    13.87     12.75    -1.12   OUT
+rail title               13.06     12.75    -0.31   ok
+rail status              13.06     12.75    -0.31   ok
+CONNECTIONS header       13.06     12.75    -0.31   ok
+CONNECTIONS row          12.24     12.00    -0.24   ok
+tab label                 8.94      9.00    +0.06   ok   <- the corrected row, and it is right
+panel label              12.30     13.50    +1.20   OUT
+```
+⚠ **Four of ten sit outside the quantisation limit and the signs DISAGREE** (+1.08, −1.12, +1.20). A
+wrong scale would push them all one way. **That points at font metrics, not geometry** — and §30 is
+BLOCKED, so **this run cannot tell you whether the game agrees.** ⛔ Do not "fix" these constants
+against preview numbers.
+
+| § | result |
+|---|---|
+| **14 PROVENANCE** | ⛔ **FOUND — F-10.** ⭐ Otherwise strong and unusually explicit: `VehicleOverviewContent.cs` marks the contact pool **🟢 MEASURED**, the glow and shelf fade **⛔ INVENTED**, and both as **owner-ruled off rendered ladders**, with the proof that there is no glow in the source asset. **Would have failed:** a number with no third kind |
+| **15 INTENT** | 🟢 **CLOSED by the owner this session.** F-7's pill — *"the pill is intended, keep it."* ⭐ The page's other asymmetries are pinned with a reason and an owner quote: the ×2.00 glow reaching 37/255 under two dials, and the modelled rod below the trunk. ⚠ `S256`'s lesson is honoured: `ShadowY + ShadowH == 893.0` was **not** relaxed to 891 to accommodate a sloppy bake — the asset was re-baked instead |
+| **16 DATA** | **CLEAN.** Blank is MISSING, never zero: `d.Valid = s.Valid && !double.IsNaN(v)` then `d.Value = d.Valid ? Formatted(i, v) : DialNoValue`; the panel takes `s.PowerUnit1Text ?? Dashes.None`. **No RGB comparison anywhere reads a pixel where alpha is 0** — my own asset work compared the **alpha plane**, per the rule. **Would have failed:** a `0.00` where the feed is absent |
+| **18 ASSETS** | **CLEAN.** Nine tab icons, measured off the render in their own 37×37 boxes: **h/box 0.860..0.880**, spread **0.020**, all inside the canon's **0.857..0.915** band. ⭐ `w/box` ranges **0.440..0.880** — which is the *proof* they are normalised on **HEIGHT**, not the square box. **No glyph clipped or stretched.** **Would have failed:** an h/box outside the band, or a w/box pinned to the box |
+| **19 BOTH SCREENS** | ⭐ **CLEAN, and this is the strongest single result in the run.** Both renders resampled into the shared 1920×1054 design frame differ in **7 pixels of 2,023,680 (0.0003 %), max channel-sum delta 3, and ZERO pixels differ by more than 30/channel.** Canon §1's *"the letterbox band differs, the design space does not"* is **confirmed to the pixel.** ⚠ Screen 3 (`MeasuredScreens` 1280×703, the same shape as screen 1) **still emits no render** |
+| **22 OVERFLOW** | ⛔ **FOUND — F-11** |
+| **23 LEGIBILITY** | ⛔ **FOUND — F-12.** ⭐ But §23's other rule **PASSES**: severity is **not** carried by colour alone. `Marker()` draws the same disc and two tick strokes in every state, so the shape is constant — **but `RowWord()` returns a different word per state** (`Go`/`Caution`/`Alarm`, and `Attached`/`Armed`/`Separated`/`Unscheduled`, `Stowed`/`Drogues Out`/`Mains Out`/`Released`). **A colour-blind viewer still gets the state, from the text.** ⚠ No stem falls under 1 device px: the smallest ink is the tab label at **12 device rows** |
+| **25 UNITS** | ⭐ **CLEAN, and the explicit call-out passes.** *"`NET PWR` is signed — verify a negative renders and is not silently made absolute."* `d.T = Math.Abs(v) / Cabin.NetPwrFullScale` takes the magnitude **for the ARC only**, and the code says why: the reference reads 0.00 W at t≈0, which rules out a centred scale, so *"the SIGN survives in the printed value, which is the only place it can"* (`BOB-39`). **`d.Value = Formatted(i, v)` is handed the signed `v`.** **Would have failed:** `Formatted(i, Math.Abs(v))` |
+| **28 VOCABULARY** | **CLEAN.** ⭐ **Zero raw non-ASCII characters** in any string literal in `VehicleOverviewContent.cs` — the project's `"°C"`-as-an-escape discipline holds. Visible vocabulary is internally consistent: rail titles are all upper-case subsystem names; the state words are Title Case throughout (`Attached`, `Armed`, `Separated`, `Unscheduled`, `Stowed`, `Drogues Out`, `Mains Out`, `Released`) — **one convention, used consistently.** **Would have failed:** a raw `°` or a mixed-case set |
+| **31 SCREEN** | **CLEAN in design space, and it is F-1 that makes this section interesting.** Every constant is `OffX/OffY + design × K`, so nothing moves between 1406 and 1420 — confirmed empirically by §19's 7-pixel result. ⛔ **The one place a constant DOES move is 1405, where the limiting axis flips** (`K 1.333017`, `OffX 0.3036`) — **and that is the size the checks run at** |
+| **32 THE EYE** | **DONE — and the report now has its over/under.** Screen 1 over screen 2 over their difference, at matched design scale, plus the Overview-over-base difference map. ⭐ **The eye and the instrument agree here**: the two screens are indistinguishable in design space, and the inherited shell does not move |
+| **30 RENDERER** | ⛔⛔ **BLOCKED — and it is the honest ceiling on this whole run.** Everything above is the **GDI+ preview**. The game's GL painter was never exercised; `install` is not permitted. [[S75]] is the precedent — the preview ignored asset tint entirely and every render before 2026-09-04 was inadmissible. ⭐ **By the brief's own rule, preview-only is a BLOCKED, not a CLEAN.** F-13's four-of-ten ink scatter is precisely the kind of thing that resolves one way on glass and the other way here |
+
+---
+
+## 📋 THE FULL SECTION TALLY — 32 of 32 RECORDED
+
+```
+FOUND    1  2  3  5  7 13 17 21 22 23 27                    (11)
+CLEAN    4  6  8  9 10 11 12 14 15 16 18 19 20 24 25 26 28 29 31 32   (20)
+BLOCKED 30                                                   (1)
+```
+⛔ **The page is NOT declared clean, and that is a deliberate verdict, not an omission.** §30 is
+blocked, and three findings (F-1, F-8, F-9) are in the documents every *later* page inherits.
+
+⭐⭐ **THE ONE-LINE SUMMARY: the shipped page is in very good shape; its SPECIFICATION and its
+INSTRUMENTS are not.** Every defect that reaches pixels is sub-pixel or owner-ruled. **F-1, F-8, F-9 and
+F-10 are all defects in the documents and checks that the next page will be built from** — which is
+exactly where the brief predicted the expensive ones would be.
+
+---
+
+## ❓ QUESTIONS — carried forward and new
+
+```
+Q: QC-7  | FACT  | F-1: derive the check sizes from DeriveScreens(), or type 1406/1420?     OPEN
+Q: QC-8  | TASTE | F-7: the control pill                          🟢 CLOSED — "the pill is intended, keep it"
+Q: QC-9  | FACT  | F-2/F-13: is the ink scatter a preview font metric or wrong constants?
+         |         ⛔ Cannot be settled without glass (§30).                                 OPEN
+Q: QC-10 | GATE  | F-6: group_65.png + line_85..94.png are drawn by nothing. Keep or delete? OPEN
+Q: QC-11 | FACT  | I-3: MD5SUMS.txt sits inside the folder it seals. Move it out?            OPEN
+Q: QC-12 | TASTE | F-12: status dim #555779 is text at 2.34 contrast — the least legible ink
+         |         on the page. Deliberate recession, or lift it? And should the two ALARM
+         |         colours (3.19 / 3.77) be the least legible severities on the page?        NEW
+Q: QC-13 | FACT  | F-11: add a longest-string fixture? The tightest measured gap is 38.2
+         |         design px on fixture data, and NET PWR is signed.                         NEW
+```
+⭐ The overnight-loop questions **`QC-2`, `QC-4`, `QC-5`, `QC-6`** remain open — see the handover above.
