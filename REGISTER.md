@@ -30466,3 +30466,132 @@ of this prompt states S258 left **26,720** checks; I measure **24,918** at `4b57
 that produced every earlier figure in this register (24,769 → 24,799 → 24,810 → 24,900 → 24,905 →
 24,918 → 24,922). ⛔ Still cannot reproduce the overseer's number, still not matching it; "count does
 not fall" is applied against my own consistent measure.
+
+---
+
+### S260 [O] Make the finished Vehicle Overview reachable in the capsule — **DONE 2026-09-10 — ROUTED AS `UiPage.VehicleOverviewV2 = 36`, AND THE BUDGET RAISED SO IT DOES NOT DRAW HALF OF ITSELF IN SILENCE. ALL SUITES PASSED (24,959 checks, up from 24,922), 9/10 mutants killed (the tenth is not killable today and says so), previewdiff 1 of 140. ⛔ NOT INSTALLED — ready when the owner says.** — [overseer `PROMPT_ROUTE_OVERVIEW.md`, 2026-09-10; branch `rebuild/base-screens`]
+
+🟢 **OWNER, 2026-09-10:** he asked whether installing would *"save the screen in the game"*. ⛔ It would
+not have — the page was referenced only by `PreviewMain.cs`. He then said **"WORD!"** to routing it.
+
+#### ⛔⛔ THE ONE THAT WOULD HAVE FAILED SILENTLY
+
+```
+page cost   VehicleOverviewContent.Commands + BasePageIcon.Commands = 1385
+painter     new DisplayList(Pages.Commands + ChromeBar.Commands + 4), FigmaUI.Commands = 380
+shortfall                                                              1005
+```
+⛔ **`DisplayList.Add` does not grow and does not throw** — `if (count >= cmds.Length) { Overflowed =
+true; return; }`. It **drops the command and carries on.** Routed as-is the page would have drawn its
+first 380 commands and stopped: half the dials, nothing after them, **no error and no log**.
+⚠ `DisplayList.cs`'s own header names this class — *"the project's three worst defects were all things
+that failed INVISIBLY."*
+⭐ **`FigmaUI.Commands` is now DERIVED**, never typed, so a dial gaining one dot cannot put it back
+under: `OverviewCost > 380 ? OverviewCost + 8 : 380`. ⛔ The 380 arm stays — it is the old worst case
+(`CoverPage`'s map view) and dropping it would silently shrink the budget if this page ever got lighter.
+
+#### ⭐ AS BUILT, MEASURED — printed by the suite itself, not restated from intent
+
+```
+FigmaUI.Commands   1393        page drew 1328 commands   (worst-case cost 1385)
+Overflowed         False       ...and at the old 380 it DOES overflow  (the falsification)
+PageCount          37          Titles.Length 37, last title "VEHICLE OVERVIEW V2"
+menu entries       26          rows 9   cell 158.7 vs LabelSize 32
+```
+
+#### ⛔ APPENDED, NEVER RENUMBERED — AND HIS FLYABLE PAGE IS PINNED
+
+`VehicleOverviewV2 = 36`, appended. ⛔ **`UiPage.Vehicle = 15` is untouched** and still dispatches to the
+old `VehicleOverviewPage` — his standing instruction is *"keep our current screens functioning for
+reference and so i can flight test whilst the screens [are] rebuilt."*
+⭐ Pinned **by value AND by behaviour**, because "15 still exists" and "15 still draws the old overview"
+are two different claims — plus a third that catches the dangerous case: **15 and 36 must draw
+DIFFERENT pages.** Mutation M6 repoints 15 at the rebuild and is killed by exactly that.
+
+#### ⛔⛔ THE FALSE GREEN — AND MY FIRST CHECK FOR IT WAS TOO WEAK
+
+§7.1: `ChecksComplete = false` leaves every marker grey and every status word dim. Hardcoding `true` so
+the page "looks right" would paint an all-systems-check **that nothing computed**. ⚠ That is `S130`.
+⭐ It is derived from `PageState.Valid` — the same flag `PreviewMain`'s dead-feed fixture clears.
+⚠⚠ **THE FIRST VERSION OF THE CHECK DID NOT CATCH IT, AND MUTANTS M4/M5 WALKED THROUGH.** It built the
+page on a live feed and a dead one and asserted the two DIFFER — which they do regardless, because
+`Valid` also drives dashes and values all over the page. ⛔ **A real comparison pointed at a question it
+cannot answer — the same shape as S259's, two tasks running.**
+⭐ **THE ISOLATING FORM:** hold the feed constant and vary ONLY `ChecksComplete`, by drawing the page
+directly with the flag forced. The routed page must **equal** the forced-`Valid` drawing and **differ**
+from the forced-opposite one, in both feed states. **M4 and M5 are now killed.**
+⚠⚠ **TELL THE OWNER:** on a dead or pre-launch feed the rail reads **grey and dim, and that is
+CORRECT, not broken.** He has only ever seen this page against a live fixture.
+
+#### ⚠⚠ SIX EXISTING GUARDS FIRED, AND EACH IS RE-POINTED WITH ITS REASON
+
+They are the "a new page must be declared here too" guards, doing their job:
+1. **`PinUiPage`** (enum pinned by ordinal) — appended.
+2. **`Titles` / `PageCount`** — 36 → 37.
+3. **touch-id namespace 199 → 200** — one more `nav.goto`, the Menu card. ⛔ **One, not two:** the page
+   carries no hit map and no `PageAction`, so nothing on it is nameable by the recorder.
+4. **`ActiveBarIcon`** — it fell to `default: return 0` and flagged the **COVER** icon on a vehicle
+   page. ⛔ A wrong answer, not a missing one. Now returns 2, like the two systems deep-views.
+5. **the S147 "five stateless pages" list → six** — its own comment says *"so a sixth cannot join them
+   quietly"*, so it is not quiet: the other five are Figma pages that DECLINE to print vessel state;
+   this one **has no Figma bar to print into**. A different case, recorded as such.
+6. **`BarFollowsItsPage` — exempted, and this is the one worth reading (`BOB-72`).**
+
+#### ⚠⚠ `BOB-72` — THE NAV ICONS ARE LIVE BUT INVISIBLE ON THIS PAGE
+
+The page is drawn on the REBUILD shell, which carries **its own** bottom bar (`BaseBar`). It does not
+draw the Figma bar's five nav icons. ⛔ But `FigmaUI.HitTest` tests `BottomBarHit` **first on every
+page**, so **the five nav targets ARE LIVE there — they are simply invisible**, sitting under the
+rebuild's own bar. ⭐ The crew can navigate away; they cannot see how.
+⛔ **Not fixed here, deliberately:** the page is owner-locked and sealed 2026-09-10, so drawing a Figma
+bar over it is not a change this task may make. Exempting the check and raising it is the honest
+option; pretending the page draws a bar it does not would be the dishonest one.
+
+#### ⭐ THE PAINTER NOW REPORTS AN OVERFLOW — §5, and this task is why it is in scope
+
+`Overflowed` was read in `PreviewMain.cs` and **nowhere in `plugin/src/`**, so in the game an overflow
+was completely silent. One guarded `Debug.LogWarning` after the build, **said ONCE per page** (the
+`ImageStore` precedent, S40 — at 60 Hz on three screens a per-frame warning buries what it reports).
+⛔ Nothing else in `ScreenPainter` changed.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,959** checks (S259 left 24,922 by my measure — `BOB-71`) |
+| mutation | **10 raised, 9 KILLED** — incl. M1 the budget left at 380 (the silent half-drawn page), M4/M5 the false green both ways, M6 the flyable page repointed, M7 renumbered instead of appended, M9 left a placeholder, M10 the wrong bar icon |
+| ⚠ **M3 SURVIVED, and it is not killable today** | dropping the `: 380` arm gives the identical 1393, because `OverviewCost > 380`. **No runtime observation can distinguish the two.** ⛔ Stated rather than dressed up — and the rule the arm exists for is now asserted (`FigmaUI.Commands >= 380`), so it fires on the only day it could matter |
+| `FigmaUINavTest.MenuGridFits()` | **passes** — no shrink, no pagination needed |
+| `previewdiff HEAD` | **1 of 140 changed: `ui_menu.png`** |
+| install | ⛔ **NOT DONE.** ⭐ **It is ready to install and that is the owner's call** — the live folder still holds the build he flies |
+
+#### ⛔ THE MENU IS A PAGE HE FLIES, AND IT CHANGED — PROVED, NOT ASSUMED
+
+⚠ `ui_menu.png` is the one changed page, and the Menu **is** flown. The question that matters is whether
+it **gained a card** or **re-flowed** — a reflow would move all 25 existing cards.
+⭐ **It cannot have, and this is an ARITHMETIC PROOF, stated as such rather than as a pixel
+measurement:** `Rows = ceil(Entries / 3)`, and **25 and 26 entries both give 9**. `CellRect(i)` depends
+only on the index, `Cols` and `Rows`, so every existing card is at the identical rect and the 26th is
+appended. Asserted in the suite.
+⚠ **`BOB-73` — §4's grid arithmetic was wrong and the conclusion was still right.** It predicted
+*"28 → 29 entries, Rows = 10, CellHeight = 140.4"*. **Measured: 26 entries, 9 rows, cell 158.7.** Its
+formula was right for the count it assumed; the count was not. ⭐ The real grid has **more** headroom
+than claimed, not less.
+
+#### ⭐ WHAT WAS **NOT** TOUCHED
+
+⛔ **No change to the Overview page itself** — it is locked and sealed; not one geometry, colour, asset
+or constant moved. ⛔ No repointing, renumbering or deletion of any existing page. ⛔ No hit map, no
+`PageAction`, no clickable controls on the new page — it stays a renderer; the toggle's four states are
+DRAWN and switched by nothing. ⛔ No tab-strip work, no docking-cam work (`S255` tabled), no MechJeb,
+craft dump, cfg or craft edit. ⛔ Nothing else in `ScreenPainter`.
+
+#### ⚠ QUESTIONS RAISED — `BOB-72`, `BOB-73`
+
+`BOB-72` **GATE** — on the routed page the Figma nav bar's five targets are LIVE but INVISIBLE (the
+rebuild shell draws its own bar there). The crew can navigate away without seeing how. Fixing it means
+drawing something over a locked page, which is the owner's call. ·
+`BOB-73` **FACT** — §4 predicted 29 menu entries / 10 rows / cell 140.4; measured 26 / 9 / 158.7. Same
+conclusion, more headroom, wrong inputs. ·
+⚠ `BOB-71` **stands**: §6 states S259 left **26,724** checks; I measure **24,922** at `09ae5e1` on the
+counter that has produced every figure in this register since S251.

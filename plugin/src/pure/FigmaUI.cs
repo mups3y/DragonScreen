@@ -84,7 +84,19 @@ namespace DragonScreen
         // could engage the autopilot or clear a gate — the owner found it by trying to fly. Built in the
         // real 4.0xx procedure grammar (`VrioTestPage` 4.700, `SuitCheckPage` 4.011) on his ruling of
         // 2026-09-07, quoted in full in `pure/CrewGatePage.cs`. Appended, never renumbered.
-        CrewGate = 35
+        CrewGate = 35,
+        // ⭐⭐ S260, 2026-09-10 — the REBUILT Vehicle Overview (`rebuild/base-screens`), owner-declared
+        // 100 % finished and sealed at `Desktop/BOB/LOCKED/VEHICLE_OVERVIEW_2026-09-10/`. Until this
+        // append it existed only in the PREVIEW: nothing in the game could reach it, so installing
+        // would not have put it on the glass. The owner: **"WORD!"** to routing it so he can look at
+        // it in the capsule.
+        // ⛔⛔ THIS IS A SECOND PAGE BESIDE `Vehicle = 15`, NOT A REPLACEMENT. 15 is the OLD overview
+        // and is what he FLIES — his standing instruction is *"keep our current screens functioning
+        // for reference and so i can flight test whilst the screens [are] rebuilt."* ⛔ 15 is not
+        // repointed, renumbered or deleted.
+        // ⛔ Appended, never renumbered — the int persists per screen, so moving one silently moves
+        // every saved selection.
+        VehicleOverviewV2 = 36
     }
 
     public enum NavAct { None, Goto, Back, Forward }
@@ -105,9 +117,27 @@ namespace DragonScreen
         /// <summary>Worst-case commands any page here emits - the Cover's MAP camera view is now the
         /// heaviest (CoverPage.Commands, its ground track a command per segment) - plus the back-chevron
         /// overlay. The painter sizes its list to the max of this and the old model.</summary>
-        public const int Commands = 380;   // +BottomBar.Commands (S176: the bar is 19 commands, not 2)
+        // ⛔⛔ S260 — ~~`public const int Commands = 380;`~~ SUPERSEDED IN PLACE (C1.16), AND THIS IS
+        // THE ONE CHANGE WITHOUT WHICH ROUTING THE OVERVIEW WOULD HAVE FAILED **SILENTLY**.
+        // The rebuilt page costs `VehicleOverviewContent.Commands + BasePageIcon.Commands` — the eight
+        // dials alone are 8 × 148 = 1,184, because §4.1's track is 135 SEPARATE DOTS per dial and is
+        // drawn faithfully rather than approximated by an `ArcBand`. Against the old 380 that is a
+        // shortfall of about a thousand.
+        // ⛔ `DisplayList.Add` DOES NOT GROW AND DOES NOT THROW — `if (count >= cmds.Length) {
+        // Overflowed = true; return; }`. It DROPS the command and carries on. Routed against 380 the
+        // page would have drawn its first 380 commands and stopped: half the dials, nothing after
+        // them, no error and no log. ⚠ `DisplayList.cs`'s own header names this class of bug — *"the
+        // project's three worst defects were all things that failed INVISIBLY."*
+        // ⭐ DERIVED, NEVER TYPED. A literal 1400 is a number nobody re-derives on the next append; a
+        // dial gaining one dot would put us back under budget without a word.
+        // ⚠ A C# `const` may use `?:` but not `Math.Max`, hence the shape.
+        // ⛔ THE 380 ARM STAYS. It is the old worst case — `CoverPage`'s MAP view, a command per ground
+        // -track segment — and dropping it would silently SHRINK the budget if this page ever got
+        // lighter than that.
+        const int OverviewCost = VehicleOverviewContent.Commands + BasePageIcon.Commands;
+        public const int Commands = OverviewCost > 380 ? OverviewCost + 8 : 380;
 
-        public const int PageCount = 36;   // S213 appended CrewGate
+        public const int PageCount = 37;   // S213 appended CrewGate; S260 appended VehicleOverviewV2
 
         const float RefW = 3427f, RefH = 2112f;
 
@@ -149,7 +179,7 @@ namespace DragonScreen
             "VEHICLE — AVIONICS", "VEHICLE — GNC", "VEHICLE — THERMAL",
             "MANUAL CHUTE DEPLOY", "MANUAL DOCKING", "RENDEZVOUS", "DEORBIT BURN PREP", "ENTRY",
             "SYSTEMS TREE", "SYSTEMS P&ID", "ASCENT / LAUNCH", "NAV / ORBIT PLOT",
-            "MISSION SEQUENCE"
+            "MISSION SEQUENCE", "VEHICLE OVERVIEW V2"
         };
 
         public static string Name(UiPage p)
@@ -268,6 +298,9 @@ namespace DragonScreen
                 case UiPage.SystemsPid:        SystemsPidPage.Build(dl, w, h, s); break;
                 case UiPage.Ascent:            AscentPage.Build(dl, w, h, s); break;
                 case UiPage.NavOrbitPlot:      NavOrbitPlotPage.Build(dl, w, h, s); break;
+                // ⭐⭐ S260 — the rebuilt overview, routed. ⛔ `UiPage.Vehicle` (15) above is untouched
+                // and still draws `VehicleOverviewPage`: this is a second page, not a replacement.
+                case UiPage.VehicleOverviewV2: VehicleOverviewContent.Draw(dl, w, h, s, OverviewUi(s)); break;
                 default:               PlaceholderPage.Build(dl, w, h, Name(page)); break;
             }
             BottomBarMarker(dl, w, h, page);
@@ -294,6 +327,36 @@ namespace DragonScreen
         /// never deleted/renumbered per UiPage's own comment, they just don't get a card until a real
         /// Build case lands), and FigmaUINavTest cross-checks it against what Build actually draws so
         /// the two can never quietly drift apart. Mirror any change to the switch above here too.</summary>
+        /// <summary>
+        /// ⭐⭐ S260 — the three caller-owned inputs the rebuilt overview takes, DERIVED from the same
+        /// `PageState` every other page reads.
+        ///
+        /// ⛔⛔ `ChecksComplete` IS NEVER A LITERAL `true`, AND THAT IS THE WHOLE POINT OF THIS METHOD.
+        /// §7.1: false leaves every marker grey and every status word dim. Passing `true` so the page
+        /// "looks right" in the capsule would paint a **green all-systems-check that nothing computed**
+        /// — a false green, on a page whose entire job is to say whether the vehicle is well.
+        /// ⚠ That is `S130`, one of the three defects `DisplayList.cs` names by name, and it is the
+        /// single worst thing this routing task could have shipped.
+        /// ⭐ `PageState.Valid` is the honest source: it is the same flag `PreviewMain`'s dead-feed
+        /// fixture clears (`dead.Valid = false`), so the page already has a rendered, approved answer
+        /// for what "no feed" looks like.
+        /// ⚠⚠ **CONSEQUENCE THE OWNER MUST BE TOLD:** on a dead or pre-launch feed the rail reads GREY
+        /// AND DIM. ⛔ That is CORRECT, not broken — he has only ever seen this page against a live
+        /// fixture.
+        ///
+        /// ⭐ The other two are `false` because §10.2 makes this a RENDERER: the SYSTEMS/CABIN toggle
+        /// and MORE are DRAWN in all four states and proved by the suite, but nothing switches them —
+        /// there is no hit map and no `PageAction` on this page, by design.
+        /// </summary>
+        static OverviewInputs OverviewUi(PageState s)
+        {
+            OverviewInputs ui = new OverviewInputs();
+            ui.ChecksComplete = s.Valid;     // ⛔ NEVER a literal true — grey on a dead feed is TRUTHFUL
+            ui.CabinSelected  = false;       // §10.2 a renderer: the toggle is DRAWN, not switched
+            ui.MoreActive     = false;
+            return ui;
+        }
+
         public static bool IsPlaceholder(UiPage page)
         {
             switch (page)
@@ -308,6 +371,7 @@ namespace DragonScreen
                 case UiPage.SystemsTree: case UiPage.SystemsPid: case UiPage.Ascent:
                 case UiPage.NavOrbitPlot:
                 case UiPage.CrewGate:
+                case UiPage.VehicleOverviewV2:   // S260 — it has a real case above, so it gets a card
                     return false;
                 default:
                     return true;
@@ -327,6 +391,11 @@ namespace DragonScreen
                 // The two systems deep-views are vehicle pages by subject even though they carry no
                 // subsystem tab bar (see the UiPage comment), so the bar marker names their parent.
                 case UiPage.SystemsTree: case UiPage.SystemsPid:
+                // ⭐ S260 — the rebuilt overview is a vehicle page by subject, exactly as the two
+                // systems deep-views above are. ⛔ Without this line it fell to `default: return 0`
+                // and would have flagged the COVER icon on a vehicle page — a wrong answer, not a
+                // missing one.
+                case UiPage.VehicleOverviewV2:
                     return 2;
                 case UiPage.SuitCheck: return 3;
                 case UiPage.Audio: case UiPage.Cabin: case UiPage.AudioVideo: return 4;

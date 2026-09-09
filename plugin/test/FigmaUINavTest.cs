@@ -39,6 +39,11 @@ public static class FigmaUINavTest
         MarginAffordances();
         RangeRingsOnTop();
         MenuGridFits();
+        // ⭐⭐ S260 — routing the rebuilt Vehicle Overview into the game. ⛔ The load-bearing one is
+        // the BUDGET: the page costs ~1,385 commands against a painter that allocated 380, and
+        // `DisplayList.Add` drops silently rather than throwing, so routed as-is it would have drawn
+        // half its dials and stopped with no error and no log.
+        TheRebuiltOverviewIsRoutedAndFitsItsBudget();
         PlaceholderUnreachable();
         CoverCamera();
         SpeccedPages();
@@ -1762,6 +1767,216 @@ public static class FigmaUINavTest
     }
 
     // ---- S107 / QC M-01: the grid is derived from the data, and stays legible ----
+    // =============================================================================================
+    //  ⭐⭐ S260 — THE REBUILT VEHICLE OVERVIEW, ROUTED. `UiPage.VehicleOverviewV2 = 36`.
+    //
+    //  🟢 OWNER, 2026-09-10: he asked whether installing would "save the screen in the game". It
+    //  would not have — the page was referenced only by `PreviewMain.cs`. He then said **"WORD!"** to
+    //  routing it. ⛔ `UiPage.Vehicle = 15` is the OLD overview and is STILL WHAT HE FLIES; this is a
+    //  second page beside it, and 15 is pinned below so a later task cannot quietly repoint it.
+    // =============================================================================================
+    static void TheRebuiltOverviewIsRoutedAndFitsItsBudget()
+    {
+        const int VW = 2560, VH = 1406;
+        PageState st = new PageState(); st.Valid = true; st.Phase = "ORBIT";
+
+        // ---- ⛔⛔ THE BUDGET. THE WHOLE REASON THIS TASK IS NOT A TWO-LINE CHANGE. ----------------
+        // ⚠ ASSERTED AS AN INEQUALITY AGAINST THE DERIVATION, never against a literal 1385: the point
+        // is that it stays true when a dial gains a dot, not that it is true today.
+        int pageCost = VehicleOverviewContent.Commands + BasePageIcon.Commands;
+        Check("S260 ⛔⛔ the painter's budget covers the heaviest page, derived not typed",
+              FigmaUI.Commands >= pageCost,
+              "budget " + FigmaUI.Commands + " vs page " + pageCost);
+        // ⛔ AND IT IS NOT A COINCIDENCE OF THE OLD NUMBER: 380 could never have covered it.
+        Check("S260 ...and the old 380 could not have — which is what made this silent",
+              pageCost > 380, "page cost " + pageCost);
+
+        // ---- ⛔⛔ THE DEFECT ITSELF, EXPRESSED AS AN ASSERTION --------------------------------
+        // `DisplayList.Add` does not grow and does not throw: `if (count >= cmds.Length) { Overflowed
+        // = true; return; }`. It DROPS the command. So the question is not "is the budget big enough"
+        // in the abstract — it is "does THIS page, built through the REAL dispatch, overflow".
+        DisplayList real = new DisplayList(FigmaUI.Commands);
+        FigmaUI.Build(real, UiPage.VehicleOverviewV2, VW, VH, st, MapProjection.Default());
+        Check("S260 ⛔⛔ the page builds through the real dispatch WITHOUT overflowing",
+              !real.Overflowed, "capacity " + real.Capacity + ", drew " + real.Count);
+        Check("S260 ...and it actually drew the page, not a stub",
+              real.Count > 1000, "only " + real.Count + " commands");
+
+        // ⭐ AND THE CHECK IS PROVED ABLE TO FAIL. A check that cannot fail is not a check (S220).
+        DisplayList starved = new DisplayList(380);
+        FigmaUI.Build(starved, UiPage.VehicleOverviewV2, VW, VH, st, MapProjection.Default());
+        Check("S260 ⭐ ...and at the OLD 380 it DOES overflow — the falsification",
+              starved.Overflowed, "380 was enough after all, so the check above proves nothing");
+
+        // ---- THE ENUM AND THE TITLE TABLE ------------------------------------------------------
+        Check("S260 PageCount is 37", FigmaUI.PageCount == 37, "" + FigmaUI.PageCount);
+        Check("S260 ⛔ VehicleOverviewV2 is 36 — APPENDED, never renumbered",
+              (int)UiPage.VehicleOverviewV2 == 36, "" + (int)UiPage.VehicleOverviewV2);
+        // ⚠ `Name()` returns "?" past the end, so a short table degrades QUIETLY — a page with no
+        // title would get a Menu card reading "?" and nobody would see a failure.
+        Check("S260 ⛔ every page has a title — Titles.Length == PageCount",
+              FigmaUI.Name((UiPage)(FigmaUI.PageCount - 1)) != "?"
+              && FigmaUI.Name((UiPage)FigmaUI.PageCount) == "?",
+              "last title " + FigmaUI.Name((UiPage)(FigmaUI.PageCount - 1)));
+        Check("S260 ...and it is the new page's own title",
+              FigmaUI.Name(UiPage.VehicleOverviewV2) == "VEHICLE OVERVIEW V2",
+              FigmaUI.Name(UiPage.VehicleOverviewV2));
+
+        // ---- ⛔⛔ THE OWNER'S FLYABLE PAGE IS UNTOUCHED ------------------------------------------
+        // His standing instruction: *"keep our current screens functioning for reference and so i can
+        // flight test whilst the screens [are] rebuilt."* ⛔ Pinned by VALUE and by BEHAVIOUR, because
+        // "15 still exists" and "15 still draws the old overview" are two different claims.
+        Check("S260 ⛔ UiPage.Vehicle is still 15", (int)UiPage.Vehicle == 15, "" + (int)UiPage.Vehicle);
+        DisplayList viaEnum = new DisplayList(FigmaUI.Commands);
+        FigmaUI.Build(viaEnum, UiPage.Vehicle, VW, VH, st, MapProjection.Default());
+        DisplayList direct = new DisplayList(FigmaUI.Commands);
+        VehicleOverviewPage.Build(direct, VW, VH, st);
+        Check("S260 ⛔ ...and it still dispatches to the OLD VehicleOverviewPage",
+              viaEnum.Count >= direct.Count && direct.Count > 0,
+              "via enum " + viaEnum.Count + ", direct " + direct.Count);
+        // ⛔ AND THE TWO PAGES ARE NOT THE SAME DRAWING — if a later task repointed 15 at the rebuild
+        // this would go green on the checks above and silently take his flyable page away.
+        Check("S260 ⛔⛔ ...and 15 and 36 are DIFFERENT pages, not one page reached twice",
+              viaEnum.Count != real.Count, "both drew " + real.Count + " commands");
+
+        // ---- ⛔⛔ THE FALSE GREEN. THE WORST THING THIS TASK COULD HAVE SHIPPED. -----------------
+        // §7.1: `ChecksComplete = false` leaves every marker grey and every status word dim. Passing a
+        // literal `true` so the page "looks right" would paint an all-systems-check that nothing
+        // computed. ⚠ That is S130, one of the three defects `DisplayList.cs` names by name.
+        // ⭐ DRIVEN, NOT ASSERTED AT: the same page is built on a LIVE feed and a DEAD one and the two
+        // must DIFFER. A hardcoded `true` makes them identical, and that is the only thing this can
+        // catch — no static read of the source would.
+        // ⚠⚠ THE FIRST VERSION OF THIS CHECK WAS TOO WEAK AND A MUTANT WALKED THROUGH IT. It built the
+        // page on a live feed and a dead one and asserted the two DIFFER — which they do regardless,
+        // because `PageState.Valid` also drives dashes and values all over the page. It could not see
+        // `ChecksComplete` at all. ⛔ Recorded rather than quietly replaced: it is the same shape as
+        // S259's — a real comparison pointed at a question it cannot answer.
+        // ⭐ THE ISOLATING FORM: hold the FEED constant and vary ONLY `ChecksComplete`, by drawing the
+        // page directly with the flag forced. Then the ROUTED page must equal the forced-`Valid` one
+        // and DIFFER from the forced-opposite one. That pins the derivation in both directions and
+        // nothing else can satisfy it.
+        PageState dead = new PageState(); dead.Valid = false; dead.Phase = "ORBIT";
+        DisplayList deadRouted = new DisplayList(FigmaUI.Commands);
+        FigmaUI.Build(deadRouted, UiPage.VehicleOverviewV2, VW, VH, dead, MapProjection.Default());
+
+        Check("S260 ⛔⛔ on a DEAD feed the routed page is the CHECKS-INCOMPLETE drawing",
+              SameInk(deadRouted, DirectOverview(VW, VH, dead, false)),
+              "the routed dead page does not match ChecksComplete=false — a false green");
+        Check("S260 ⛔⛔ ...and is NOT the checks-complete one — the mutant that hardcodes true",
+              !SameInk(deadRouted, DirectOverview(VW, VH, dead, true)),
+              "a dead feed drew the HEALTHY page: green that nothing computed (S130)");
+        Check("S260 ⛔ on a LIVE feed it IS the checks-complete drawing",
+              SameInk(real, DirectOverview(VW, VH, st, true)),
+              "the routed live page does not match ChecksComplete=true");
+        Check("S260 ⛔ ...and is NOT the incomplete one — the mutant that hardcodes false",
+              !SameInk(real, DirectOverview(VW, VH, st, false)),
+              "a live feed drew the grey page");
+
+        int deadInk = 0;
+        for (int i = 0; i < deadRouted.Count; i++) if (deadRouted.At(i).Kind == DrawKind.Text) deadInk++;
+        Check("S260 ...and both feeds still draw a whole page (grey is not blank)",
+              deadRouted.Count > 1000 && deadInk > 0,
+              "dead " + deadRouted.Count + " cmds / " + deadInk + " texts");
+
+        // ---- ⛔ THE BAR MARKER NAMES THE RIGHT ICON ---------------------------------------------
+        // Without its own case in `ActiveBarIcon` the page fell to `default: return 0` and flagged the
+        // COVER icon on a vehicle page — a WRONG answer, not a missing one, and invisible unless asked.
+        // ⭐ Asked BEHAVIOURALLY: the marker's own x must land where `UiPage.Vehicle`'s does.
+        Check("S260 ⛔ the bar marker names the VEHICLE icon, as it does for UiPage.Vehicle",
+              MarkerX(real) >= 0f && Math.Abs(MarkerX(real) - MarkerX(viaEnum)) < 0.01f,
+              "v2 marker at " + MarkerX(real) + ", Vehicle's at " + MarkerX(viaEnum));
+        Check("S260 ...and that is NOT where the Cover's marker sits, so the check can fail",
+              Math.Abs(MarkerX(real) - MarkerX(BuildPage(UiPage.Cover, VW, VH, st))) > 0.01f,
+              "the vehicle and cover markers share an x, so this proves nothing");
+
+        // ---- ⛔ THE 380 FLOOR --------------------------------------------------------------------
+        // ⚠ HONEST LIMIT, STATED: today `OverviewCost > 380`, so dropping the `: 380` arm changes
+        // NOTHING and no runtime check can see it. This asserts the RULE the arm exists for — the
+        // budget may never fall below the old worst case — so it fires on the day the page gets
+        // lighter and the arm is missing, which is the only day it could matter.
+        Check("S260 ⛔ the budget never falls below the old worst case (CoverPage's map view)",
+              FigmaUI.Commands >= 380, "" + FigmaUI.Commands);
+
+        // ---- ⛔ THE MENU IS A PAGE THE OWNER FLIES, AND IT CHANGES. PROVED, NOT ASSUMED. ---------
+        // `previewdiff` reports `ui_menu.png` as the ONE changed page. The question that matters is
+        // whether it GAINED A CARD or RE-FLOWED — a reflow would move all 25 existing cards on a page
+        // he uses. ⭐ It cannot have: `Rows` is `ceil(Entries/Cols)` and `CellRect` depends only on
+        // the index, `Cols` and `Rows`, so if `Rows` is unchanged every existing card is at the
+        // identical rect and the new one is appended.
+        // ⚠ THIS IS AN ARITHMETIC PROOF, NOT A PIXEL MEASUREMENT, and it is stated as such: 25 and 26
+        // entries both give 9 rows, so the grid did not reflow.
+        Check("S260 the menu holds 26 entries after the append", MenuPage.Entries.Length == 26,
+              "" + MenuPage.Entries.Length);
+        Check("S260 ⛔ ...and 25 and 26 entries BOTH give 9 rows — so no existing card moved",
+              (25 + 3 - 1) / 3 == 9 && (26 + 3 - 1) / 3 == 9, "rows changed");
+        Check("S260 ...so the cell height is the 9-row one, unshrunk",
+              Math.Abs(MenuPage.CellHeight - ((1830f - 210f) - 24f * 8f) / 9f) < 0.01f,
+              "" + MenuPage.CellHeight);
+        // ⚠ §4 of the prompt predicted 29 entries / 10 rows / cell 140.4. Measured: 26 / 9 / 158.7.
+        // ⛔ The conclusion it drew is unchanged and in fact safer — MORE headroom, not less — but the
+        // count it was drawn from was wrong, so the numbers are reported as MEASURED. `BOB-73`.
+        Check("S260 ...and that is MORE headroom than the prompt predicted, not less",
+              MenuPage.CellHeight > 140.4f, "" + MenuPage.CellHeight);
+
+        // ⭐ THE AS-BUILT NUMBERS, PRINTED. The checks above prove them; this line is so the report
+        // can quote what was MEASURED rather than what was intended, without a second instrument.
+        Console.WriteLine("    [S260] budget " + FigmaUI.Commands + "   page " + real.Count
+                          + " cmds (cost " + pageCost + ")   overflowed " + real.Overflowed
+                          + "   PageCount " + FigmaUI.PageCount
+                          + "   menu entries " + MenuPage.Entries.Length
+                          + " rows " + ((MenuPage.Entries.Length + 2) / 3)
+                          + " cell " + MenuPage.CellHeight.ToString("0.0")
+                          + " vs label " + MenuPage.LabelSize);
+    }
+
+    /// <summary>S260 — the overview drawn DIRECTLY with `ChecksComplete` forced, so the routed page
+    /// can be compared against a known answer instead of against itself.</summary>
+    static DisplayList DirectOverview(int vw, int vh, PageState s, bool complete)
+    {
+        OverviewInputs ui = new OverviewInputs();
+        ui.ChecksComplete = complete; ui.CabinSelected = false; ui.MoreActive = false;
+        DisplayList dl = new DisplayList(FigmaUI.Commands);
+        VehicleOverviewContent.Draw(dl, vw, vh, s, ui);
+        return dl;
+    }
+
+    static DisplayList BuildPage(UiPage p, int vw, int vh, PageState s)
+    {
+        DisplayList dl = new DisplayList(FigmaUI.Commands);
+        FigmaUI.Build(dl, p, vw, vh, s, MapProjection.Default());
+        return dl;
+    }
+
+    /// <summary>S260 — do two lists draw the same ink? ⚠ Compared over the SHORTER list: the routed
+    /// page carries one extra command (`BottomBarMarker`) that the direct draw does not, and that
+    /// difference is chrome, not the page.</summary>
+    static bool SameInk(DisplayList a, DisplayList b)
+    {
+        int n = Math.Min(a.Count, b.Count);
+        if (n == 0) return false;
+        for (int i = 0; i < n; i++)
+        {
+            DrawCmd x = a.At(i), y = b.At(i);
+            if (x.Kind != y.Kind) return false;
+            if (Math.Abs(x.A - y.A) > 0.002f || Math.Abs(x.B - y.B) > 0.002f
+                || Math.Abs(x.C - y.C) > 0.002f || Math.Abs(x.D - y.D) > 0.002f) return false;
+            if (Math.Abs(x.Colour.R - y.Colour.R) > 0.002f
+                || Math.Abs(x.Colour.G - y.Colour.G) > 0.002f
+                || Math.Abs(x.Colour.B - y.Colour.B) > 0.002f
+                || Math.Abs(x.Colour.A - y.Colour.A) > 0.002f) return false;
+        }
+        return true;
+    }
+
+    /// <summary>S260 — the x of the bottom bar's marker rect on a built page, or -1. It is the LAST
+    /// command `FigmaUI.Build` appends, so it is found from the end.</summary>
+    static float MarkerX(DisplayList dl)
+    {
+        for (int i = dl.Count - 1; i >= 0; i--)
+            if (dl.At(i).Kind == DrawKind.Rect) return dl.At(i).A;
+        return -1f;
+    }
+
     static void MenuGridFits()
     {
         int n = MenuPage.Entries.Length;
@@ -2753,8 +2968,14 @@ public static class FigmaUINavTest
         // The bar is the one thing the crew see from anywhere, so the guard has to be page-wide.
         // ⚠ FIVE PAGES LEGITIMATELY DASH - they do not receive a PageState at all - and naming them
         // here is the record of which five, so a sixth cannot join them quietly.
+        // ⚠⚠ S260 — A SIXTH JOINS THE LIST, AND THE COMMENT ABOVE SAYS THAT MUST NOT HAPPEN
+        // QUIETLY, SO HERE IS WHY IT IS NOT QUIET. The other five are Figma pages that CHOOSE not to
+        // print vessel state in the bar. `VehicleOverviewV2` is a different case entirely: it draws
+        // the REBUILD shell, which has its own bar, so there is no Figma bar on that page to print
+        // CURRENT STATE into. ⛔ It is not a page declining to show state — it is a page the probe
+        // has no bar to read. The distinction matters, so it is recorded rather than folded in.
         UiPage[] stateless = { UiPage.Menu, UiPage.Cabin, UiPage.SuitCheck, UiPage.Procedure,
-                               UiPage.VrioTest };
+                               UiPage.VrioTest, UiPage.VehicleOverviewV2 };
         PageState sweepState = new PageState();
         sweepState.Valid = true; sweepState.Phase = "ENTRY INTERFACE";
         int live = 0, dashed = 0, wrong = 0;
@@ -2770,7 +2991,7 @@ public static class FigmaUINavTest
                                                             + BarValue(dl, VW, VH, BottomBar.FitFor(up)) + "\" exempt="
                                                             + exempt); }
         }
-        Check("every page that receives vessel state prints it in the bar; the five that do not, do not",
+        Check("every page that receives vessel state prints it in the bar; the six that do not, do not",
               wrong == 0, wrong + " page(s) disagreed with the exemption list");
         Check("...and that is most of them, not a handful", live >= 18,
               "only " + live + " pages printed it, " + dashed + " dashed");
@@ -3956,6 +4177,24 @@ public static class FigmaUINavTest
                 if (c.Kind == DrawKind.Image && c.AssetKey == "bar_nav_0")
                 { ix = c.A; iy = c.B; iw = c.C; ih = c.D; }
             }
+            // ⛔⛔ S260 — ONE PAGE IS EXEMPT, AND IT IS EXEMPT BY DESIGN RATHER THAN BY EXCUSE.
+            // `VehicleOverviewV2` is drawn on the REBUILD shell (`BasePageIcon`), which carries its
+            // OWN bottom bar (`BaseBar`, §8 of `SPEC_BASE_SCREENS.md`). It does not draw the Figma
+            // bar's five nav icons, so there is no `bar_nav_0` to find and the three checks below
+            // have no subject.
+            // ⚠⚠ THE CONSEQUENCE IS REAL AND IS RAISED, NOT HIDDEN (`BOB-72`): `FigmaUI.HitTest`
+            // still tests `BottomBarHit` FIRST on every page, so the five nav targets ARE LIVE on this
+            // page — they are simply INVISIBLE, sitting under the rebuild's own bar. The crew can
+            // navigate away; they cannot see how.
+            // ⛔ The page is OWNER-LOCKED (sealed 2026-09-10), so drawing a Figma bar over it is not
+            // a change this task may make. Exempting the check is the honest option; pretending the
+            // page draws a bar it does not would be the dishonest one.
+            if (up == UiPage.VehicleOverviewV2)
+            {
+                Check(up + ": exempt — draws the REBUILD shell's own bar, not the Figma nav bar",
+                      ix < 0f, "it drew a bar_nav_0 after all — the exemption is now wrong");
+                continue;
+            }
             Check(up + ": drew the first nav icon", ix >= 0f, "no bar_nav_0 command");
             if (ix < 0f) continue;
 
@@ -4010,7 +4249,13 @@ public static class FigmaUINavTest
         // ⭐ S213: 16 -> 17. "4.100 Mission Sequence" draws its body with `sx = w/RefW`, so it SPREADS
         // like the other procedure screens. A page that landed in the letterbox half by accident would
         // have read 16/20 here, which is exactly what this count exists to catch.
-        Check("17 page-views spread, 19 letterbox", spread == 17 && boxed == 19,
+        // ⚠ S260: ~~17 spread / 19 letterbox~~ → 17 / 20. `VehicleOverviewV2` falls to `FitFor`'s
+        // default and is counted letterboxed. ⛔ THE COUNT IS BOOKKEEPING FOR THIS PAGE AND NOTHING
+        // MORE, and that is worth saying plainly: the page draws NO Figma bar at all, so its "fit"
+        // decides nothing visible — it decides only where `BottomBarHit` puts the five INVISIBLE nav
+        // targets (`BOB-72`). Left at the default deliberately rather than guessed at, because
+        // choosing a fit for a bar nobody draws would be inventing a decision.
+        Check("17 page-views spread, 20 letterbox", spread == 17 && boxed == 20,
               spread + " spread, " + boxed + " letterboxed");
 
         // *** S172's SECOND defect, the one that reads as broken: the bar's first rule CONTINUES the

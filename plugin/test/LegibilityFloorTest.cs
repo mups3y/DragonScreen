@@ -2022,6 +2022,17 @@ public static class LegibilityFloorTest
         // instructs. 18/18: the procedure's own body sits well above the floor — the count is the
         // caution card's five 26-design-px lines, the auto-gates card's three, and the bar.
         B(UiPage.CrewGate,          18, 18),   // S213
+        // ⭐⭐ S260 — the rebuilt Vehicle Overview, routed. ⛔ DUMPED BY `PrintBaselines` RATHER THAN
+        // TYPED, as this file instructs, and flipped straight back — 37/30 is measured, not chosen.
+        // ⚠ IT IS A HIGH ENTRY AND THAT IS NOT A REGRESSION, IT IS WHAT THE PAGE IS: the eight dials
+        // each carry a small caption, the left rail carries seven title/status pairs, and the right
+        // panel and CONNECTIONS block add their own — a lot of small type by design, on a page whose
+        // whole job is to fit many readouts at once. 🟢 The owner declared it 100 % finished and
+        // sealed it 2026-09-10 after reading it on the glass.
+        // ⛔ THE RATCHET STILL BITES: this number is now the ceiling. If a later task adds text below
+        // the floor on this page the hard check above fails, exactly as it does for every other page.
+        // The baseline records where the page STARTED; it does not bless anything further.
+        B(UiPage.VehicleOverviewV2, 37, 30),   // S260 — dumped, worst: default / default
     };
 
     static FloorBaseline B(UiPage p, int below, int belowDense)

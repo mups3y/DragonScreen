@@ -114,7 +114,11 @@ public static class CrewPressTest
         "SystemsTree", "SystemsPid",
         "Ascent",
         "NavOrbitPlot",
-        "CrewGate" };
+        "CrewGate",
+        // ⭐ S260 — appended, never renumbered. The pin is indexed BY ORDINAL, so this entry is the
+        // thing that would catch an INSERT rather than an append: a member given an explicit value in
+        // the middle would slide every later name and still "match" on count alone.
+        "VehicleOverviewV2" };
 
     static readonly string[] PinCoverButton = {
         "None", "Menu", "Back", "Forward",
@@ -648,7 +652,13 @@ public static class CrewPressTest
         //   procedure can show (`CrewGatePage.MaxSteps` = 8). So 199.
         //   ⚠ The step ids are the reason this number moves when `MaxSteps` does, and that is deliberate:
         //   a procedure that can show a row the recorder cannot name is the defect S164 exists to catch.
-        Check(all.Count == 199, "the namespace should hold 199 ids, it holds " + all.Count);
+        // ⭐ S260 adds ONE, and it is the same shape as S213's: the rebuilt Vehicle Overview joins
+        // `UiPage`, so it gains a `nav.goto` id — its Menu card. ⛔ ONE, not two: the page carries no
+        // hit map and no `PageAction` of its own (§10.2 — it is a renderer; its SYSTEMS/CABIN toggle
+        // is DRAWN in all four states and switched by nothing), so nothing on the page itself is
+        // nameable by the recorder. ⚠ If a later task makes those controls live, this number moves
+        // again — which is exactly what it is for. So 200.
+        Check(all.Count == 200, "the namespace should hold 200 ids, it holds " + all.Count);
 
         Dictionary<string, string> seen = new Dictionary<string, string>();
         for (int i = 0; i < all.Count; i++)

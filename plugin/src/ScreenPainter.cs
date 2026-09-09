@@ -163,6 +163,10 @@ namespace DragonScreen
         /// be the thing that is right.
         /// </summary>
         private int selectedPage;
+        /// <summary>⭐ S260 — the page an overflow was last reported for, so the warning is said ONCE
+        /// per page rather than every frame (the `ImageStore` precedent, S40). -1 = nothing reported.
+        /// ⚠ Per SCREEN, because each screen owns its own painter and its own list.</summary>
+        private int lastOverflowPage = -1;
         private DragonScreenState persist;
         /// <summary>Last seen persist.Version - see Update() for why a poll and not an event.</summary>
         private int lastStateVersion = -1;
@@ -1575,6 +1579,25 @@ namespace DragonScreen
                 // formats, because this runs every frame on three screens. Real vessel values replace
                 // these when the data layer lands; the layout does not change when they do.
                 ChromeBar.Build(page, w, h, chrome);
+            }
+
+            // ---- ⭐⭐ S260: THE OVERFLOW WAS COMPLETELY SILENT IN THE GAME UNTIL THIS LINE ----------
+            // ⛔ `DisplayList.Overflowed` was read in `PreviewMain.cs` and NOWHERE in `plugin/src/`.
+            // `Add` does not grow and does not throw — it DROPS the command and carries on — so a page
+            // that outran its budget drew part of itself and stopped, with no error and no log.
+            // ⚠ `DisplayList.cs`'s own header names this class: *"the project's three worst defects
+            // were all things that failed INVISIBLY."* S260 routed a 1,385-command page against a
+            // 380-command budget, so this task is the one that would have hit it.
+            // ⚠ SAID ONCE PER PAGE, NOT PER FRAME — the `ImageStore` precedent (S40). At 60 Hz on
+            // three screens a per-frame warning is a log flood that buries the thing it reports.
+            if (page.Overflowed && lastOverflowPage != selectedPage)
+            {
+                lastOverflowPage = selectedPage;
+                Debug.LogWarning("[DragonScreen] display list OVERFLOWED on page "
+                                 + (FigmaMode ? FigmaUI.Name((UiPage)selectedPage)
+                                              : ("legacy page " + selectedPage))
+                                 + " at capacity " + page.Capacity
+                                 + " — the page drew only part of itself. (S260)");
             }
 
             // ---- THE TOUCH MARKER IS GONE ----
