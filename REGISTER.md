@@ -30186,3 +30186,144 @@ deleted, and the build recovered. `build.py` sweeping `obj/` is the underlying e
 `BOB-69` **FACT** — `SPEC_BASE_SCREENS.md` is the authority for this page and lives at
 `C:\Users\User\Desktop\BOB\`, **outside the repo and outside version control**, so §7's edit is not in
 this commit and C7's "the only source of truth is the repo" does not cover it.
+
+---
+
+### S258 [O] The new Dragon render, with its shadow and glow — **DONE 2026-09-10 — THE ASSET SWAP AND THE BAKED EFFECT. ALL SUITES PASSED (24,918 checks, up from 24,905), 9/9 mutants killed, previewdiff 6 of 140 changed and NONE flown, the shelf row measures delta 0. ⛔ NOT INSTALLED** — [overseer `PROMPT_VEHICLE_RENDER_SWAP.md`, 2026-09-10; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim, 2026-09-10:** *"I would like to replace the current 3d render on the new vehicle
+overview page with this one."* · *"I prefer the new render, do not trim off anything it fits it's place
+perfectly at that size without trimming."* · *"I would definitely like number 3 shadow+glow no
+trimming."* · glow **46 %**, width **×2.00** — *"2.0 all confirmed"*.
+
+#### ⭐ BOTH ASSETS INSTALLED, AND MEASURED BY THIS SESSION RATHER THAN TAKEN FROM THE PROMPT
+
+| file | measured |
+|---|---|
+| `art/cover/dragon_crew_v3.png` | **1800 × 3010 RGBA**, md5 **`6987dfebeb58c73f5ce61e42e72161ad`**, alpha&gt;0 bbox **(93, 80, 1707, 2944) → 1614 × 2864**, edge alpha 0 on all four sides |
+| `art/cover/dragon_shadow_glow.png` | **2358 × 1860 RGBA**, md5 **`3f3841c304cd112a7059ce7136297454`**, **peak alpha 224**, edge alpha **1** on all four sides — nothing clipped |
+
+⭐ Every figure matches the prompt exactly, and the md5s are unchanged **after** the copy.
+⛔ `dragon_turn_000.png` untouched — the COVER page still builds frame 000's key from
+`Turntable.KeyPrefix`, so deleting it would break a different page.
+
+#### ⛔⛔ ONE DISAGREEMENT INSIDE THE PROMPT, AND THE ASSET SETTLED IT — `BOB-70`
+
+§4's constant table says **`ShadowY = 271f`**. But **271 + 620 = 891**, and three other statements in the
+same prompt require **893**:
+- §5: the shelf fade *"reaching **exactly 0 at y = 893.0**"*
+- §6: *"a test that … `ShadowY + ShadowH == 893.0` — it must reach the shelf and stop there"*
+- §6: *"the effect's ink ending at **y 885.8** — **7.2 px clear** of the shelf"*
+
+⭐ **MEASURED on the shipped PNG:** the alpha ramp reaches **1/255 at the asset's own LAST ROW** (3 at
+1.3 px up, 16 at 6.3 px up, peak 223 at ~39.7 px up). The asset's bottom edge **IS** design y 893.0, so
+`ShadowY = 893 − 620 = 273`. At 273 the perceptible ink ends **7.2 px clear**, matching §6's own figure;
+at 271 it would be 9.2. ⛔ **Built 273 and reported, not silently corrected.**
+⭐⭐ **AND THE RENDER CONFIRMS IT:** the before/after delta at design y 893 is **0**.
+
+#### ⭐ THE VEHICLE — four constants, and the arithmetic is the EXISTING code
+
+| const | from | to |
+|---|---|---|
+| `VehicleAsset` | `dragon_turn_000` | **`dragon_crew_v3`** |
+| `AssetW, AssetH` | `512, 1024` | **`1800, 3010`** |
+| `AssetOpaqueX, AssetOpaqueY` | `24, 113` | **`93, 80`** |
+| `AssetOpaqueW, AssetOpaqueH` | `464, 798` | **`1614, 2864`** |
+
+⛔ `VehicleCx = 960`, `VehicleTop = 334.5`, `VehicleW = 292` — **unchanged**. The crop rule is unchanged
+(`alpha > 0`, §8.6's own).
+
+#### ⭐ AS BUILT, MEASURED — NOT AS INTENDED
+
+```
+k          = 292.0 / 1614          = 0.1809170
+draw x, y  = 797.17472 , 320.02664
+draw w, h  = 325.65056 x 544.56010
+box        left 814.0   right 1106.0   top 334.5   bottom 852.64622
+height     518.14622    (was 502.18)
+shelf clearance 40.35378                (was 56.32)
+side gaps  LOOP B -> vehicle 0.8   vehicle -> NET PWR 1 1.0   ⭐ UNCHANGED, asserted
+effect     box x 567.0 y 273.0  786.0 x 620.0   centre 960.0   bottom 893.0
+           emitted at command INDEX 1
+```
+⛔ **Only the bottom edge moved, by 15.97 px.** Width is bound at 292.0 and unchanged, so the side gaps
+and dial clearances are untouched — and that is asserted, not asserted-by-omission.
+⚠ The suite already records that §5.5 states 0.8 / 1.0 while §8.5 states 0.9 / 0.9 and the locked x
+values give **0.8 / 1.0**. Pre-existing, documented, and **unchanged** by this task.
+
+#### ⭐⭐ THE TWO ROWS §6 SAYS MUST NOT MOVE — MEASURED ON THE PNG
+
+| row | before → after |
+|---|---|
+| the shelf line, **design y 893** | **max channel delta 0** ✅ |
+| the bar band, **design y 997.4** | **max channel delta 0** ✅ |
+
+⭐ And the fade's decay is visible in the measurement: delta **6** at y 886, **4** at 888, **2** at
+890–891, **1** at 892, **0** at 893. The layer reaches the shelf and stops there, exactly as baked.
+⚠ §6's *"ink ending at y 885.8"* is at a perceptibility threshold of ~5–6/255; at that threshold I
+measure **y 886**, i.e. **7.0 px clear**. At an absolute delta ≥ 2 it runs to y 891. Both reported.
+
+#### ⛔⛔ DRAW ORDER, WHICH IS THE ONE THING EASY TO GET WRONG
+
+The effect is **light and shade on the deck**, so it is drawn **before `Rail`** — §4's own instruction.
+⚠ Its index is **1, not 0**, and that is correct: §8.1's page title draws first, at y≈96, which cannot
+overlap an effect living between y 273 and the shelf. ⛔ **The assertion was tightened to the actual
+rule** rather than to `index == 0` — a pin tighter than the rule is how a later correct change gets
+reported as a regression. What is asserted is that **no painted command precedes it**, so moving the
+call down beside `Vehicle` fails (mutation M5: **1,143 painted commands** would precede it).
+⭐ That order is the ONLY thing keeping the dial ink clean: at ×2.00 the glow genuinely reaches `LOOP B`
+and `NET PWR 1` at alpha **37/255**. 🟢 The owner was shown that and chose ×2.00 — **a decision, not a
+defect** — and the glow passes UNDER the dials, never over them.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,918** checks (S256 left **24,905** by my measure — see below) |
+| `VehicleOverviewContentTest` | **289 checks, 0 failed** (was 276) |
+| mutation | **9 raised, 9 KILLED, 0 survived** — incl. M5 the effect moved beside `Vehicle`, M7 `ShadowY` back to the prompt's 271, M6 the box leaned off 960, M2 the artwork box gone stale |
+| ⭐ the derivation | asserted, not the literal: height must equal `AssetOpaqueH / AssetOpaqueW × VehicleW`, and it is read **off the emitted command** with the file's own fractions as an independent second expression — the trap `VehicleOverviewContentTest.cs:660` documents |
+| `previewdiff HEAD` | **6 of 140 changed**, ⛔ **none flown** — all six are `ui_overview_*`; `ui_baseicon_*` did **not** change, which is right: this is content, not shell |
+| install | ⛔ **NOT DONE** — §8 forbids it; the owner is flight-testing |
+
+⚠⚠ **A DISAGREEMENT ABOUT THE CHECK COUNT ITSELF — `BOB-71`.** §6 states *"S256 left **26,707** checks
+(the overseer re-ran it at `1abf652`)"*. **I measure 24,905 at that commit**, by summing the suites'
+own `N checks` lines — the same instrument that gave 24,769 (S251), 24,799 (S252), 24,810 (S253),
+24,900 (S254) and 24,905 (S256). Adding the 165 device-check `ok` lines gives 25,070, still not 26,707.
+⛔ I cannot reproduce the overseer's number and have not tried to match it; the requirement *"count does
+not fall"* is applied against my own consistent measure, **24,905 → 24,918**.
+
+#### ⛔ THE SIX CHANGED PAGES, AND WHY NONE IS FLOWN
+
+`ui_overview_screen1/2` · `ui_overview_screen1_cabin` · `ui_overview_screen1_cabin_more` ·
+`ui_overview_screen1_systems_more` · `ui_overview_nofeed`. ⭐ `grep` across `plugin/src/` shows
+`VehicleOverviewContent` is referenced **only from `plugin/preview/` and `plugin/test/`** — no glue draws
+it and there is no `UiPage` routing (S248 shipped it as a RENDERER, `PageCount` unchanged). ⛔ The 134
+unchanged pages include every screen the owner currently flies.
+
+#### ⭐ THE SPECS, MARKED SUPERSEDED IN PLACE (C1.16) — both outside the repo
+
+`SPEC_OVERVIEW_STATUS_ROWS.md` §8.6 — the third ruling it has carried; the whole earlier block is kept
+because its WIDTH-FIT and `alpha > 0` crop rules are what the new asset is fitted **by**, unchanged.
+`SPEC_GAUGES.md` §5.5's *"the turntable frames are the right asset"* — superseded twice over, struck in
+place, with the note that the measurement behind it was never wrong.
+⚠ `dragon_crew_hi_771x1232.png` is now **moot** for this page and its `C7.1` blocker with it — ⛔ but
+**unresolved, not resolved**: nothing established whether that render came from the CC-BY model or a
+NASA press image. It simply stopped mattering here.
+
+#### ⭐ WHAT WAS **NOT** TOUCHED
+
+⛔ No `VehicleCx` / `VehicleTop` / `VehicleW`, no dial, rail, row or connection geometry. ⛔ No renderer
+capability added — no blur, no blend modes, no gradients. ⛔ No trimming or re-baking of either asset.
+⛔ `dragon_turn_000.png` kept. ⛔ No tab-strip work — `S256` is done at `1abf652`. ⛔ No docking-cam work —
+`S255` stays tabled. ⛔ No MechJeb, craft dump, cfg or craft edit. ⛔ The modelled rod below the trunk is
+kept — 🟢 the owner saw it, was shown a trimmed alternative, and chose it.
+
+#### ⚠ QUESTIONS RAISED — `BOB-70`, `BOB-71`
+
+`BOB-70` **FACT** — the prompt's §4 gives `ShadowY = 271`, which contradicts its own §5 and both of its
+§6 assertions; `271 + 620 = 891`, not 893. The asset settled it (alpha reaches 1/255 at its own last
+row) and **273** is built. Confirmed on the render: delta 0 at the shelf row. ·
+`BOB-71` **FACT** — §6 states S256 left **26,707** checks; I measure **24,905** at `1abf652` on the same
+instrument that produced every earlier figure in the register. I cannot reproduce 26,707 and did not
+try to match it; "count does not fall" was applied against my own consistent measure.

@@ -246,17 +246,90 @@ namespace DragonScreen
         //  alternative — fitting the FILE rather than the artwork — holds the height but shrinks the
         //  capsule to 264.6 wide and opens the side gaps to 14.5, which is the one thing §8.6 says the
         //  width-fit rule exists to prevent. `BOB-49`, and the swap is the four constants below.
+        //
+        //  ⭐⭐ S258 — THE SWAP HAPPENED, AND `BOB-49` IS CLOSED BY THE OWNER, 2026-09-10, verbatim:
+        //  *"I would like to replace the current 3d render on the new vehicle overview page with this
+        //  one."* · *"I prefer the new render, do not trim off anything it fits it's place perfectly at
+        //  that size without trimming."*
+        //  ⛔ EVERYTHING ABOVE IS KEPT (C1.16) AND NONE OF IT WAS WRONG — it is the measurement that
+        //  chose `dragon_turn_000` over `dragon_crew_hi` while the promotion was unruled, and the
+        //  WIDTH-FIT rule it establishes is what the new asset is fitted by. What changed is the FILE.
+        //  ⚠ ~~`dragon_crew_hi_771x1232.png` … C7.1 look-don't-ship … the promotion is NOT RULED~~ —
+        //  MOOT: neither file is used now. The C7.1 blocker went with it, unresolved rather than
+        //  resolved, and that distinction is worth keeping.
+        //  ⭐ The new asset SHIPS in `plugin/GameData/DragonScreen/art/cover/`, so there is no C7.1
+        //  question about it at all: `ImageStore.cs:73` and `PreviewMain.cs:3655` both build
+        //  `art/cover/<key>.png`, and the KEY IS THE FILENAME. There is no manifest and no enum.
+        //  ⛔ `dragon_turn_000.png` STAYS — `Turntable.KeyPrefix` = `"dragon_turn_"` and the COVER
+        //  page still builds frame 000's key from it. Removing it would break a different page.
         // ==========================================================================================
-        public const string VehicleAsset = "dragon_turn_000";
+        public const string VehicleAsset = "dragon_crew_v3";     // S258: was "dragon_turn_000"
         public const float VehicleCx = 960f;
         public const float VehicleTop = 334.5f;
         public const float VehicleW = 292f;
         /// <summary>The asset's own pixels, and the box its artwork actually occupies inside them.
         /// ⛔ MEASURED off the file (alpha &gt; 0), not assumed — three plausible "trim to the artwork"
-        /// rules give three different heights and §8.6 names alpha &gt; 0 as the one to use.</summary>
-        public const float AssetW = 512f, AssetH = 1024f;
-        public const float AssetOpaqueX = 24f, AssetOpaqueY = 113f;
-        public const float AssetOpaqueW = 464f, AssetOpaqueH = 798f;
+        /// rules give three different heights and §8.6 names alpha &gt; 0 as the one to use.
+        /// ⭐ S258 — re-measured off `dragon_crew_v3.png` by this session, not taken from the prompt:
+        /// 1800 × 3010 RGBA, md5 `6987dfebeb58c73f5ce61e42e72161ad`, alpha&gt;0 bbox
+        /// x 93..1707, y 80..2944 → 1614 × 2864. ⚠ ~~512 × 1024, artwork 24,113 464×798~~ superseded
+        /// in place (C1.16). ⭐ The RULE is unchanged and so is the code that reads these; only the
+        /// numbers moved, which is exactly what `BOB-49` said the swap would be.</summary>
+        public const float AssetW = 1800f, AssetH = 3010f;
+        public const float AssetOpaqueX = 93f, AssetOpaqueY = 80f;
+        public const float AssetOpaqueW = 1614f, AssetOpaqueH = 2864f;
+
+        // ==========================================================================================
+        //  ⭐⭐ S258 — THE SHADOW + GLOW, AND WHY IT IS AN ASSET RATHER THAN PRIMITIVES
+        //
+        //  🟢 OWNER, 2026-09-10: *"I would definitely like number 3 shadow+glow no trimming."*, at
+        //  glow brightness **46 %** and glow width **×2.00** — *"2.0 all confirmed"*.
+        //
+        //  ⛔ `DisplayList` HAS NO BLUR, NO BLEND MODE AND NO GRADIENT. Its primitives are `Rect`,
+        //  `Box`, `Text`, `Image`, `Asset`, `ImageCircle`, `ImageUV`, `Line`, `Tri`, `ArcBand`. A
+        //  blurred overlay ellipse cannot be drawn, so it arrives pre-rendered. ⛔ Do NOT "improve"
+        //  this by adding blend modes to the renderer — one flat layer is EXACT here, not an
+        //  approximation, and the arithmetic is why: on a ground whose every channel is below 0.5
+        //  (ours is `#1A1F35` = 26,31,53), `overlay` with black is identical to alpha-compositing
+        //  black, and `screen` with white is identical to alpha-compositing white. The three layers
+        //  were solved into one straight-alpha layer exactly (`A = 1−(1−g)(1−s)(1−p)`).
+        //
+        //  ⛔ PROVENANCE — TWO OF THE THREE LAYERS ARE MEASURED AND ONE IS NOT, and a later session
+        //  must not mistake the invented one for a source value:
+        //     drop shadow   🟢 MEASURED  vehicle alpha, dy 5.07, blur stdDev 44.39, black 15 %
+        //     contact pool  🟢 MEASURED  cx 960, cy 848.06, rx 190.25, ry 41.58, blur 15.85
+        //     glow          ⛔ INVENTED  same centre, rx 380.50 (×2.00), ry 79.01, blur 34.88, white 46 %
+        //     shelf fade    ⛔ INVENTED  alpha × smoothstep, reaching 0 at y = 893.0 over the last 40 px
+        //  ⭐⭐ THERE IS NO WHITE GLOW IN THE SOURCE ASSET — proved, not assumed: along the bottom the
+        //  designer's own composite only ever DARKENS. "Glow" is a word in their filename. 🟢 The owner
+        //  asked for it anyway and was right to — their ground is `#1A1C48` (blue 72) against our
+        //  `#1A1F35` (blue 53), so a black pool has about a third less room to work in on our page.
+        //  ⛔ 46 % and ×2.00 are OWNER-RULED off rendered ladders, not defaults.
+        //
+        //  ⚠ AT ×2.00 THE GLOW REACHES TWO DIALS — alpha 37/255 under `LOOP B` and `NET PWR 1`
+        //  (`LOOP A` and `NET PWR 2` are untouched at 0). 🟢 The owner was shown that number for every
+        //  width on the ladder and chose ×2.00. ⛔ A DECISION, NOT A DEFECT. Drawing this layer FIRST
+        //  is what keeps the dial INK clean: the glow passes under it, never over it.
+        //  ⚠ THE SHELF FADE EXISTS BECAUSE THE EFFECT WANTED TO CROSS THE SHELF. Cut flat at 893 it
+        //  left alpha 82/255 sitting on the shelf line — a visible straight chop. ⛔ Do not remove the
+        //  fade and do not extend the layer past 893.
+        //
+        //  ⛔⛔ THE BOX IS SYMMETRIC ON 960 BY CONSTRUCTION (`960 ∓ 393`) AND ITS BOTTOM IS THE SHELF.
+        //  The asset is exactly 3× the design box (786×3 = 2358, 620×3 = 1860). The overseer's first
+        //  bake auto-trimmed to the alpha and came out 0.33 px lopsided; it was re-baked symmetric on
+        //  purpose. ⛔ S256 took a 0.5 px lean out of the tab strip — do not re-introduce one here.
+        //
+        //  ⚠⚠ `ShadowY` IS 273, NOT THE 271 THE S258 PROMPT'S §4 TABLE PRINTS, AND THE ASSET SETTLED
+        //  IT. §4 says 271; §5 says the fade reaches "exactly 0 at y = 893.0"; §6 asks for a test that
+        //  `ShadowY + ShadowH == 893.0` and reports the ink ending at 885.8, "7.2 px clear of the
+        //  shelf". 271 + 620 = **891**, which contradicts all three. ⭐ MEASURED on the file by this
+        //  session: the alpha ramp reaches 1/255 at the asset's own LAST ROW (3 at 1.3 px up, 16 at
+        //  6.3 px up, peak 223 around 39.7 px up), so the asset's bottom edge IS design y 893.0 and
+        //  `ShadowY = 893 − 620 = 273`. At 273 the perceptible ink ends 7.2 px clear, matching §6's own
+        //  measurement; at 271 it would be 9.2. ⛔ Reported as `BOB-70` rather than silently corrected.
+        // ==========================================================================================
+        public const string ShadowAsset = "dragon_shadow_glow";
+        public const float ShadowX = 567f, ShadowY = 273f, ShadowW = 786f, ShadowH = 620f;
 
         // ==========================================================================================
         //  §2 / §7.3 / §7.4 — THE ROWS. ⛔ Every title names ITS OWN SOURCE and nothing more.
@@ -316,6 +389,7 @@ namespace DragonScreen
             1                                   // §8.1 the title
             + RailRows * 5                      // disc + two tick strokes + title + status
             + DialCount * DialGauge.Commands     // §5.5's eight dials
+            + 1                                 // ⭐ S258 the shadow+glow, drawn FIRST
             + 1                                 // §8.6 the vehicle
             + 2 + 4 * 2                          // §8.3 header + rule + four label/value pairs
             + PanelRows * 4                     // §5.6 track + fill + label + value
@@ -338,6 +412,13 @@ namespace DragonScreen
             InkLine(dl, fit, TitleCx, TitleInkTop + TitleInk * 0.5f, TitleInk,
                     TextAlign.Centre, StatusLit, Title);
 
+            // ⛔⛔ FIRST, AND THAT IS THE ONE THING HERE THAT IS EASY TO GET WRONG. The effect is
+            // LIGHT AND SHADE ON THE DECK, so it belongs UNDER EVERYTHING — not next to `Vehicle`,
+            // which draws AFTER the dials. Moved down to sit beside the thing it belongs to, it would
+            // lay the glow ON TOP of the `LOOP B` and `NET PWR 1` dials. ⚠ This is exactly the kind of
+            // line a later session "tidies" by grouping it with `Vehicle`; the suite asserts its index
+            // is lower than every rail, dial and vehicle command precisely so that tidy-up fails.
+            Shadow(dl, fit);
             Rail(dl, fit, s, ui);
             Dials(dl, fit, s);
             Vehicle(dl, fit);
@@ -543,6 +624,17 @@ namespace DragonScreen
         // ==========================================================================================
         //  THE VEHICLE
         // ==========================================================================================
+        /// <summary>
+        /// ⭐ S258 — the baked shadow + glow, drawn at full white tint exactly like the vehicle, so the
+        /// asset's own straight alpha is what composites. ⛔ Called FIRST from <see cref="Content"/> —
+        /// see the note there and the constant block above for why the position is load-bearing.
+        /// </summary>
+        private static void Shadow(DisplayList dl, BaseFit fit)
+        {
+            dl.Asset(ShadowAsset, fit.X(ShadowX), fit.Y(ShadowY), fit.S(ShadowW), fit.S(ShadowH),
+                     new Rgba(1f, 1f, 1f, 1f));
+        }
+
         private static void Vehicle(DisplayList dl, BaseFit fit)
         {
             // WIDTH-FIT on the ARTWORK, not on the file — see the header block above.

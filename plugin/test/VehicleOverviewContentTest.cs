@@ -648,30 +648,45 @@ public static class VehicleOverviewContentTest
     static void TheVehicleIsWidthFitAndNeverScaledPerAxis()
     {
         DisplayList dl = Content(Healthy(), Ui(false, false, true));
-        DrawCmd img = new DrawCmd();
+        // ⚠⚠ S258 — THERE ARE TWO `Image` COMMANDS ON THIS PAGE NOW. This loop used to take "the
+        // last one" and that happened to be the vehicle; it still would, but relying on it is the
+        // kind of accident that survives a reorder. ⛔ Both are found BY KEY.
+        DrawCmd img = new DrawCmd(), shadow = new DrawCmd();
+        int imgAt = -1, shadowAt = -1;
         for (int i = 0; i < dl.Count; i++)
-            if (dl.At(i).Kind == DrawKind.Image) img = dl.At(i);
-        Check("the vehicle is drawn from the asset that SHIPS",
-              img.AssetKey == "dragon_turn_000", img.AssetKey ?? "(none)");
+        {
+            if (dl.At(i).Kind != DrawKind.Image) continue;
+            if (dl.At(i).AssetKey == "dragon_crew_v3") { img = dl.At(i); imgAt = i; }
+            if (dl.At(i).AssetKey == "dragon_shadow_glow") { shadow = dl.At(i); shadowAt = i; }
+        }
+        // ⚠ S258 — ~~`dragon_turn_000`~~ superseded in place (C1.16). 🟢 OWNER, 2026-09-10: *"I would
+        // like to replace the current 3d render on the new vehicle overview page with this one."*
+        // ⛔ The turntable frame is NOT deleted — the COVER page still builds frame 000's key from
+        // `Turntable.KeyPrefix`; this page simply stopped being the thing that used it.
+        Check("S258 the vehicle is drawn from the asset that SHIPS",
+              img.AssetKey == "dragon_crew_v3", img.AssetKey ?? "(none)");
 
         // ⛔ NEVER SCALE THE VEHICLE PER-AXIS. The drawn rect must carry the FILE's own aspect.
-        Near("the drawn rect keeps the asset's aspect exactly", img.C / img.D, 512.0 / 1024.0, 1e-4);
+        Near("the drawn rect keeps the asset's aspect exactly", img.C / img.D, 1800.0 / 3010.0, 1e-4);
 
         // ⛔ READ OFF THE EMITTED COMMAND, NOT OFF `VehicleBox`. A mutation that scaled the whole
         // draw by 7.7 % SURVIVED a version of this check that asked `VehicleBox` where the artwork
         // was — because `VehicleBox` recomputes the same expression the draw uses, so the two agree
         // about any error. The artwork's own corner is recovered from the RECT that was drawn, with
         // the asset's measured opaque box as the second, independent, expression.
-        double aw = img.C * (464.0 / 512.0);
-        double al = img.A + img.C * (24.0 / 512.0);
-        double at = img.B + img.D * (113.0 / 1024.0);
-        double ah = img.D * (798.0 / 1024.0);
+        // ⭐ S258 — the fractions are re-pointed to the NEW file's own measured alpha box
+        // (1800×3010, artwork x 93..1707 / y 80..2944 = 1614×2864), measured by the S258 session off
+        // the shipped PNG. ~~464/512, 24/512, 113/1024, 798/1024~~ superseded in place (C1.16).
+        double aw = img.C * (1614.0 / 1800.0);
+        double al = img.A + img.C * (93.0 / 1800.0);
+        double at = img.B + img.D * (80.0 / 3010.0);
+        double ah = img.D * (2864.0 / 3010.0);
         Near("the drawn ARTWORK is width-fit to the locked 292.0", aw, 292.0, 0.02);
         Near("its left edge is the locked 814.0", al, 814.0, 0.02);
         Near("its top is the locked 334.5", at, 334.5, 0.02);
         Near("it is centred on the frame", al + aw / 2.0, 960.0, 0.02);
         Near("its height follows from the width and the asset, never from the box", ah,
-             292.0 / (464.0 / 798.0), 0.03);
+             292.0 / (1614.0 / 2864.0), 0.03);
 
         float l, t, r, b;
         VehicleOverviewContent.VehicleBox(out l, out t, out r, out b);
@@ -679,13 +694,73 @@ public static class VehicleOverviewContentTest
         Near("VehicleBox reports the same top the command drew", t, at, 0.02);
         Near("the ARTWORK is width-fit to the locked 292.0", r - l, 292.0, 0.01);
         Near("it is centred on the frame", (l + r) / 2.0, 960.0, 0.01);
-        // ⚠ AND THE HEIGHT IS NOT THE SPEC'S 466.59, BECAUSE THIS IS NOT THE SPEC'S ASSET. The
-        // turntable frame's opaque box is 464x798 (0.5815) against dragon_crew_hi's 771x1232
-        // (0.6258): width-fitting the artwork runs it to 502.18 instead. Reported, not hidden — the
-        // prompt's "the geometry is identical either way" is not true of these two files. BOB-49.
-        Near("with THIS asset the artwork runs 502.18 tall", b - t, 292.0 / (464.0 / 798.0), 0.02);
-        Near("crew_hi would have given 466.59 in the same box", 292.0 / (771.0 / 1232.0), 466.59, 0.02);
-        Check("it still clears the shelf by a wide margin", 893.0 - b > 50.0, "" + (893.0 - b));
+        // ⚠ S258 — ~~"with THIS asset the artwork runs 502.18 tall"~~ and ~~"crew_hi would have given
+        // 466.59"~~ SUPERSEDED IN PLACE (C1.16). Both were true of files this page no longer draws,
+        // and `BOB-49` — which named the swap as "the four constants" — is closed by it.
+        // ⛔ THE DERIVATION IS ASSERTED, NOT THE LITERAL: the height must fall out of
+        // `AssetOpaqueH / AssetOpaqueW × VehicleW`, so a future asset swap cannot keep a stale number.
+        Near("S258 the artwork now runs 518.147 tall — DERIVED from the new asset's own box",
+             b - t, 292.0 / (1614.0 / 2864.0), 0.02);
+        Near("S258 ...and that derivation is what the constants actually compute",
+             b - t,
+             VehicleOverviewContent.AssetOpaqueH / VehicleOverviewContent.AssetOpaqueW
+             * VehicleOverviewContent.VehicleW, 0.002);
+        Near("S258 the bottom edge is 852.647", b, 852.647, 0.01);
+        // ⚠ THE CLEARANCE FELL 56.32 -> 40.354 AND THAT IS THE ONLY THING THAT MOVED. The width is
+        // bound at 292.0 and unchanged, so §8.5's locked side gaps and dial clearances are untouched.
+        Near("S258 the shelf clearance is 40.354 — the ONLY edge that moved", 893.0 - b, 40.354, 0.01);
+        Check("S258 ...and it still clears the shelf", 893.0 - b > 0.0, "" + (893.0 - b));
+        // ⭐ THE SIDE GAPS ARE ASSERTED UNCHANGED, because "only the bottom moved" is a claim.
+        Near("S258 the left edge did not move", l, 814.0, 0.002);
+        Near("S258 the right edge did not move", r, 1106.0, 0.002);
+
+        // ---- ⭐⭐ S258: THE SHADOW + GLOW, AND THE ORDER IT MUST BE DRAWN IN --------------------
+        Check("S258 the shadow+glow layer is emitted at all",
+              shadowAt >= 0 && shadow.AssetKey == "dragon_shadow_glow", shadow.AssetKey ?? "(none)");
+        // ⛔⛔ FIRST. The effect is light and shade on the DECK; drawn beside `Vehicle` it would lay
+        // the glow ON TOP of the `LOOP B` and `NET PWR 1` dials. ⚠ At ×2.00 the glow genuinely reaches
+        // those two at alpha 37/255 — 🟢 the owner was shown that and chose ×2.00 — so the ONLY thing
+        // keeping their ink clean is that this layer is underneath. Asserted against every other
+        // command, not just against the vehicle.
+        // ⚠ IT IS INDEX 1, NOT 0, AND THAT IS CORRECT: §8.1's page TITLE draws first, at y≈96, which
+        // cannot overlap an effect that lives between y 273 and the shelf. §4's requirement is that
+        // the effect precede the RAIL, the DIALS and the VEHICLE, and that is what is asserted —
+        // "index == 0" would be a tighter pin than the rule, and a tighter pin than the rule is how a
+        // later correct change gets reported as a regression.
+        Check("S258 ⛔ ...and NOTHING DRAWN precedes it — the only earlier command is §8.1's title",
+              shadowAt == 1 && dl.At(0).Kind == DrawKind.Text, "index " + shadowAt
+              + ", command 0 is " + dl.At(0).Kind);
+        Check("S258 ⛔ ...strictly before the vehicle", shadowAt < imgAt,
+              shadowAt + " vs " + imgAt);
+        // ⛔ THE STATEMENT THAT ACTUALLY MATTERS: no painted surface — no rail disc, no dial dot, no
+        // panel fill, no image — is emitted before the effect. If a later session moves the call down
+        // beside `Vehicle`, this is what fails.
+        int paintedBefore = 0;
+        for (int i = 0; i < shadowAt; i++)
+        {
+            DrawKind k = dl.At(i).Kind;
+            if (k != DrawKind.Text) paintedBefore++;
+        }
+        Check("S258 ⛔ ...so no rail, dial, panel or image is painted under-to-over the wrong way",
+              paintedBefore == 0, paintedBefore + " painted command(s) before the effect");
+
+        // ⛔ SYMMETRIC ON 960 BY CONSTRUCTION. S256 took a 0.5 px lean out of the tab strip; the
+        // overseer's first bake of this asset was 0.33 px lopsided and was re-baked on purpose.
+        Near("S258 ⭐ the effect box is symmetric on 960",
+             VehicleOverviewContent.ShadowX + VehicleOverviewContent.ShadowW / 2f, 960.0, 0.002);
+        // ⚠⚠ 273, NOT THE PROMPT'S 271 — the asset settled it. Its alpha ramp reaches 1/255 at its own
+        // LAST ROW, so the bottom edge IS design y 893.0, which is what §5's "reaching exactly 0 at
+        // y = 893.0" and §6's own "7.2 px clear" both require. 271 + 620 = 891 contradicts both.
+        // `BOB-70`.
+        Near("S258 ⛔ the effect reaches the shelf and stops there (bottom == 893.0)",
+             VehicleOverviewContent.ShadowY + VehicleOverviewContent.ShadowH, 893.0, 0.002);
+        // ⭐ The asset is exactly 3x the design box by construction — 786x3 = 2358, 620x3 = 1860.
+        Near("S258 the drawn box is the design box, not the file's pixels",
+             shadow.C, VehicleOverviewContent.ShadowW, 0.002);
+        Near("S258 ...and its height likewise", shadow.D, VehicleOverviewContent.ShadowH, 0.002);
+        Check("S258 the effect is drawn at full white tint, so the asset's own alpha composites",
+              shadow.Colour.R > 0.999f && shadow.Colour.G > 0.999f
+              && shadow.Colour.B > 0.999f && shadow.Colour.A > 0.999f, "");
     }
 
     // ---- SPEC_GAUGES §5.5 -------------------------------------------------------------------------
