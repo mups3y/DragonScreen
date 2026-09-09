@@ -124,8 +124,57 @@ public static class MechHostTest
             Check("NO node names the ambiguous `MechJebCore`",
                   !Regex.IsMatch(txt, @"^\s*name\s*=\s*MechJebCore\s*$", RegexOptions.Multiline), "");
             // MechJeb's own vendored patch adds a core to EVERY command pod. Ours must not.
-            Check("the core is patched onto the Dragon parts only, never all command pods",
-                  !txt.Contains("@PART[*]") && txt.Contains("TE_18_DRAGONV2_POD"), "");
+            //
+            // ---- ⚠ THE OLD PROXY DIED WHEN THE cfg's SCOPE CHANGED, AND IT DIED SILENTLY-CAPABLE ----
+            // ⚠ SUPERSEDED IN PLACE 2026-09-09 (C1.16). WHAT IT WAS:
+            //     !txt.Contains("@PART[*]") && txt.Contains("TE_18_DRAGONV2_POD")
+            // A whole-FILE ban on the `@PART[*]` selector. ⭐ That was a sound proxy for as long as
+            // this cfg held only DragonScreen's own patches: if the file never said `@PART[*]`, no
+            // node in it could reach every command pod. ⛔ The merge of 2026-09-09 (nine patches from
+            // four folders into one shipped file, owner instruction) ended that. The file now carries
+            // a TAC-LS CO2 capacity fix that legitimately selects `@PART[*]` — it only EDITS existing
+            // tank amounts and adds no module at all — so the old line failed on a patch that is not
+            // the hazard, while no longer being ABLE to distinguish the hazard from it.
+            //
+            // ⛔ THE PROPERTY IS UNCHANGED AND IS NOT WEAKENED. It is now stated directly instead of
+            // by proxy, in two halves, and both are mutation-proven:
+            //   (a) every `DragonMechJebCore` add sits under a selector that NAMES the Dragon pod;
+            //   (b) NO `@PART[*]` block in the shipped cfg adds a `MODULE` at all — which is the
+            //       actual hazard class the old line was reaching for, and is STRICTER than it was,
+            //       because it catches a bare module add on every part whatever the module is called.
+            var coreSelectors = new List<string>();
+            var wildcardModuleAdds = new List<string>();
+            string selector = "";
+            bool inWildcard = false;
+            int depth = 0;
+            foreach (string raw in File.ReadAllLines(partCfg))
+            {
+                string line = raw;
+                int slash = line.IndexOf("//", StringComparison.Ordinal);
+                if (slash >= 0) line = line.Substring(0, slash);
+                string t = line.Trim();
+                if (t.Length == 0) continue;
+                if (t.StartsWith("@PART[", StringComparison.Ordinal))
+                {
+                    selector = t;
+                    inWildcard = t.StartsWith("@PART[*]", StringComparison.Ordinal);
+                    depth = 0;
+                    continue;
+                }
+                if (t == "{") { depth++; continue; }
+                if (t == "}") { depth--; if (depth <= 0) { inWildcard = false; selector = ""; } continue; }
+                if (t == "MODULE" && inWildcard) wildcardModuleAdds.Add(selector);
+                if (Regex.IsMatch(t, @"^name\s*=\s*DragonMechJebCore\s*$")) coreSelectors.Add(selector);
+            }
+            Check("the shipped cfg still adds the core at all (the check has a subject)",
+                  coreSelectors.Count > 0, "");
+            foreach (string s in coreSelectors)
+                Check("the core is patched onto the Dragon parts only, never all command pods",
+                      s.Contains("TE_18_DRAGONV2_POD")
+                      && !s.StartsWith("@PART[*]", StringComparison.Ordinal), "selector=[" + s + "]");
+            Check("no @PART[*] block in the shipped cfg ADDS a MODULE to every part",
+                  wildcardModuleAdds.Count == 0,
+                  wildcardModuleAdds.Count == 0 ? "" : string.Join(" ; ", wildcardModuleAdds.ToArray()));
         }
 
         // ---- (4) the tune ships inside the mod, intact ----------------------------------
