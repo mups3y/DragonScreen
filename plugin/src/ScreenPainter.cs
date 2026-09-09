@@ -331,6 +331,82 @@ namespace DragonScreen
         }
 
         /// <summary>
+        /// S249 — THE ONE-LAUNCH FONT MEASUREMENT. Enumerate the OS fonts UNITY can see and log the
+        /// D-DIN ones, with the TOTALS beside them.
+        ///
+        /// ⭐ WHY THE TOTALS ARE NOT OPTIONAL: a filter that matched nothing and an API that returned
+        /// nothing look identical in a log, and telling those apart is the whole point of the task.
+        /// So the count is printed whether or not anything matched.
+        ///
+        /// ⭐ AND WHY THE `AppData\Local` COUNT IS HERE TOO. The eight D-DIN faces are installed
+        /// PER-USER (`AppData\Local\Microsoft\Windows\Fonts`) and registered in `HKCU`, and GDI+ on
+        /// this same machine cannot see one of them — proved in S248 by rendering the whole preview
+        /// with the family swapped and getting a byte-identical PNG. ⛔ If Unity's PATH list contains
+        /// nothing under `AppData\Local`, the answer is "Unity cannot see per-user fonts either" and
+        /// the fix is an all-users install, not a different name — and that verdict must not depend
+        /// on whether a DIN font happened to match a substring.
+        ///
+        /// ⚠ BOTH CALLS ARE GUARDED. `EnsureFont`'s contract is that it fails soft — "no font just
+        /// means no text, never no page" — so an enumeration that throws must not be what takes the
+        /// three screens down. The exception is logged instead, because "it threw" is itself an
+        /// answer and a silent catch is not.
+        ///
+        /// ⛔ IT MEASURES, IT DOES NOT FIX. Unity listing a name is NOT proof that
+        /// `CreateDynamicFontFromOSFont` accepts it; that still has to be set and confirmed by the
+        /// `requested/resolved` line above. And it says nothing about the PREVIEW, which is a
+        /// different font stack and a separate defect.
+        /// </summary>
+        private static void LogOsFonts()
+        {
+            try
+            {
+                string[] names = Font.GetOSInstalledFontNames();
+                Debug.Log("[DragonScreen] S249 OS font NAMES Unity can see: "
+                          + (names == null ? "NULL ARRAY" : names.Length + " total")
+                          + " ; DIN matches: " + Matches(names, "DIN"));
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[DragonScreen] S249 GetOSInstalledFontNames threw: " + e);
+            }
+
+            try
+            {
+                string[] paths = Font.GetPathsToOSFonts();
+                int userScope = 0;
+                if (paths != null)
+                    for (int i = 0; i < paths.Length; i++)
+                        if (paths[i] != null && paths[i].IndexOf("AppData", StringComparison.OrdinalIgnoreCase) >= 0)
+                            userScope++;
+                Debug.Log("[DragonScreen] S249 OS font PATHS Unity can see: "
+                          + (paths == null ? "NULL ARRAY" : paths.Length + " total")
+                          + ", " + userScope + " under AppData (per-user)"
+                          + " ; DIN matches: " + Matches(paths, "DIN"));
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[DragonScreen] S249 GetPathsToOSFonts threw: " + e);
+            }
+        }
+
+        /// <summary>Every entry containing <paramref name="needle"/>, case-insensitively, joined for
+        /// one log line — or the word NONE, which is a result and not an absence of one.</summary>
+        private static string Matches(string[] all, string needle)
+        {
+            if (all == null) return "NONE (null array)";
+            var sb = new System.Text.StringBuilder();
+            int found = 0;
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (all[i] == null) continue;
+                if (all[i].IndexOf(needle, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (found++ > 0) sb.Append(" | ");
+                sb.Append(all[i]);
+            }
+            return found == 0 ? "NONE" : found + " -> " + sb;
+        }
+
+        /// <summary>
         /// Resolve the font once.
         ///
         /// CreateDynamicFontFromOSFont only sees fonts INSTALLED IN WINDOWS. D-DIN - the family the
@@ -368,6 +444,15 @@ namespace DragonScreen
                 Debug.Log("[DragonScreen] screen " + index + " font requested '" + want
                           + "', resolved '" + font.name + "', dynamic=" + font.dynamic
                           + ", ascent=" + font.ascent + ", baseSize=" + font.fontSize);
+
+                // ⭐⭐ S249 — AND WHAT UNITY CAN ACTUALLY SEE, ASKED ONCE RATHER THAN GUESSED.
+                // The line above says what ONE requested name resolved to. It cannot say WHY a name
+                // failed, and the three reasons need three different fixes: the bold FACE is
+                // unreachable, the whole Exp FAMILY is unreachable, or Unity cannot see PER-USER
+                // fonts at all. ⛔ A three-candidate test cannot tell those apart and can come back
+                // all-negative, having spent a restart to learn "not those three".
+                // ⭐ Screen 1 only: it is machine-wide information and three copies is noise.
+                if (index == 1) LogOsFonts();
             }
 
             Shader s = Shader.Find("GUI/Text Shader");

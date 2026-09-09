@@ -29039,7 +29039,7 @@ intended, or does it want scoping? **Both are behaviour changes and neither belo
 
 - ⭐ **NEW:** `plugin/src/pure/DialGauge.cs` (`SPEC_GAUGES.md`, the whole family) ·
   `plugin/src/pure/VehicleOverviewContent.cs` (`SPEC_OVERVIEW_STATUS_ROWS.md`, the page) ·
-  `plugin/test/DialGaugeTest.cs` (102 checks) · `plugin/test/VehicleOverviewContentTest.cs` (266).
+  `plugin/test/DialGaugeTest.cs` (102 checks) · `plugin/test/VehicleOverviewContentTest.cs` (~~266~~ **276** — ⚠ CORRECTED BY `S249`: the 266 was counted while this entry was being drafted and two later edits to that suite added ten checks. The overseer re-measured 276 and is right; C1.16, so the wrong number stays visible.)
 - ⭐ **CHANGED, minimally:** `PreviewMain.cs` (six renders + `--overviewcheck`) · `build.py` (that check
   becomes a gate in `test`) · `Typography.cs` (**added** `CapHeightOfSize` + `SizeForInk`) ·
   `TestMain.cs` (two registrations) · `VehicleSubsystemPage.cs` — **ONE KEYWORD**, `static` →
@@ -29148,7 +29148,7 @@ strings at once. ⛔ Not done: it is a cfg change and an install, which is an ow
 
 | instrument | result |
 |---|---|
-| `build.py test` | **ALL SUITES PASSED** — `DialGaugeTest` **102**, `VehicleOverviewContentTest` **266**, 0 failed |
+| `build.py test` | **ALL SUITES PASSED** — `DialGaugeTest` **102**, `VehicleOverviewContentTest` ~~266~~ **276**, 0 failed |
 | `--overviewcheck` (new gate in `test`) | **57 ok, 0 FAIL**, at BOTH shipped sizes, all four control states |
 | its falsification pass | content deleted → **4 of 4 probes report faults** |
 | mutation | **18 raised, 18 KILLED, 0 survived** |
@@ -29183,3 +29183,134 @@ the ORDER half only — the phase-expectation table is still open · `BOB-51` 21
 `BOB-52` the approved mock vs §2.2/§1/§5.7 · `BOB-53` the empty asset folder.
 ⛔ `BOB-32` (the ICON shell's tab strip colours nothing) and `BOB-34`/`BOB-35` from `S247`'s raise are
 **answered by the new specs** — §2.1/§2.2 supplied the colours and the lettering, §8.6 the crop rule.
+
+---
+
+### S249 [O] Ask Unity what it can actually see — the one-launch font enumeration, built and installed — **DONE 2026-09-09 — the instrument is on the glass and the game has NOT been launched. ⛔ The font question is NOT answered and this line does not claim it is** — [overseer `PROMPT_FONT_PROBE.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+- ⭐ **ONE FILE:** `plugin/src/ScreenPainter.cs` — `EnsureFont()` gains a call to a new
+  `LogOsFonts()` inside the `if (!fontLogged)` block **that already runs**. ⛔ No second gate, no
+  second flag, and the only condition added is the prompt's own `index == 1`.
+- ⛔ **NOTHING ELSE MOVED.** `fontName` is still `D-DIN` in all three cfg blocks;
+  `PreviewMain.FontFamily`, `Typography.CapHeightOfSize` and `CapCentreOfTop` are untouched;
+  `pure/DialGauge.cs` and `pure/VehicleOverviewContent.cs` were not opened.
+
+#### ⭐ WHAT IT LOGS, AND WHY EACH PIECE IS THERE
+
+```
+[DragonScreen] S249 OS font NAMES Unity can see: <n> total ; DIN matches: NONE | <n> -> a | b | c
+[DragonScreen] S249 OS font PATHS Unity can see: <n> total, <m> under AppData (per-user) ; DIN matches: ...
+```
+⭐ **THE TOTALS ARE NOT DECORATION** — *"a filter that returns nothing and an API that returns nothing
+look identical in a log"*, and telling those apart is the whole task. The count prints whether or not
+anything matched, and a null array says `NULL ARRAY` rather than `0`.
+⭐ **THE `AppData` COUNT IS ONE STEP BEYOND THE PROMPT'S §2 LIST, DELIBERATELY.** The prompt's own
+decision table has a row — *"nothing under `AppData\Local` in PATHS ⇒ Unity cannot see per-user fonts"*
+— that a DIN-only filter cannot reach: if no DIN path exists, "no per-user fonts at all" and "per-user
+fonts fine, no DIN among them" print identically. One integer separates them, and it is the row the
+prompt calls **the most likely single cause**.
+⚠ **BOTH CALLS ARE IN `try/catch` AND LOG THE EXCEPTION.** `EnsureFont`'s stated contract is that it
+fails soft — *"no font just means no text, never no page"* — so an enumeration that throws must not be
+what takes the three screens down. ⛔ "It threw" is itself an answer; a silent catch is not.
+
+#### ⭐ THE API WAS VERIFIED BY THE COMPILER, NOT BY THE PROMPT
+
+`Font.GetOSInstalledFontNames()` and `Font.GetPathsToOSFonts()` are both exported by
+`UnityEngine.TextRenderingModule.dll`, which `build.py:100` already references — ⭐ **and the build
+compiling against KSP's own assemblies is the proof, not the strings found in the binary.** No new
+reference, no new dependency, no version guard needed.
+
+#### ⛔ WHAT THIS CANNOT TELL US, STATED SO NOBODY READS IT AS MORE
+
+⛔ **Unity listing a name is NOT proof that `CreateDynamicFontFromOSFont` accepts it.** It narrows four
+guesses to one candidate; the candidate still has to be SET and the existing `requested/resolved` line
+still has to confirm it.
+⛔ **AND IT SAYS NOTHING ABOUT THE PREVIEW.** GDI+ and Unity are different font stacks. The preview
+being wrong (`BOB-45`, proved byte-identically in `S248`) is a SEPARATE defect from the game being
+right, and closing one does not close the other.
+
+#### ⚠ TWO THINGS THE PROMPT SAID THAT THE CODE DOES NOT
+
+1. ⛔ **"Only the DLL moves" — IT DID NOT. ELEVEN SHIPPED ART FILES WERE MISSING FROM THE LIVE GAME.**
+   Measured before installing, by md5 across all 170 shipped files:
+   `b_nav0..b_nav4 · b_point · b_state · ic_tab_comms · r_count · r_iss · r_spx` were **absent**, not
+   different. ⭐ They are `S242`/`S243`/`S246`'s bar tiles and the Comms glyph, so the last install
+   predates them — the live game has been running without art the repo has shipped for days. ⚠ Nothing
+   the crew sees changes: every one is referenced only by the base-page renderers, which have no
+   `UiPage` value and are not reachable.
+2. ⚠ **"The `GameData/DragonScreen/` folder is overwritten by every install — anything not in the repo
+   dies" is not what `install()` does.** It walks the REPO and copies; it never deletes. `PluginData/`
+   (four MechJeb settings files, including the tuned `Crew-Dragon` one) survived, as it always has.
+   ⛔ Stated because a prompt that overstates a destructive step teaches the next chat to fear the
+   wrong thing.
+
+#### ⭐ THE INSTALL, RE-ASSERTED AS §5 REQUIRES
+
+| | md5 |
+|---|---|
+| repo `plugin/GameData/DragonScreen/DragonScreen.cfg` | `7588f071d69b25a278bacf9e64a2b47b` |
+| live `GameData/DragonScreen/DragonScreen.cfg` | `7588f071d69b25a278bacf9e64a2b47b` |
+
+⭐ **IDENTICAL, AND UNCHANGED FROM BEFORE THE INSTALL — so `S247`'s repo==deployed match survives.**
+The cfg was never written: `install()` skips a file already identical and printed `unchanged
+DragonScreen.cfg`. ⭐ **All 170 shipped files now match the repo byte for byte**, and a second
+`install` run reports nothing to write, which is the idempotence proof.
+⛔ `LocalFixes/frost_mod_b9partswitch_fix.cfg`: **still present, 3122 bytes, mtime 2026-08-04 12:45 —
+untouched.** `GameData/DragonScreen/` still holds **exactly one** `.cfg` at its top level.
+
+⚠ **A NUMBER THAT LOOKED WRONG AND WAS NOT.** `GameData` counts **120 folders**, against `S247`'s
+recorded **129**. ⛔ Nothing was deleted: 129 is the count of ENTRIES (`ls -1`), 120 folders plus 9
+loose files. Same tree, two counting methods. **Reported because the discrepancy was real until it was
+run down**, and a build chat that quietly picks the reassuring number is the failure this project
+already has a rule about.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** — `DialGaugeTest` **102**, `VehicleOverviewContentTest` **276**, 0 failed |
+| `previewdiff HEAD` | ⛔ **REFUSED, and that is the correct answer** — see below |
+| install | 12 files written (11 missing PNGs + the DLL), then 0 on a second run; both cfg md5s unchanged |
+| `--overviewcheck` | still 57 ok, 0 FAIL (it runs inside `test`) |
+
+⛔ **`previewdiff` REFUSED with *"no render input differs"*, and it is right.** `PREVIEW_INPUTS` is
+`plugin/src/pure/`, `plugin/preview/`, `plugin/GameData/DragonScreen/` — `plugin/src/ScreenPainter.cs`
+is the KSP GLUE and is never compiled into the preview, so the change **cannot** move a preview pixel.
+⭐ That is a stronger statement than "0 changed" and it is the gate working exactly as `S168` designed
+it: a vacuous comparison is refused rather than reported. **`S248`'s own previewdiff ran twice at 0 of
+134 existing pages changed**, and nothing since has touched a render input.
+
+⚠ **`VehicleOverviewContentTest` IS 276, NOT THE 266 `S248`'s COMMIT CLAIMED. The overseer is right.**
+The 266 was counted while that register entry was being drafted; two later edits to the suite — the
+dead-feed connection dashes and the vehicle checks that read the EMITTED command instead of
+`VehicleBox` — added ten. ⭐ `S248`'s entry is **corrected in place**, old number struck, not rewritten
+(C1.16).
+
+#### ⛔ WHAT THE OWNER'S NEXT LAUNCH CARRIES — THREE VERIFICATIONS, ONE RESTART
+
+⛔ **A build chat cannot check any of these: none of them exists until KSP runs.** In `KSP.log`:
+
+1. **THE FONT ENUMERATION (this task).** `grep "S249" KSP.log` — two lines, both totals, and whether
+   `DIN` appears in NAMES, in PATHS, in both or in neither. ⚠ **An empty match is a RESULT, not a
+   failed test** — report it exactly as it comes back.
+2. ⛔ **THE CO2 CAPACITY FIX, NEVER YET VERIFIED, AND THE ONE THAT MATTERS MOST.** In
+   `ModuleManager.ConfigCache`, `CarbonDioxide` `maxAmount` on `TE_18_DRAGONV2_POD` must read
+   **`29714.94625`**; before `S247` it read **`300`**. ⚠ **The owner has watched crew die of CO2
+   poisoning with this defect live.** `WasteWater` must read **`286.26543`**, on BOTH V2 pods.
+3. **`S247`'s INSTALL ITSELF.** `DragonScreenMonitor` must still count **3**, `DragonScreenState`
+   **2**, `DragonMechJebCore` **2**. ⛔ **A doubled count (6/4/4) means the merged patch is being
+   applied twice.**
+⚠ **The launch will be SLOW** — the cfg changed at `S247`, so ModuleManager re-runs every patch
+instead of loading its cache. ⚠ **A new MM warning on `Large_Crewed_Lab` is PREDICTED** (it has Oxygen
+and CO2 but no `WasteWater` tank for `@TANK[WasteWater]` to edit) — `S247`'s `BOB-42`, not a fault.
+
+#### ⚠ QUESTIONS RAISED — `BOB-54`
+
+`BOB-54` **the live install was missing 11 shipped art files and nothing noticed.** Every one is
+reachable only from the unrouted base pages today, so nothing on the glass was wrong — ⛔ **but the
+same gap on a routed page would be a missing image at flight time, and no instrument in this build
+compares the shipped folder with the live one.** `install` is the only thing that closes it and it is
+owner-gated. **Should `test` (or a new verb) MEASURE the repo-vs-live delta and report it without
+writing anything?**
+⭐ `BOB-51` · `BOB-46` · `BOB-47` · `BOB-53` — **settled by the overseer in this prompt's §4**, carried
+forward, and none of them acted on here. `BOB-49` and `BOB-52` remain with the owner.
