@@ -29750,3 +29750,107 @@ side — should the switch abort the executor itself? ·
 `BOB-61` ⛔ **`maxPhasingOrbits` is MechJeb's 5 and is untouched, as instructed** — but the transfer is
 215 km → ~420 km, and if five revolutions is not enough the autopilot gives up rather than failing
 loudly. **A finding for the first flight, and a number only the owner may set.**
+
+---
+
+### S253 [O] Turn on the acceleration limiter — **DONE 2026-09-09 — TWO WRITES, AND NOTHING ELSE. ALL SUITES PASSED (24,810 checks, up from 24,799), 9/9 mutants killed, previewdiff 0 of 140, installed, both cfg md5s unchanged at S251's value** — [overseer `PROMPT_LIMIT_ACCELERATION.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim, 2026-09-09:** *"set `Core.Thrust.LimitAcceleration = true` · set
+`MaxAcceleration = 40 m/s²` until we test it at default levels first, after next flight if limit
+acceleration is set to true and we still overheat only then do we change it to 20m/s"*.
+
+#### ⭐ THE TWO WRITES, AND ONLY THE TWO
+
+| field | written | today | authority |
+|---|---|---|---|
+| `Core.Thrust.LimitAcceleration` | **`true`** | `false` — RO's own seed, `MechJebModuleAscentSettings.cs:355` | the owner's ruling above |
+| `Core.Thrust.MaxAcceleration.Val` | **`40`** | `40` — MechJeb's field default, `MechJebModuleThrustController.cs:114` | the owner's ruling above |
+
+⭐ **`MaxAcceleration` is a `readonly EditableDouble`**, so the write is `.Val`, never the field —
+verified against the vendored declaration rather than assumed.
+⚠ **WRITING 40 MOVES NO VALUE TODAY** and is written anyway because the owner asked, because the field
+is `[Persistent(pass = Pass.GLOBAL)]` and therefore CAN be re-seeded from a global settings file, and
+because a written value gives the read-back an expectation to score instead of a blind row.
+⛔ **AND 40 IS DELIBERATE, NOT LAZY.** The community consensus is 20 m/s²; the owner is flying MechJeb's
+default first so the next flight measures **the limiter being ON** and not the limiter plus a new
+magnitude at once. **20 is his next call and nobody else's** — the constant's own docstring says so, and
+`AscentProfileTest` fails if anyone writes it without a ruling.
+
+#### ⛔⛔ WHY A Q LIMIT ALONE CANNOT STOP THE HEATING — the row's reason, not a restatement of the order
+
+The max-Q limiter caps **ρv²**; aerodynamic heating scales with **ρv³**. Holding q EXACTLY at its cap
+therefore still lets velocity climb as density falls — the limiter doing its job while the heating
+rises. **MEASURED on the 2026-09-09 19:57 flight:** q pinned flat at ~24,500 Pa from MET 51 s to MET
+82 s while surface speed went **283 → 516 m/s**. ⭐ An acceleration cap bites on the other term —
+`MechJebModuleThrustController.cs:477` throttles on `AccelerationLimitedThrottle()`, i.e. on
+thrust/mass, which is what drives v upward inside the atmosphere.
+⛔ **The RO speed rule is CONTEXT and is deliberately NOT transcribed as a constant** — nothing would
+read it, and a number nobody reads is a claim.
+
+#### ⭐ WHERE THEY WENT — the same three places S250/S251's thrust writes go
+
+`MechConductor.Configure`'s existing `core.Thrust` block · a row each in `AscentProfile.Audit` as
+`AscentDisposition.Write` · a matching expectation each in `AscentReadback.Expected` as
+`ExpectSource.OurWrite` · and the read-back's glue now READS `Core.Thrust.MaxAcceleration` back.
+⭐ **`Core.Thrust.MaxAcceleration` IS A NEW AUDIT ROW** — 78 → **79**. It was a box on the ascent
+settings screen (`MechJebModuleAscentSettingsMenu.cs:34` draws it as the text field beside the toggle)
+that the table had never carried, because the table enumerated what `ApplyRODefaults()` reaches and RO
+does not reach this one. Same shape as S235's `AutostageLimit` addition.
+⚠ The block's heading *"the thrust controller: RO seeds every one of these"* is now false for exactly
+one row, and is **marked in place rather than rewritten** (C1.16).
+
+#### ⭐ THE COUNTS, AND WHAT THEY BECAME
+
+| pin | was | now |
+|---|---|---|
+| audit rows | 78 | **79** |
+| `Write` disposition | 10 | **12** |
+| settings `Configure` writes in all | 13 | **15** (12 `Write` + 3 `RuntimeMission`) |
+| `OurWrite` expectations in the read-back | 10 | **12** |
+| RO-seeded boxes exempt by owner ruling | 6 | **7** (`Core.Thrust.LimitAcceleration`) |
+| RO-seeded boxes left alone | ≥29 | **≥28** |
+
+⚠ **ONE DISAGREEMENT WITH THE PROMPT, REPORTED RATHER THAN QUIETLY RESOLVED.** §4 asks for *"fifteen
+`OurWrite` rows"*. **Fifteen is the number of settings `Configure` writes**, and that is what became 15;
+the read-back's `OurWrite` rows are **12**, because the three destination rows are `MissionFact`, not
+`OurWrite`. The two numbers were the same object in the prompt and are not the same object in the code.
+⛔ **Read-back disagreement count: ZERO** — a core holding exactly its declared values still reports
+`0 disagree`, and the seven not-checkable rows are unchanged (the two new rows are both checkable).
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,810** checks (S252 left 24,799 — it rose by 11) |
+| mutation | **9 raised, 9 KILLED, 0 survived** — incl. M1 the cap changed to the forbidden 20, M4 the ρv²/ρv³ reasoning deleted, M6 the magnitude written as a bare literal, M9 the glue stops reading it back |
+| `previewdiff HEAD` | **0 of 140 changed**, ⛔ **not vacuous** — it named `AscentProfile.cs` and `AscentReadback.cs` as its two changed inputs and rendered both trees |
+| install | wrote **exactly one file**, `DragonScreen.dll`; all **170** files then md5-identical repo↔live |
+| repo + live `DragonScreen.cfg` | **`7297bda3ecaf269f04289c24ea4df036`** — identical to each other **and unchanged from S251/S252**, as a task that changes no cfg requires |
+| PluginData | unchanged by the install; ⛔ **no `mechjeb_settings*` file at the GameData root** — so nothing can re-seed the GLOBAL `MaxAcceleration` today |
+| ⛔ `LocalFixes/frost_mod_b9partswitch_fix.cfg` | still present, 3122 bytes, mtime 2026-08-04 |
+
+#### ⭐ WHAT WAS **NOT** TOUCHED
+
+⛔ **No other ascent number.** `PitchRate` 0.75, `PitchStartHeight` 1000, `MaxDynamicPressure` 24000,
+`LimitDynamicPressure`, `LimitToPreventOverheats`, `AutostageLimit`, the orbit and the plane launch are
+all exactly as S251/S252 left them. ⛔ No `LimitThrottle` / `MaxThrottle`. ⛔ No `LimitAoA` / `MaxAoA` —
+and it is unreachable anyway (`MechJebModuleAscentBaseAutopilot.cs:354` runs `LimitQaEnabled` **or**
+`LimitAoA`, never both, and we fly Q-alpha). ⛔ No `LimitQa` change, no rendezvous or docking work, no
+`.cfg`, craft, blacklist, Vehicle Overview or black-box change. ⛔ No instrumentation added.
+
+#### ⛔ WHAT THE OWNER CHECKS ON THE NEXT FLIGHT
+
+1. `conductor: PVG configured` now names **"acceleration limiter ON at 40 m/s²"** in the same sentence
+   as the max-Q and overheat limiters.
+2. ⭐⭐ **Whether anything still overheats.** ⛔ That is the whole point of flying it at 40 — if it still
+   overheats, **20 m/s² is the owner's next decision and nobody else's.**
+3. Everything else identical to the last flight.
+
+#### ⚠ QUESTIONS RAISED — `BOB-62`
+
+`BOB-62` ⚠ **FACT, not this task's to fix (C1.1).** `build.py previewdiff` prints
+`!! WARNING: assets\kenney_ui_scifi is now EMPTY - check it against your backups`. It **is** empty —
+mtime 2026-09-06 12:49, three days before this task — and the directory is `.gitignore`d
+(`.gitignore:79`), never tracked, so **git cannot restore it**. It is REFERENCE art under C7.1
+("look, don't ship"), so nothing shipped depends on it and no page changed. Flagged rather than
+touched; the owner's backups are the only route.

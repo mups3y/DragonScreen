@@ -995,6 +995,19 @@ namespace DragonScreen
                     // ⛔ NOT TRUNK PROTECTION, and it must not be described as such: the controller
                     // reads `p.temperature / p.maxTemp` and never `skinTemperature`.
                     core.Thrust.LimitToPreventOverheats = true;
+                    // ---- ⭐⭐ S253 — THE ACCELERATION LIMITER, AND WHY THE Q LIMITER ABOVE IS NOT ENOUGH
+                    // 🟢 OWNER, 2026-09-09: *"set `Core.Thrust.LimitAcceleration = true` · set
+                    // `MaxAcceleration = 40 m/s²` until we test it at default levels first"*.
+                    // ⛔ The line above caps **ρv²**; heating scales with **ρv³**. Holding max Q exactly
+                    // still lets velocity climb as density falls — measured on the 2026-09-09 19:57
+                    // flight, q flat at ~24,500 Pa from MET 51 s to 82 s while surface speed went
+                    // 283 → 516 m/s. An acceleration cap bites on thrust/mass, the term that drives v.
+                    // ⛔ 40 IS MECHJEB'S OWN DEFAULT ON PURPOSE — the owner is testing the limiter being
+                    // ON before he tests a magnitude, so the next flight measures one change. 20 m/s² is
+                    // the community number and it is HIS next call, not this file's.
+                    // ⭐ `MaxAcceleration` is a `readonly EditableDouble` — `.Val`, never the field.
+                    core.Thrust.LimitAcceleration = true;
+                    core.Thrust.MaxAcceleration.Val = AscentProfile.MaxAccelerationMps2;
                 }
             }
             catch (Exception e)
@@ -1072,7 +1085,10 @@ namespace DragonScreen
             Debug.Log("[DragonScreen] conductor: PVG configured — autostage ON (RO's own default; "
                       + "§B8's deviation LIFTED by the owner 2026-09-09), AscentType PSG (RO's), "
                       + "max-Q limiter ON at " + AscentProfile.MaxDynamicPressurePa.ToString("F0")
-                      + " Pa, overheat limiter ON, PitchRate "
+                      + " Pa, overheat limiter ON, acceleration limiter ON at "
+                      + AscentProfile.MaxAccelerationMps2.ToString("F0") + " m/s² (S253; MechJeb's own "
+                      + "default magnitude, deliberately — the owner is testing the limiter first), "
+                      + "PitchRate "
                       + AscentProfile.PitchRateDegPerS.ToString("F2") + " deg/s, PitchStartHeight "
                       + AscentProfile.PitchStartHeightM.ToString("F0") + " m (AltitudeBottom), "
                       + "target " + (t.PeriapsisM / 1000.0).ToString("F0") + " x "

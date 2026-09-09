@@ -516,18 +516,32 @@ public static class ConductorEngageTest
         // and the other six are still absent. ⛔ A blanket `!cfg.Contains("Thrust")` would have
         // to be deleted to let any of them through, and deleting a check is exactly how the next six
         // creep back in.
+        // ⚠⚠ S253 — ~~THREE of the nine~~ FIVE. The owner turned the ACCELERATION limiter on,
+        // 2026-09-09: *"set `Core.Thrust.LimitAcceleration = true` · set `MaxAcceleration = 40 m/s²`"*.
+        // ⭐ The magnitude is asserted THROUGH THE NAMED CONSTANT, exactly as the max-Q magnitude is —
+        // a bare `= 40` here would pass a laxer check and lose the provenance, which is the whole
+        // reason `AscentProfile.MaxAccelerationMps2` exists.
         string[] thrustWrites =
         {
             "core.Thrust.LimitDynamicPressure = true",
             "core.Thrust.MaxDynamicPressure.Val = AscentProfile.MaxDynamicPressurePa",
             "core.Thrust.LimitToPreventOverheats = true",
+            "core.Thrust.LimitAcceleration = true",
+            "core.Thrust.MaxAcceleration.Val = AscentProfile.MaxAccelerationMps2",
         };
         for (int i = 0; i < thrustWrites.Length; i++)
             Check("S250: the owner-ruled thrust write '" + thrustWrites[i] + "' is present",
                   cfg.Contains(thrustWrites[i]), "");
+        // ⛔⛔ S253 — ~~"LimitAcceleration", "LimitAcceleration.Val"~~ REMOVED FROM THIS LIST AND
+        // SUPERSEDED IN PLACE (C1.16). The owner ruled the limiter ON on 2026-09-09 and both fields are
+        // asserted PRESENT above, so leaving them here would be asserting the opposite of the ruling.
+        // ⚠ AND THE SECOND NAME WAS WRONG THE WHOLE TIME, which is worth recording rather than tidying
+        // away: the magnitude field is `MaxAcceleration.Val`, not `LimitAcceleration.Val` — a bool has
+        // no `.Val`. So that entry could never have caught anything. ⛔ Everything else on this list
+        // stays, and the rule it enforces is unchanged.
         string[] thrustStillAbsent =
         {
-            "LimitAcceleration", "LimitAcceleration.Val", "LimitToTerminalVelocity",
+            "LimitToTerminalVelocity",
             "ElectricThrottle", "DifferentialThrottle", "SmoothThrottle",
         };
         for (int i = 0; i < thrustStillAbsent.Length; i++)

@@ -96,6 +96,12 @@ public static class AscentProfileTest
         "Core.Thrust.LimitToPreventOverheats",   // owner override; ⛔ NOT trunk protection
         "PitchRate",                             // his own flown value, corroborated by telemetry
         "PitchStartHeight",                      // "raise it to 1000" — OWNER-CHOSEN, not measured
+        // 🟢 S253 — the SEVENTH, and it is an owner ruling of exactly the same kind, 2026-09-09:
+        // "set `Core.Thrust.LimitAcceleration = true`". RO seeds it false
+        // (`MechJebModuleAscentSettings.cs:355`), so writing true needs an exemption and this is it.
+        // ⛔ `Core.Thrust.MaxAcceleration` is NOT here and must not be — RO does not seed it, so it
+        // needs no exemption from a rule about RO-seeded boxes.
+        "Core.Thrust.LimitAcceleration",         // "set Core.Thrust.LimitAcceleration = true"
     };
 
     // ⭐ THE EXACT SET OF BOXES `MechConductor.Configure` MAY WRITE. Pinned by name AND by count, so
@@ -135,6 +141,16 @@ public static class AscentProfileTest
         // reset MechJeb's SETTINGS and did not lift "direct part control is ours". The first of these
         // is what keeps the vehicle launching at all — see `AutoDeploySolarPanels` below.
         "AutoDeploySolarPanels", "SkipCircularization", "WarpCountDown", "Core.Warp.activateSASOnWarp",
+        // ⛔⛔ S253 — TWO MORE, AND THE LIST NAME IS NOW THREE COUNTS STALE. It is KEPT rather than
+        // renamed (C1.16): "TheNineWrites" is what the register, the commits and four earlier tasks
+        // call it, and a rename would break every one of those references to save a word. It holds
+        // TWELVE. 🟢 OWNER, 2026-09-09, verbatim: *"set `Core.Thrust.LimitAcceleration = true` · set
+        // `MaxAcceleration = 40 m/s²` until we test it at default levels first, after next flight if
+        // limit acceleration is set to true and we still overheat only then do we change it to 20m/s"*.
+        // ⭐ The Q limiter caps ρv²; heating scales with ρv³ — measured on the 2026-09-09 19:57 flight,
+        // q flat at ~24,500 Pa from MET 51 s to 82 s while speed went 283 → 516 m/s. ⛔ A THIRTEENTH
+        // still fails here, exactly as an eleventh did.
+        "Core.Thrust.LimitAcceleration", "Core.Thrust.MaxAcceleration",
     };
 
     public static int Run()
@@ -180,8 +196,12 @@ public static class AscentProfileTest
         // `TheNineWrites` below just as loudly, and an over-writing one fails it too.
         // ⚠ S235: 77 -> 78. The added row is `AutostageLimit` (JOB 4) — a box that was always
         // being written and was simply not in the table. The pin still catches a LOST row.
-        Check("S222b/S235: the audit did not lose rows while shedding writes (78 boxes)",
-              AscentProfile.Audit.Length == 78, "rows=" + AscentProfile.Audit.Length);
+        // ⚠ S253: 78 -> 79. The added row is `Core.Thrust.MaxAcceleration` — the magnitude beside the
+        // `LimitAcceleration` toggle the owner turned on, and the one box in the thrust block that
+        // `ApplyRODefaults()` does NOT seed. Same shape as S235's addition: a box that was always on
+        // the screen and simply not in the table. The pin still catches a LOST row.
+        Check("S222b/S235/S253: the audit did not lose rows while shedding writes (79 boxes)",
+              AscentProfile.Audit.Length == 79, "rows=" + AscentProfile.Audit.Length);
 
         // ⭐ THE HEADLINE, PINNED AS A NUMBER. 47 -> 8.
         // ⚠ S235 — THIS PIN READ `== 8`. SUPERSEDED IN PLACE (C1.16 / G12). See `TheNineWrites`
@@ -196,12 +216,16 @@ public static class AscentProfileTest
         // different questions and conflating them is how a row goes missing.
         // ⚠ S251: ~~SIX~~ — TEN. Four §B12.7 writes came back (`BOB-55` settled), and
         // `AscentType` / `Core.Node.Autowarp` stay withdrawn because S250 showed they cost nothing.
-        Check("S251: exactly TEN boxes carry the Write disposition (47 -> 9 -> 6 -> 10)",
-              AscentProfile.CountOf(AscentDisposition.Write) == 10,
+        // ⚠ S253: ~~TEN~~ — TWELVE. The owner's acceleration limiter and its magnitude, 2026-09-09.
+        // One of the two (`LimitAcceleration`) is an RO-seeded box and therefore also needs an entry in
+        // `OwnerNamedExemptions`; the other (`MaxAcceleration`) is MechJeb's own field default and does
+        // not. ⛔ Both are HIS, quoted in their own audit rows — a build chat still cannot add a write.
+        Check("S253: exactly TWELVE boxes carry the Write disposition (47 -> 9 -> 6 -> 10 -> 12)",
+              AscentProfile.CountOf(AscentDisposition.Write) == 12,
               "written=" + AscentProfile.CountOf(AscentDisposition.Write));
-        Check("S251: ...and THIRTEEN settings are written by Configure in all (10 Write + 3 RuntimeMission)",
+        Check("S253: ...and FIFTEEN settings are written by Configure in all (12 Write + 3 RuntimeMission)",
               AscentProfile.CountOf(AscentDisposition.Write)
-              + AscentProfile.CountOf(AscentDisposition.RuntimeMission) - 1 == 13,
+              + AscentProfile.CountOf(AscentDisposition.RuntimeMission) - 1 == 15,
               "write=" + AscentProfile.CountOf(AscentDisposition.Write)
               + " runtime=" + AscentProfile.CountOf(AscentDisposition.RuntimeMission)
               + " (LaunchingToPlane is RuntimeMission but written by the plane launch, not Configure)");
@@ -210,7 +234,7 @@ public static class AscentProfileTest
 
         // ...and they are THESE eight, by name. Adding a ninth fails here even if it is plausible.
         for (int i = 0; i < TheNineWrites.Length; i++)
-            Check("S251: '" + TheNineWrites[i] + "' is one of the ten writes",
+            Check("S253: '" + TheNineWrites[i] + "' is one of the twelve writes",
                   AscentProfile.Row(TheNineWrites[i]).How == AscentDisposition.Write,
                   "how=" + AscentProfile.Row(TheNineWrites[i]).How);
 
@@ -281,6 +305,27 @@ public static class AscentProfileTest
         // above that peak is the defect, whatever the number is.
         Check("S250: the threshold is BELOW our last flight's 48,971 Pa peak, or it can never fire",
               AscentProfile.MaxDynamicPressurePa < 48971.0, "");
+
+        // ⭐⭐ S253 — THE ACCELERATION LIMITER, PINNED THE SAME WAY, AND THE MAGNITUDE PIN IS THE
+        // UNUSUAL ONE: it asserts the value is MechJeb's OWN DEFAULT, which is the opposite of what a
+        // tuning pin usually asserts. 🟢 That is the owner's instruction — "until we test it at default
+        // levels first" — so the next flight measures the limiter being ON and not a second change
+        // beside it. ⛔ 20 m/s² is the community number and it is HIS next call: if a later task
+        // "improves" this to 20 without an owner ruling, this line is what says so.
+        Check("S253: the acceleration limiter is WRITTEN ON — the owner's 2026-09-09 override",
+              AscentProfile.Row("Core.Thrust.LimitAcceleration").How == AscentDisposition.Write
+              && AscentProfile.Row("Core.Thrust.LimitAcceleration").Value.Contains("RO seeds false"), "");
+        Check("S253: the cap is MechJeb's own default 40 m/s², deliberately NOT the community 20",
+              AscentProfile.MaxAccelerationMps2 == 40.0
+              && AscentProfile.Row("Core.Thrust.MaxAcceleration").How == AscentDisposition.Write, "");
+        Check("S253: ...and its row says WHY 40 and not 20, so nobody 'improves' on it",
+              AscentProfile.Row("Core.Thrust.MaxAcceleration").Why.Contains("20"), "");
+        // ⛔ AND THE REASON THE LIMITER EXISTS AT ALL IS RECORDED WHERE IT CAN BE FOUND: a Q limiter
+        // caps ρv² and heating scales with ρv³, so the two are not substitutes. A row that lost that
+        // would read as a duplicate of the max-Q write.
+        Check("S253: the limiter's row names the ρv² / ρv³ argument, not just the owner's say-so",
+              AscentProfile.Row("Core.Thrust.LimitAcceleration").Why.Contains("ρv²")
+              && AscentProfile.Row("Core.Thrust.LimitAcceleration").Why.Contains("ρv³"), "");
         Check("S222b: the render also reports the UI-derived count, so the log answers the owner's question",
               AscentProfile.Render().Contains("UI-derived"), "");
     }
@@ -311,8 +356,10 @@ public static class AscentProfileTest
         // ...and the exemption list may not grow WITHOUT AN OWNER RULING. ⚠ S250: ~~three, named
         // by the owner on 2026-09-08~~ — now SIX, and every one of the six is an owner ruling
         // quoted in its own audit row. ⛔ A build chat may still not add a seventh.
-        Check("S250: exactly SIX RO-seeded boxes are exempt, and the owner ruled every one",
-              OwnerNamedExemptions.Length == 6, "n=" + OwnerNamedExemptions.Length);
+        // ⚠ S253: ~~SIX~~ — SEVEN. `Core.Thrust.LimitAcceleration`, ruled by the owner on 2026-09-09
+        // and quoted in its own audit row. ⛔ A build chat may still not add an eighth.
+        Check("S253: exactly SEVEN RO-seeded boxes are exempt, and the owner ruled every one",
+              OwnerNamedExemptions.Length == 7, "n=" + OwnerNamedExemptions.Length);
         for (int j = 0; j < OwnerNamedExemptions.Length; j++)
             Check("S222b: the exempt '" + OwnerNamedExemptions[j] + "' really is one RO seeds",
                   System.Array.IndexOf(RoSeeded, OwnerNamedExemptions[j]) >= 0, "");
@@ -324,8 +371,12 @@ public static class AscentProfileTest
             if (AscentProfile.Row(RoSeeded[i]).How != AscentDisposition.Write) left++;
         // ⚠ S250: 30 -> 29. Five RO-seeded boxes became owner-ruled writes and one
         // (`Autostage`) went the other way, from a write to RO's own default.
-        Check("S250: ...and the rule bites — at least 29 RO-seeded boxes are still left alone",
-              left >= 29, "left=" + left);
+        // ⚠ S253: 29 -> 28. `Core.Thrust.LimitAcceleration` became the sixth owner-ruled write of an
+        // RO-seeded box. ⛔ The floor is LOWERED deliberately and only by the width of that one ruling —
+        // it is not a guard being loosened to make room, and a seventh would fail the exemption pin
+        // above before it ever reached here.
+        Check("S253: ...and the rule bites — at least 28 RO-seeded boxes are still left alone",
+              left >= 28, "left=" + left);
     }
 
     // =====================================================================================

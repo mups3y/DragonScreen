@@ -316,6 +316,41 @@ namespace DragonScreen
         public const double PitchStartHeightM = 1000.0;
 
         // =========================================================================================
+        // ⭐⭐ S253 — THE ACCELERATION LIMIT. ⛔ NOT ONE OF THE THREE ABOVE, AND NOT DERIVED THE SAME WAY.
+        //
+        // 🟢 OWNER 2026-09-09, verbatim: "set `Core.Thrust.LimitAcceleration = true` · set
+        // `MaxAcceleration = 40 m/s²` until we test it at default levels first, after next flight if
+        // limit acceleration is set to true and we still overheat only then do we change it to 20m/s".
+        //
+        // ⛔⛔ WHY A Q LIMIT ALONE CANNOT STOP THE HEATING, which is the whole reason this lever exists.
+        // The max-Q limiter caps **ρv²**; aerodynamic heating scales with **ρv³**. Holding q EXACTLY at
+        // its cap therefore still lets velocity climb as density falls — the limiter is doing its job
+        // and the heating keeps rising. MEASURED on the 2026-09-09 19:57 flight: q pinned flat at
+        // ~24,500 Pa from MET 51 s to MET 82 s while surface speed went 283 → 516 m/s.
+        // ⭐ An ACCELERATION cap bites on the other term: it throttles on thrust/mass, which is what
+        // actually drives v upward inside the atmosphere.
+        // ⛔ THE RO SPEED RULE IS CONTEXT, NOT A CONSTANT — it is deliberately not transcribed here as a
+        // threshold, because nothing in this file would read it and a number nobody reads is a claim.
+        // =========================================================================================
+
+        /// <summary>
+        /// ⭐ The acceleration cap, m/s². ⛔⛔ **THIS IS MECHJEB'S OWN FIELD DEFAULT (40), CHOSEN
+        /// DELIBERATELY, AND IT IS NOT THE COMMUNITY NUMBER.** 🟢 The owner is testing the limiter being
+        /// **ON** before he tests a new magnitude, so that the next flight measures ONE change and not
+        /// two: *"until we test it at default levels first"*. ⛔ The community consensus is 20 m/s², and
+        /// **20 is HIS next call and nobody else's** — *"after next flight if limit acceleration is set
+        /// to true and we still overheat only then do we change it to 20m/s"*. Do not write it, and do
+        /// not suggest it here.
+        /// ⚠ **WRITING 40 MOVES NO VALUE TODAY** — `MechJebModuleThrustController.cs:114` initialises
+        /// `readonly EditableDouble MaxAcceleration = 40` and `ApplyRODefaults()` never touches it
+        /// (verified: 0 matches in `MechJebModuleAscentSettings.cs`). It is written anyway because the
+        /// owner asked for it, because the field is `[Persistent(pass = Pass.GLOBAL)]` and so CAN come
+        /// back from a global settings file, and because it gives the read-back an expectation to score
+        /// instead of a blind row.
+        /// </summary>
+        public const double MaxAccelerationMps2 = 40.0;
+
+        // =========================================================================================
         // 2. THE AUDIT — every box the ascent stack puts on the screen, and our decision on it
         // =========================================================================================
         // Enumerated from the vendored menus themselves, not from memory:
@@ -477,6 +512,10 @@ namespace DragonScreen
             R("Aref",               AscentDisposition.RoDefault, "0 (field default = auto)", "UI box. Reference area; 0 lets the glue ball derive it."),
 
             // ---- the thrust controller: RO seeds every one of these ---------------------------------
+            // ⚠ S253 — ONE EXCEPTION TO THAT HEADING, MARKED IN PLACE RATHER THAN REWRITTEN (C1.16):
+            // `Core.Thrust.MaxAcceleration` is NOT seeded by `ApplyRODefaults()`. It is MechJeb's own
+            // field default and it is in this block because it is the magnitude belonging to
+            // `LimitAcceleration`, which RO does seed. Everything else here is still RO's.
             R("Core.Thrust.MaxDynamicPressure", AscentDisposition.Write, "24000 Pa (RO seeds 50000)",
               "⭐⭐ **S250 — MEASURED OFF REAL DRAGON MISSIONS**, the mean of three clean ascent peaks (CRS-14 21,943 / CRS-13 23,814 / CRS-16 24,347 Pa). ⭐ **CONFIDENCE HIGH, and it is the only one of the three ascent numbers that is** — `q` is measured directly rather than inferred through an attitude relationship. ⚠ ApplyRODefaults sets it TWICE (20000 early, 50000 at the end), so RO's real seed is 50000 — above our own last flight's 48,971 Pa peak, which is why nothing throttled. Full provenance: `AscentProfile.MaxDynamicPressurePa`."),
             R("Core.Thrust.MinThrottle",        AscentDisposition.RoDefault, "0.05 (RO)", "The floor RO gives an RO/RF engine."),
@@ -485,7 +524,10 @@ namespace DragonScreen
               "RO turns this off; RealFuels' own ullage model owns ignition stability, and `src/Ullage.cs` is what reads it."),
             R("Core.Thrust.AutoRCSUllaging",    AscentDisposition.RoDefault, "true (RO)",  "RCS settling before an RO relight."),
             R("Core.Thrust.LimitThrottle",      AscentDisposition.RoDefault, "false (RO)", "No blanket throttle cap."),
-            R("Core.Thrust.LimitAcceleration",  AscentDisposition.RoDefault, "false (RO)", "No g-limit; the crew limit is not modelled here."),
+            R("Core.Thrust.LimitAcceleration",  AscentDisposition.Write, "true (RO seeds false)",
+              "🟢🟢 **S253 — OWNER OVERRIDE, 2026-09-09**, verbatim: 'set `Core.Thrust.LimitAcceleration = true` · set `MaxAcceleration = 40 m/s²` until we test it at default levels first'. ⛔⛔ **THIS IS THE LEVER THE MAX-Q LIMITER CANNOT PULL, and that is the whole reason for it:** the Q limiter caps **ρv²** while aerodynamic heating scales with **ρv³**, so holding q exactly at its cap still lets velocity climb as density falls. MEASURED on the 2026-09-09 19:57 flight — q pinned flat at ~24,500 Pa from MET 51 s to 82 s while surface speed went 283 → 516 m/s, the limiter working perfectly and the heating rising anyway. ⭐ `MechJebModuleThrustController.cs:477` throttles on `AccelerationLimitedThrottle()`, i.e. on thrust/mass, which is the term that drives v. The magnitude is the row below. ~~No g-limit; the crew limit is not modelled here.~~ SUPERSEDED IN PLACE (C1.16) — and note the old reason was about the CREW, which is not why it is on now."),
+            R("Core.Thrust.MaxAcceleration",    AscentDisposition.Write, "40 m/s² (MechJeb's own field default; RO does not seed it)",
+              "🟢 **S253 — OWNER, 2026-09-09**, the magnitude for the row above. ⛔⛔ **IT IS MECHJEB'S OWN DEFAULT ON PURPOSE, AND 20 IS NOT OURS TO WRITE:** the community number is 20 m/s² and the owner is deliberately flying the DEFAULT first — 'until we test it at default levels first, after next flight if limit acceleration is set to true and we still overheat only then do we change it to 20m/s' — so the next flight measures the limiter being ON rather than the limiter plus a new magnitude at the same time. ⚠ **WRITING IT MOVES NO VALUE TODAY**: `MechJebModuleThrustController.cs:114` initialises `readonly EditableDouble MaxAcceleration = 40` and `ApplyRODefaults()` never touches it. It is written because the owner asked, because the field is `[Persistent(pass = Pass.GLOBAL)]` and so can be re-seeded from a global settings file, and because a written value gives the read-back something to score. ⭐ It is a `readonly EditableDouble`, so the write is `MaxAcceleration.Val`, never the field. Full provenance: `AscentProfile.MaxAccelerationMps2`."),
             R("Core.Thrust.LimitToPreventOverheats", AscentDisposition.Write, "true (RO seeds false)",
               "🟢 **OWNER OVERRIDE, 2026-09-09.** A plain bool with no magnitude to choose. ⛔⛔ **IT IS NOT TRUNK PROTECTION AND MUST NOT BE DESCRIBED AS SUCH:** `MechJebModuleThrustController` reads `p.temperature / p.maxTemp` only and NEVER `skinTemperature`, so it sees a part's bulk temperature, not its skin. ~~RealHeat owns heating~~ — still true of the MODEL; this is a throttle limiter on top of it."),
 

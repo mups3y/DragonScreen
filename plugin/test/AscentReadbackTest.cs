@@ -183,6 +183,25 @@ public static class AscentReadbackTest
               mq >= 0 && AscentReadback.Expected[mq].Number == 24000.0
               && AscentReadback.Expected[mq].Source == ExpectSource.OurWrite, "");
 
+        // ⭐⭐ S253 — THE ACCELERATION LIMITER, AND THE PAIR IS THE POINT. The toggle alone is
+        // meaningless without the magnitude and the magnitude alone actuates nothing, so both are
+        // expected and both are declared `OurWrite`. ⚠ The magnitude's expectation (40) is ALSO
+        // MechJeb's own field default, so this row can never fire on a stale RO seed — there is no RO
+        // seed for it. It fires if a GLOBAL settings file re-seeds the field or if our write never runs.
+        int la = IndexOf("Core.Thrust.LimitAcceleration");
+        Check("S253 the acceleration limiter is expected ON, and declared as OUR write",
+              la >= 0 && !AscentReadback.Expected[la].IsNumber
+              && AscentReadback.Expected[la].Text == "true"
+              && AscentReadback.Expected[la].Source == ExpectSource.OurWrite, "");
+        int ma = IndexOf("Core.Thrust.MaxAcceleration");
+        Check("S253 ...and its magnitude is expected at the owner's 40 m/s², as our write",
+              ma >= 0 && AscentReadback.Expected[ma].IsNumber
+              && AscentReadback.Expected[ma].Number == 40.0
+              && AscentReadback.Expected[ma].Source == ExpectSource.OurWrite, "");
+        Check("S253 ...and the audit agrees both are written, not left at RO's default",
+              AscentProfile.Row("Core.Thrust.LimitAcceleration").How == AscentDisposition.Write
+              && AscentProfile.Row("Core.Thrust.MaxAcceleration").How == AscentDisposition.Write, "");
+
         // ⚠ RO ASSIGNS DesiredAttachAlt TWICE and the LAST one is 145 km, not the 110 km the audit's
         // prose says. The expectation follows RO's actual behaviour; if this is ever "corrected" to
         // 110000 the instrument starts firing a false red on every flight.

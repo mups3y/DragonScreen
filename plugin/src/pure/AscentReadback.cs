@@ -347,7 +347,17 @@ namespace DragonScreen
             B("Core.Thrust.LimitToPreventUnstableIgnition", ExpectSource.RoDefault, false, "ApplyRODefaults: LimitToPreventUnstableIgnition = false"),
             B("Core.Thrust.AutoRCSUllaging",    ExpectSource.RoDefault, true,  "ApplyRODefaults: AutoRCSUllaging = true"),
             B("Core.Thrust.LimitThrottle",      ExpectSource.RoDefault, false, "ApplyRODefaults: LimitThrottle = false"),
-            B("Core.Thrust.LimitAcceleration",  ExpectSource.RoDefault, false, "ApplyRODefaults: LimitAcceleration = false"),
+            // 🟢🟢 S253 — ~~RoDefault, false~~ SUPERSEDED IN PLACE (C1.16). The owner turned the
+            // limiter ON, 2026-09-09, and the expectation follows the decision: `ApplyRODefaults` still
+            // seeds `false` (`MechJebModuleAscentSettings.cs:355`), so this row now reports the failure
+            // mode `OurWrite` exists for — our write not landing on top of RO's seed.
+            B("Core.Thrust.LimitAcceleration",  ExpectSource.OurWrite, true,
+              "S253: owner OVERRIDE. Configure writes true; ApplyRODefaults sets it false (MechJebModuleAscentSettings.cs:355)"),
+            // ⚠ 40 IS ALSO MECHJEB'S OWN FIELD DEFAULT, so this row cannot fire on a stale RO seed —
+            // there is no RO seed. It fires if a GLOBAL settings file re-seeds the field (it is
+            // `[Persistent(pass = Pass.GLOBAL)]`) or if our write is not reached at all.
+            N("Core.Thrust.MaxAcceleration",    ExpectSource.OurWrite, 40.0,
+              "S253: owner's magnitude, deliberately MechJeb's own default. MechJebModuleThrustController.cs:114 `readonly EditableDouble MaxAcceleration = 40`; ApplyRODefaults never touches it"),
             B("Core.Thrust.LimitToPreventOverheats", ExpectSource.OurWrite, true,
               "S250: owner OVERRIDE. Configure writes true; ApplyRODefaults sets it false. ⛔ It reads p.temperature/p.maxTemp only, never skinTemperature — NOT trunk protection"),
 

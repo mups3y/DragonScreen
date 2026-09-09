@@ -187,6 +187,8 @@ namespace DragonScreen
             Flag(obs, "Core.Thrust.AutoRCSUllaging", delegate { return core.Thrust.AutoRCSUllaging; });
             Flag(obs, "Core.Thrust.LimitThrottle", delegate { return core.Thrust.LimitThrottle; });
             Flag(obs, "Core.Thrust.LimitAcceleration", delegate { return core.Thrust.LimitAcceleration; });
+            // ⭐ S253 — the magnitude beside the toggle. `readonly EditableDouble`, so `.Val` is read.
+            Num (obs, "Core.Thrust.MaxAcceleration", delegate { return core.Thrust.MaxAcceleration.Val; });
             Flag(obs, "Core.Thrust.LimitToPreventOverheats", delegate { return core.Thrust.LimitToPreventOverheats; });
 
             // ---- the CLASSIC path: unread by the PSG solver, and read back anyway -------------------
