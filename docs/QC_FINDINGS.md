@@ -6795,3 +6795,255 @@ per session (C1.12) · ⛔ **Never edit `docs/BUILD_PLAN.md`** (guarded, G10) ·
 PLACE** (C1.16 / G12) · ⛔ **§14.2a:** an element **absent** from the export **stays exactly as it is**;
 absence bounds what may be **ADDED** and says nothing about what must be **REMOVED** · ⛔ **Never write the
 bare word "stock"** · ⛔ **BOB-8 is BOB's line — do not touch the recorder.**
+
+
+---
+
+# 🔬 THE DEFECT CHECKLIST — FIRST RUN — VEHICLE OVERVIEW · 2026-09-10
+
+**Brief:** `Desktop/BOB/PROMPT_QC_CHECKLIST.md` (26,413 B, 2026-09-10 03:08).
+**Target:** the page the owner declared *"100 percent finished"* and locked.
+**Rendered fresh at HEAD `b2eaa46` (S260)** — `build.py test` 26,724 checks green, `build.py preview`
+140 pages. Lock bundle `md5sum -c` **14/14 OK**. Working tree clean. ⛔ **Nothing was fixed.**
+
+⛔⛔ **THIS REPORT IS INCOMPLETE AGAINST THE STOPPING RULE AND I AM NOT CALLING THE PAGE CLEAN.**
+PART 1 says a page may not be declared clean *"until every section of PART 3 has been run and its result
+recorded."* **I ran 14 of the 32 sections.** The other 18 are listed as `NOT RUN` with the reason. ⭐ Per
+the brief's own words — *"an honest BLOCKED is worth more than a CLEAN you did not earn."*
+
+⚠ **AND ONE CORRECTION TO THE BRIEF ITSELF:** PART 4 asks for *"all twenty checklist sections"*; PART 3
+lists **32**. Recorded under §5 CONTRADICT, which is the section that asks for exactly this.
+
+---
+
+## 🔴 THE HEADLINE — `--overviewcheck` HAS NEVER MEASURED THE SHIPPED RENDER
+
+### F-1 · **TIER 1** · the instrument runs at a size the product does not render
+
+| | screen 1 | screen 2 |
+|---|---|---|
+| `DeriveScreens()` — mesh aspect × cfg `screenWidth 2560` | `round(2560×703/1280)` = **1406** | `round(2560×710/1280)` = **1420** |
+| the sealed / shipped PNG | **2560×1406** | **2560×1420** |
+| what `--overviewcheck` measures | **2560×1405** | **2560×1419** |
+
+⛔⛔ **AND ON SCREEN 1 THE ONE-ROW DIFFERENCE FLIPS THE FIT REGIME.** `BaseFit.For` takes
+`K = min(w/1920, h/1054)`:
+
+```
+shipped 2560x1406   K = min(1.333333, 1.333966) = 1.333333   WIDTH-limited    OffX 0.0000  OffY 0.3333
+checked 2560x1405   K = min(1.333333, 1.333017) = 1.333017   HEIGHT-limited   OffX 0.3036  OffY 0.0000
+```
+⭐ **The exe prints its own wrong frame in its own header** — `[OVERVIEW] 2560x1405   k = 1.33302
+x-offset 0.30`. The shipped page is `k = 1.33333, x-offset 0.00`. **Different scale, different letterbox,
+different axis.** Every device-px expectation in that block is computed from the wrong `K`.
+
+⛔ **IT BREAKS `PreviewMain.cs`'s OWN STATED RULE**, written above `MeasuredScreens`:
+> *"Nothing in this file may name a render size that did not come through there."*
+
+The literals `2560, 1405` and `2560, 1419` are named at `:2282` (`TriCheckAt`, labelled **"SHIPPED
+GLASS"**), `:2906–2946` (`BaseCheckAt`, both screens) and `:3301` (`OverviewCheckAt`). None came through
+`DeriveScreens()`.
+
+⚠ **This is what the LOCK cites as proof:** *"`DragonScreenPreview --overviewcheck` ink measured off
+BOTH screens, all ok."* **It measured off two screens that do not exist.**
+
+**Fix plan.** Derive the check sizes from `DeriveScreens()` — the same array the renderer uses — instead
+of typing them. ⛔ **Do not simply retype 1406/1420**: that reproduces the defect with better numbers and
+will drift again the next time the cfg changes. The rule the file already states is the fix.
+**Verify:** the header prints `2560x1406 k = 1.33333 x-offset 0.00`; re-run and confirm which
+expectations move, because some of them will.
+
+---
+
+## 🟠 THE TOLERANCES ARE WIDER THAN THE SPEC'S OWN VISIBILITY THRESHOLD
+
+### F-2 · **TIER 2** · the guard on the element the owner NAMED permits more drift than the canon calls visible
+
+`PreviewMain.cs:3128` — `SayAt("the page title's ink CENTRE x", (l+r)/2, f.X(960f), **3.0**, "")`
+
+```
+ok   the page title's ink CENTRE x   measured 1278   expected 1280.00      <- passes: 2.0 < 3.0
+```
+⛔ **Canon §2, on this exact element:** *"A 2 px difference between two pages is visible when you switch
+between them, and it is invisible when you look at either one alone."*
+⭐⭐ **So the check tolerates ±3.0 device px on the one value the spec says must never drift — and a
+2 px deviation is what it is currently passing.** A second page whose title sat 2.9 px off centre would
+be certified identical. ±3.0 device px is **±2.25 design px**; two pages could differ by **4.5 design px**
+and both report `ok`.
+
+⚠ **The same tolerance hides a units problem.** `:3125` checks ink HEIGHT against `23.67 * f.K`, tol 3.0:
+```
+ok   the page title's ink HEIGHT   measured 34   expected 31.55   design 25.51
+```
+**The check's own back-conversion says the rendered ink is 25.51 design px. `TitleInk` is 23.67.**
+That is **+7.8 %**, and it passes because 2.45 < 3.0. ⛔ This is §2 UNITS on the canon's flagship
+constant, and it is the same family as the `LabelPx`-is-a-font-size defect the brief already records.
+⚠ Rail row 1 shows it too, and shows it **moving with the screen**: `design 13.50` on screen 1 and
+`design 12.75` on screen 2, against a `RailTitleInk` of **13.06**.
+
+**Fix plan.** Tolerances must be stated as a rule, not a number: for a centred element assert the
+**equality of the two gaps** (§11's own instruction), and for ink height assert against the measured
+device value with a tolerance **derived from the rasteriser's known ±1 px**, not 3.0. ⛔ Then find out
+whether the residual 7.8 % is a font-metric divergence or a wrong constant — **that is a separate
+question and this finding does not answer it.**
+
+---
+
+## 🟡 THE DOCUMENT DEFECTS
+
+### F-3 · **TIER 2** · §5 CONTRADICT — the canon disagrees with itself, and both halves are wrong about screen 2
+
+| source | screen 1 | screen 2 |
+|---|---|---|
+| canon **§1** | 2560 × **1406** ✅ | 2560 × **1419** ❌ |
+| canon **§2** (the measured block) | 2560 × **1405** ❌ | 2560 × **1419** ❌ |
+| the brief, PART 4 item 6 | 2560 × **1405** ❌ | 2560 × **1419** ❌ |
+| **measured, the sealed PNGs** | **2560 × 1406** | **2560 × 1420** |
+
+⭐ §2's figures are *honest about where the check ran* — they are simply the wrong sizes to have run at
+(F-1). §1 has screen 1 right and screen 2 wrong. **No single row of this table is correct throughout.**
+
+### F-4 · **TIER 3** · §3 ANCHOR — the artwork bbox is stated one px too large at both maxima
+
+Canon §6: *"artwork box `alpha>0` = **93..1707 × 80..2944**"*. **Measured on the file: `93..1706 ×
+80..2943`.**
+🟢 **The shipped code is RIGHT** — `AssetOpaqueW = 1614f, AssetOpaqueH = 2864f`, which is exactly the
+measured extent. The doc renders a width as an end-coordinate in closed-range notation.
+⛔ **The trap:** anyone re-deriving from the canon as an inclusive range gets 1615 × 2865 →
+bottom **852.506** instead of **852.646**. Re-derived both ways:
+```
+exclusive (= the code)  art 1614x2864 -> h 518.1462  bottom 852.6462  shelf clear 40.3538   <- correct
+inclusive (as written)  art 1615x2865 -> h 518.0062  bottom 852.5062  shelf clear 40.4938   <- 0.14 off
+```
+⚠ Canon §6's *"292.0 × **518.147**"* and *"bottom **852.647**"* are each rounded up in the last digit;
+exact is **518.1462** and **852.6462**. Its *"shelf clearance 40.354"* is correct (40.3538).
+
+### F-5 · **TIER 3** · §17 ALPHA — S259 invented the right discriminator and ran it on ONE of four edges
+
+S259's own test, applied to all four edges of `dragon_shadow_glow.png`:
+```
+TOP     edge alpha 1   154/2358 nonzero   margin 0 rows            -> RAMP TRUNCATED
+BOTTOM  edge alpha 0     0/2358 nonzero   margin 6 rows = 2.00 dsg -> ZERO INSIDE THE FILE  ✅
+LEFT    edge alpha 1   132/1866 nonzero   margin 0 cols            -> RAMP TRUNCATED
+RIGHT   edge alpha 1   140/1866 nonzero   margin 0 cols            -> RAMP TRUNCATED
+```
+🟢 **The bottom — the edge BOB-70 was about, and the one that carries the `ShadowY + ShadowH = 893.0`
+claim — is genuinely clean.** The re-bake worked. **The other three were never checked.**
+⚠ **The visual cost is nil and I am not claiming otherwise:** an alpha-1 tail over ground `#1A1F35`
+moves a channel by **0.90/255**. ⛔ **The finding is not "the page looks wrong" — it is that the asset's
+ramp is cut on three sides and nothing in the suite can see it** (see I-2).
+⚠ **And §3 ANCHOR again:** *"`ShadowY + ShadowH = 893.0` is the shelf, **exactly**"* is true of the
+**BOX**. The **INK** stops at **891.0** — the 6 transparent rows are 2.00 design px. Both true, different
+things; the canon says only the first.
+
+### F-6 · **TIER 3** · §27 DEAD THINGS — 12 shipped PNGs, 831,343 bytes, drawn by nothing
+
+`frame59.png` (143,168 — ⭐ known and deliberate: the tier-2 reference `VrioTestPage` is measured
+against, per this file's own H-10 correction), **`group_65.png` (686,596)**, and `line_85..94.png`
+(10 files, 1,579 total).
+
+⛔⛔ **CORRECTION, MADE BEFORE THIS WAS REPORTED — MY FIRST SCAN SAID 47 FILES AND ~14 MB AND IT WAS
+WRONG.** A literal `"key"` search cannot see a constructed key: `Turntable.cs:85` has
+`KeyPrefix = "dragon_turn_"`, so **all 35 `dragon_turn_*.png` are live** and were about to be reported
+as dead. ⭐ Recorded because anyone scanning the same way reaches the same false result — and because it
+is §A, committed by the instrument checking for §A. See **I-4**.
+
+### F-7 · **TIER 3 / TASTE** · §21 — the control pill stands proud of its own box by 9.4 design px
+
+Measured from **source**, not prose (`VehicleOverviewContent.cs:178–184`):
+```
+box   BoxY 823.63  BoxH 69.37   ->  823.63 .. 893.00     bottom is EXACTLY the shelf y 893.0
+pill  PillY 814.25 PillH 88.14  ->  814.25 .. 902.39     9.38 above the box, 9.39 below it
+```
+Concentric — both centre on **858.32** ✅. **Confirmed by eye on the render** (crop at 3×): the white
+`SYSTEMS` pill is visibly taller than the outlined `CABIN` box on both edges.
+🟢 **NO COLLISION** — controls span x 68.56..371.35, the shelf runs x 534..1386 (no overlap), and the
+pill's bottom at 902.39 clears the tab icons at 906.7 by **4.31 design px**.
+⚠ **§15 INTENT says ask, not assert:** this is large and obvious, and the owner declared the page
+finished having looked at it. **Queued as `QC-8`, not filed as a defect.**
+
+---
+
+## ⭐⭐ INSTRUMENTS THAT CANNOT FAIL — the brief calls this the highest-value list, and two are mine
+
+| id | instrument | why it cannot fail |
+|---|---|---|
+| **I-1** | `--overviewcheck` / `--basecheck` / `TriCheckAt` | Measures 1405/1419; the product renders 1406/1420. On screen 1 it runs in the **wrong fit regime**. No defect in the shipped render can reach it. **= F-1** |
+| **I-2** | the shadow **aspect** check (`786×3 = 2358`, `622×3 = 1866`) | Both pass, and **neither reads a single alpha value**. A ramp truncated on any edge — the exact BOB-70 defect it was written after — is invisible to it. It checks the **box**, not the **ink** |
+| **I-3** | `md5sum -c MD5SUMS.txt` on the LOCKED bundle | ⛔ The manifest lives **inside the folder it hashes** and does not hash itself. It was **regenerated at 02:04**, four minutes after the 02:00 seal, to add the addendum. **An edit that regenerates the manifest passes.** ⚠ `LOCK.md` also says *"12 files"*; the manifest now carries **14** |
+| **I-4** | ⚠ **my own** §27 asset scan (literal string match) | Could not see `Turntable.KeyPrefix`; would have reported **35 live assets as dead**. Caught before filing. **= F-6** |
+| **I-5** | ⚠ **my own** first §11 test on the shadow ("ink bbox centre == file centre") | **Guaranteed true**: the ink spans x 0..2357 of a 2358-wide file, so the bbox IS the file. It cannot fail. The **mirror test** is the one that carries information — and it passes honestly (max 2/255, matching the documented resampling noise) |
+
+---
+
+## ✅ CLEAN — with what I measured and what would have failed
+
+| § | result |
+|---|---|
+| **10 RADIUS** | ⭐ **S260 moved not one pixel.** Locked renders (09ae5e1) vs fresh at HEAD `b2eaa46`: `ui_overview_screen1` `dafab2dd…`, `screen2` `ba898456…`, `baseicon_screen1` `86cd5f3b…` — **md5-identical, all three**, and identical to `MD5SUMS.txt`. S260 changed `FigmaUI.Commands` from a typed 380 to a derived 1393 and routed the page into the capsule. **Would have failed:** any md5 difference |
+| **11 CENTRE** (vehicle) | Structural axis from the **12 widest rows** (the trunk at full diameter) = **899.50** asset px; the opaque bbox's pixel-centre is **899.5**. Offset **0.0905 design px** (0.12 device). **Would have failed:** > 0.5 design px. ⚠ My whole-image row median said **−1.45 design px** and was the **wrong instrument** — narrow nose and rod rows dominate it. Discarded, not reported |
+| **11 CENTRE** (title/border parity) | In **continuous** coordinates the outer border sits at 1280.5 and the title and vehicle at 1279.5 — all within **±0.5 px**, the parity limit for integer pixel runs (title ink width 427, odd). ⛔ My first read of "1 px left" was an index-vs-continuous error and is **withdrawn**. The reportable part is F-2, the tolerance |
+| **20 STATE** | All four control states render, plus dead feed. The suite proves both labels ink in their own half, **neither clipped**, in all four — the state that once rendered `CABIN` as `N`. **Would have failed:** a clipped run or a label crossing the split |
+| **24 HONESTY** | Dead feed vs live: **60,327 px differ (1.676 %)**, design x 69.0..1854.0, y 117.5..769.3. **The dead feed is unmistakably distinct.** **Would have failed:** an identical or near-identical render |
+| **26 DETERMINISM** | The render at HEAD is **byte-identical** to the one sealed at a different commit two days earlier — deterministic across both runs *and* commits. **Would have failed:** any byte difference |
+| **29 BUDGET** | `FigmaUI.Commands` is now **derived**: `OverviewCost > 380 ? OverviewCost + 8 : 380` = **1393**. Page draws **1328**, worst case **1385**, margin **8**. **Would have failed:** the old typed **380** — and S260 proved it does overflow there, silently |
+
+---
+
+## ⛔ NOT RUN — and why. 18 of 32.
+
+⛔ **These are not passes.** PART 1: *"A section you skipped is not a section that passed."*
+
+- **30 RENDERER — BLOCKED, and it conditions everything above.** Every measurement here is off the
+  **GDI+ preview**. The game's GL painter is not exercised, `install` is not permitted, and [[S75]] is
+  the precedent for the two diverging invisibly. ⭐ **By the brief's own rule, preview-only is a BLOCKED,
+  not a CLEAN** — so F-2's 7.8 % ink-height gap in particular may be a preview font metric, and this run
+  cannot tell you which.
+- **13 CONSISTENCY — PARTIAL, and the brief called it the hardest.** I re-derived **2 of 10** rows of
+  §3's ladder from the render: page title (**25.51** measured vs **23.67** stated) and rail title
+  (**13.50** / **12.75** vs **13.06**). ⛔ **Both disagree, which is exactly what the brief predicted**
+  — *"assume more of it is wrong."* **The other 8 rows are unmeasured.**
+- **19 BOTH SCREENS — PARTIAL.** Both rendered and both measured for F-1/F-3, but screen 3
+  (`MeasuredScreens` 1280×703, identical to screen 1) **emits no render at all**.
+- **1–9, 12, 14–16, 18, 22–23, 25, 28, 31, 32** — not run: `1 FRAME` and `5 CONTRADICT` only to the
+  depth F-1/F-3 required; `4 DERIVE` only for the vehicle and shadow boxes; `12 EDGES`, `18 ASSETS`,
+  `22 OVERFLOW` (needs a longest-string fixture, which does not exist — the shipped one is the
+  convenient one), `23 LEGIBILITY`, `28 VOCABULARY`, `32 THE EYE` (only the control crop) all
+  outstanding.
+
+---
+
+## ❓ QUESTIONS RAISED
+
+```
+Q: QC-7  | FACT  | F-1: fix the check sizes by DERIVING them from DeriveScreens(), or by typing
+         |         1406/1420? Deriving is the file's own stated rule; typing repeats the defect.
+Q: QC-8  | TASTE | F-7: the control pill stands 9.4 design px proud of its box top and bottom.
+         |         Seen and intended, or to be brought inside the box?
+Q: QC-9  | FACT  | F-2: is the title's 7.8% ink-height excess (25.51 measured vs 23.67 stated) a
+         |         preview font metric or a wrong constant? ⛔ Cannot be settled without glass (§30).
+Q: QC-10 | GATE  | F-6: group_65.png (686,596 B) and line_85..94.png are drawn by nothing. Delete,
+         |         or keep as reference? ⛔ C1.16 means I do not delete; frame59 is already ruled KEEP.
+Q: QC-11 | FACT  | I-3: MD5SUMS.txt sits inside the folder it seals and was regenerated after the
+         |         seal. Move the manifest outside the bundle, or accept it as a tamper-evidence
+         |         gap? LOCK.md's "12 files" is also now 14.
+```
+
+⭐ **The overnight-loop questions `QC-2`, `QC-4`, `QC-5`, `QC-6` remain open** — see the handover above.
+
+---
+
+## ⚙ HOW THIS RUN WAS MADE — so it can be repeated or attacked
+
+```
+branch rebuild/base-screens   HEAD b2eaa46 (S260)   tree clean   nothing installed, nothing pushed
+lock   Desktop/BOB/LOCKED/VEHICLE_OVERVIEW_2026-09-10   md5sum -c  14/14 OK
+build  plugin/build.py test     26,724 checks, all suites passed
+       plugin/build.py preview  140 pages
+       DragonScreenPreview.exe --overviewcheck     (its own output quoted above)
+tools  five measurement scripts, written to disk and run as files, never heredoc'd:
+       m_alpha.py  m_edges.py  m_sym.py  m_axis.py  m_title.py  m_centre.py  m_batch.py  m_crop.py
+```
+🟢 **`PROMPT_ALL_CHATS_NO_HEREDOC.md` adopted** (owner, 2026-09-10). Every file this session was written
+with the `Write` tool and every script run as a file. ⚠ The one heredoc attempted early in the session
+failed exactly as that prompt predicts — `unexpected EOF` — and was replaced with a written file.
