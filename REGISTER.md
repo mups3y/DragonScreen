@@ -30869,7 +30869,7 @@ body is longer than 200 chars, shorter than the file, and does not contain `def 
 | `build.py test` | **ALL SUITES PASSED**, **24,979** checks (S261 left 24,966 by my measure — `BOB-71`) |
 | ⛔⛔ **guard watched to refuse** | **twice** — §5 above. Exit 1, `Nothing was copied`, both branches named, gap measured |
 | `previewdiff HEAD` | ⭐ **REFUSED as vacuous** — *"no render input differs between HEAD and the working tree, so '0 pages changed' would be arithmetic, not a measurement."* ⚠ **That is a STRONGER answer than "0 of 140 changed"**, and it is reported as what it is: the S168 guard proving this task touches nothing the preview reads, rather than 140 renders concluding nothing. `build.py` and `HarnessTest.cs` are not in `PREVIEW_INPUTS` |
-| reinstall | see the block below |
+| reinstall | ⭐ **DONE from `rebuild/base-screens` @ `74710c3`** — measured in §10 below |
 
 #### 8. ⛔ NOT TOUCHED
 
@@ -30894,3 +30894,31 @@ probably an interrupted `previewdiff`. ⛔ **Left alone and reported, not tidied
 **24,979** now, on the counter that has produced every figure in this register since S251. ⭐ The task
 itself names this *"two different aggregations, both rose; do not treat the mismatch as a defect"* —
 recorded on that basis. **The delta is +13.**
+
+#### ⭐ §10 — INSTALLED, MEASURED AFTER THE REINSTALL
+
+🟢 The owner's S261 gate — verbatim *"install it"* — is discharged here, **from the right branch
+this time**. The guard printed the provenance line it exists to print:
+```
+install: branch rebuild/base-screens @ 74710c3
+⚠ 2 file(s) in the destination are NOT in this branch's build, and were NOT removed
+      PluginData\tuning.reference.cfg
+      SeatSwap.cfg          <- ⭐ CAUGHT BY THE NEW ORPHAN REPORT, ON ITS FIRST REAL RUN
+```
+
+| file | was (master's, wrongly shipped) | now |
+|---|---|---|
+| `DragonScreen.dll` | 760,832 B · `3da5365ac1e252b825d7a462d480885e` | **832,000 B · `9f330450f531fe2df441a71dc2a6d8fd`** |
+| `DragonScreen.cfg` | `02458657be5d042e1ca89077a6c91389` | ⭐ **`7297bda3ecaf269f04289c24ea4df036`** — the expected value, restored |
+| `SeatSwap.cfg` | present, 1,975 B | ⭐ **deleted by hand** |
+
+⭐ **FULL SWEEP: 172 repo files, 172 matched by md5, 0 mismatched, 0 absent.** One extra live file,
+`PluginData\tuning.reference.cfg` — runtime output the game writes, identified in `S260` and correctly
+not shipped. ⚠ **That is the same file count and the same single extra `S260` recorded**, so the folder
+is back to the state it should have been in all along — not merely "installed", but *verified equal*.
+⚠ `SeatSwap.cfg` was **backed up before deletion** and is recoverable two ways (session scratchpad, and
+`git show cb8e5fa:plugin/GameData/DragonScreen/SeatSwap.cfg`); 1,975 B, md5
+`c6d5a5a5ab4d5dfe0d2a2227a100245a`, **verified identical to master's copy before it was removed.**
+⚠ Deleting it is the one thing in this task that touched the live game folder, and it was done because
+the task instructed it by name — `install` itself still prunes nothing.
+⛔ **KSP NEEDS A FULL RESTART to pick up the DLL.**
