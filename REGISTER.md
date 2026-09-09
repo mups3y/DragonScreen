@@ -28903,3 +28903,132 @@ it is rather than made to look like the one that was asked for.
 worth its own task.
 
 **Commit:** this one. **No `git push`.**
+
+---
+
+### S247 [O] The ten ModuleManager patches merged into one shipped cfg, and installed — **DONE 2026-09-09 — repo landed, live install performed on the owner's word in-chat, merge independently re-verified line by line, one repo safety test found broken by the merge and repaired without being weakened. ⚠ §7's ConfigCache verification stays OPEN until the owner's next KSP launch** — [overseer `PROMPT_INSTALL_MERGED_CFG.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+- ⭐ **REPO:** `plugin/GameData/DragonScreen/DragonScreen.cfg` is the merged file; `SeatSwap.cfg` →
+  `docs/superseded/SeatSwap.cfg.superseded` (C1.16), kept **byte-identical** so its md5 still proves
+  the merge preserved it. ⛔ The shipped folder now holds **exactly ONE `.cfg`**, which is what makes
+  §1's five bare `MODULE` adds safe.
+- 🟢 **THE GATE WAS OPENED BY THE OWNER IN THIS CHAT, VERBATIM: *"Yes — do the live install"*.**
+  ⛔ The prompt's own banner (*"OWNER-AUTHORISED … you have permission to write to the live KSP
+  GameData"*) carries **no owner quote**, where every other ruling in these documents carries one, so
+  C1.12's evidentiary standard says it is not a ruling I received. ⭐ Everything reversible was done
+  first — repo committed, all 8 live files backed up and md5-verified — and then the one word asked
+  for. **`BOB-40` is closed by that quote, not by the banner.**
+
+#### ⛔ THE MERGED cfg FAILED THE REPO'S OWN SAFETY TEST, AND THE TEST WAS RIGHT TO FIRE
+
+`MechHostTest` asserted *"the core is patched onto the Dragon parts only, never all command pods"* as
+`!txt.Contains("@PART[*]") && txt.Contains("TE_18_DRAGONV2_POD")` — a whole-**FILE** ban on the
+`@PART[*]` selector. ⭐ Sound while this cfg held only DragonScreen's own patches. ⛔ The merge ends
+it: the file now carries a TAC-LS CO2 fix that legitimately selects `@PART[*]` and only **edits** tank
+amounts, so the old line failed on a patch that is **not the hazard** while no longer being **able to
+tell the hazard from it**.
+
+⛔ **IT WAS NOT LOOSENED TO MAKE AN INSTALL PASS.** The property is now stated directly, in two halves,
+and is **stricter**: (a) every `DragonMechJebCore` add sits under a selector that **names** the Dragon
+pod; (b) **no `@PART[*]` block adds a `MODULE` at all** — the actual hazard class, caught whatever the
+module is called. Old line **superseded in place** with the incident (C1.16 as extended 2026-09-06).
+⭐ **MUTATION — 3 raised, 3 killed:** `M1` core selector widened to `@PART[*]` → **both** new checks
+fail and name the selector · `M2` a bare `MODULE` smuggled into the CO2 patch's own `@PART[*]` block →
+killed · `M3` the core add deleted → killed by *"the check has a subject"*, so it cannot pass vacuously.
+⚠ **This is the one C# change the prompt did not anticipate** (*"configs only, no C# builds"*). Test
+only; no shipped code moved. **Flagged for the overseer to confirm or revert.**
+
+#### ⭐ THE MERGE RE-VERIFIED RATHER THAN TRUSTED — because the originals were about to be deleted
+
+Every non-comment line of all nine source files, read from the **LIVE** copies:
+`DragonScreen 51 · SeatSwap 10 · TundraRO 5 · HabTech2 9 · Droneship 4 · F9_S2 4 · reliability 31 ·
+TEATEB 17 · InstantSpool 22` → **153 in, 153 found, 0 LOST**; the **29** merged lines with no original
+are **exactly** the new CO2/WasteWater patch, enumerated. Module adds match the originals one for one:
+`DragonScreenMonitor 3/3 · DragonScreenState 1/1 · DragonMechJebCore 1/1`.
+⚠ **THE PROMPT'S "182 non-comment source lines in" IS THE *OUT* COUNT.** 153 in + 29 new = 182 out.
+Reporting the number I got.
+
+#### ⭐⭐ §1's HAZARD IS CLOSED AT THE SOURCE, WITHOUT WAITING FOR A RESTART
+
+⛔ **Exactly ONE `.cfg` in the entire install adds each module** — `DragonScreen/DragonScreen.cfg`,
+for all three, grepped across the whole of `GameData`. That is a **stronger and earlier** proof than
+§7.1's post-restart count, and it means no original survived anywhere.
+
+#### ⚠ TWO THINGS MEASURED ABOUT THE NEW CO2 PATCH, BOTH REPORTED AND NEITHER FIXED (§6)
+
+1. ⛔ **ITS BLAST RADIUS IS 54 PARTS, NOT THE DRAGON.** `@PART[*]` matches **52** parts through the
+   `ModuleFuelTanks` branch and **2** through the plain-`RESOURCE` branch — HabTech2 ISS modules, BDB
+   capsules, stock pods, the cupola, every crewed part with an Oxygen tank. Defensible (TAC-LS's
+   ratios are universal) but it is a **whole-install** change, not a Dragon fix.
+2. ⚠ **ONE MATCHED PART HAS NO `WasteWater` TANK** — `Large_Crewed_Lab` (Oxygen + CarbonDioxide, no
+   WasteWater). `@TANK[WasteWater]` finds nothing there: at minimum a **NEW** ModuleManager warning
+   against §7.3's *"zero new MM errors"*. ⭐ **Predicted before the install**, so it can be told apart
+   from a real fault in the log.
+
+#### ⭐ THE BEFORE, CAPTURED SO THE AFTER IS A COMPARISON AND NOT A GUESS
+
+| §7.1, pre-install `ModuleManager.ConfigCache` | count |
+|---|---:|
+| `DragonScreenMonitor` | **3** |
+| `DragonScreenState` | **2** |
+| `DragonMechJebCore` | **2** |
+
+⭐ Exactly §7.1's required values, so a doubling after the restart is unambiguous.
+
+| §7.2, pre-install | Oxygen | CO2 | WasteWater | Waste |
+|---|---:|---:|---:|---:|
+| `TE_18_DRAGONV2_POD` | 34400.7 | 300 | 200 | 50 |
+| `TE_18_DRAGONV2_POD_I4` | 34400.7 | 300 | 200 | 50 |
+
+⭐ Both carry the same Oxygen, so the patch predicts **CO2 29714.94625** and **WasteWater 286.26543**
+on **both** — exactly §7.2's required numbers, and the two ratios independently imply the same
+Oxygen 34400.7, so the arithmetic is self-consistent.
+⛔ **THERE IS NO DRAGON 1 POD IN THIS INSTALL.** The only Dragon pods are the two V2s;
+`RO_TE_Dragon_1.cfg` is a RealismOverhaul *config filename*, not an installed part.
+
+`KSP.log` baseline for §7.3: **11,718** ModuleManager lines, **0** error/exception lines,
+MM **v4.2.3.0**, *"46062 patches loaded from cache"*.
+⚠ **THE NEXT LAUNCH WILL BE A LONG ONE** — the cfg changed, so MM re-runs every patch instead of
+loading that cache, and the summary line will read differently for that reason alone.
+
+#### ⭐ LINE ENDINGS — the repo copy is not the byte count the prompt quotes
+
+The repo/deployed copy is **LF, 39,469 bytes**; the Desktop source is **CRLF, 40,159** — the size the
+prompt states. `.gitattributes` mandates LF (*"The build asserts on line endings and a Windows
+checkout silently rewriting them has bitten this project before"*). Content identical ignoring CR, and
+the **deployed file is byte-identical to the repo copy** (md5 `7588f071…`), so shipped and installed
+are the same bytes.
+
+#### ⚠ ONE MEASUREMENT I COULD NOT REPRODUCE, REPORTED ANYWAY
+
+The **FIRST** `previewdiff` of the session said **52 existing pages changed**. ⛔ It did not reproduce:
+three further runs — LF, CRLF, and LF again — all said **0 changed, 134 unchanged**. So the 52 was the
+*run*, not the change. ⭐ **The first `previewdiff` of a session is not trustworthy until it repeats** —
+the same shape as [[S246]]'s stale-test-binary trap.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** — `MechHostTest` **107 checks, 0 failed** (105 before) |
+| `harnesscheck` | **ok**, fault named, exit 1, **178** clean report lines |
+| `previewdiff HEAD` | **0 changed, 0 new, 0 removed** (of 134) — nothing the owner flies moved |
+| mutation (the repaired check) | **3 raised, 3 killed, 0 survived** |
+| live install | one `.cfg` in `DragonScreen/`, both folders gone, deployed md5 == repo md5 |
+| ⛔ `LocalFixes/frost_mod_b9partswitch_fix.cfg` | **STILL PRESENT**, 3122 bytes, mtime unchanged |
+| backups | **8 files** in `Desktop/BOB/deleted_backup/`, **every md5 verified against the live original** before deletion |
+
+#### ⚠ WHAT IS STILL OPEN — `BOB-41`
+
+⛔ **§7 cannot be done by a build chat.** It needs a full KSP restart to regenerate
+`ModuleManager.ConfigCache`, and a restart is glass time — a separate owner gate (C1.12/C1.14). So
+**§7.1, §7.2 and §7.3 stay OPEN** until the owner launches once. Every BEFORE number is above.
+
+#### ⚠ QUESTIONS RAISED — `BOB-40` (closed in-chat), `BOB-41`, `BOB-42`
+
+`BOB-40` the GameData gate — **CLOSED by the owner's own words in this chat** ·
+`BOB-41` §7's verification needs a launch; install now / verify next launch, or hold both? ·
+`BOB-42` the CO2 patch reaches 54 parts install-wide and `Large_Crewed_Lab` has no `WasteWater` —
+intended, or does it want scoping? **Both are behaviour changes and neither belongs in a merge.**
+
+**Commit:** `2174e63`. **No `git push`.**
