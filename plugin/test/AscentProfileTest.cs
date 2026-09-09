@@ -79,11 +79,23 @@ public static class AscentProfileTest
     // ⛔ THE ONLY THREE RO-SEEDED BOXES WE ARE STILL ALLOWED TO WRITE, AND THE OWNER NAMED ALL THREE
     // ON 2026-09-08. A fourth entry here is a build chat deciding it may deviate, which is exactly what
     // C1.8/C1.12 forbid — so the list is pinned by LENGTH as well as by content.
+    // ⛔⛔ S250 — ~~AscentType~~ AND ~~Autostage~~ WERE NEVER EXEMPTIONS, AND THE OLD
+    // LIST SAID THEY WERE. `ApplyRODefaults()` sets BOTH itself: `AscentType = AscentType.PSG` (:375)
+    // and `Autostage = true` (:361). So one was a redundant write of RO's own value and the other was
+    // a DEVIATION **FROM** RO recorded as if it preserved RO's default. ⭐ `DesiredOrbitAltitude`
+    // is the ONLY true exemption to "if RO sets it, we do not" — RO seeds 145000, the mission is
+    // 215 km. Superseded in place (C1.16); the owner's 2026-09-08 quotes are kept because they are
+    // what was said, and what changed is what the vendored source turned out to do.
     static readonly string[] OwnerNamedExemptions =
     {
-        "DesiredOrbitAltitude",   // "we can set the orbit to 215km"
-        "AscentType",             // the KEEP list: "ascent type PSG"
-        "Autostage",              // "the only change should be the auto stage being our way"
+        "DesiredOrbitAltitude",   // "we can set the orbit to 215km" — RO seeds 145000
+        // 🟢 S250 — the owner's 2026-09-09 OVERRIDES. Each is a box RO seeds and he ruled
+        // otherwise, in writing, and each names its own provenance in the audit row.
+        "Core.Thrust.LimitDynamicPressure",      // "set max q to true"
+        "Core.Thrust.MaxDynamicPressure",        // the magnitude it needed — MEASURED, 24000 Pa
+        "Core.Thrust.LimitToPreventOverheats",   // owner override; ⛔ NOT trunk protection
+        "PitchRate",                             // his own flown value, corroborated by telemetry
+        "PitchStartHeight",                      // "raise it to 1000" — OWNER-CHOSEN, not measured
     };
 
     // ⭐ THE EXACT SET OF BOXES `MechConductor.Configure` MAY WRITE. Pinned by name AND by count, so
@@ -100,12 +112,25 @@ public static class AscentProfileTest
     // the instrument built to catch re-seeds was blind to the one setting that bounds a
     // runaway staging cascade. Raising this pin makes an existing authorised write VISIBLE;
     // it does not add one. ⛔ A TENTH still fails here, exactly as a ninth did.
+    // ⛔⛔ S250 — THE WRITE SET, RE-NAMED BY THE OWNER, 2026-09-09.
+    // ~~AscentType — Autostage — WarpCountDown — SkipCircularization — AutoDeploySolarPanels —
+    //   AutoDeployAntennas — Core.Node.Autowarp — Core.Warp.activateSASOnWarp~~ SUPERSEDED (C1.16).
+    // 🟢 "reset our mechjeb back to 100% default settings", option (b): MechJeb genuinely untouched,
+    // and ONLY what the prompt names added back. ⭐ Two of the eight were never deviations at all
+    // — `ApplyRODefaults()` sets `AscentType = PSG` (:375) and `Autostage = true` (:361) ITSELF.
+    // ⚠ Six of them DO move a flown value, and four of those have named consequences: the pad hold
+    // on the solar panels, the unowned maneuver node, the 11 s countdown against a ~20 s PSG cold start,
+    // and SAS on warp. All four are in the audit rows and raised as BOB-55.
     static readonly string[] TheNineWrites =
     {
-        "AscentType", "Autostage", "WarpCountDown", "SkipCircularization",
-        "AutoDeploySolarPanels", "AutoDeployAntennas",
-        "Core.Node.Autowarp", "Core.Warp.activateSASOnWarp",
-        "AutostageLimit",   // ⭐ S228 R-03 / S235 JOB 4 — the same §B8 deviation as `Autostage`
+        // the SAFETY device — not part of the lifted deviation, and a true "100% default"
+        // MechJeb sets it to 0, which is the value that expended the drogues at 33.9 km (F-102).
+        "AutostageLimit",
+        // the two owner OVERRIDES, 2026-09-09: "set max q to true" (+ the magnitude it needed)
+        "Core.Thrust.LimitDynamicPressure", "Core.Thrust.MaxDynamicPressure",
+        "Core.Thrust.LimitToPreventOverheats",
+        // the two ascent numbers — one corroborated by real telemetry, one owner-CHOSEN inside a band
+        "PitchRate", "PitchStartHeight",
     };
 
     public static int Run()
@@ -158,15 +183,28 @@ public static class AscentProfileTest
         // ⚠ S235 — THIS PIN READ `== 8`. SUPERSEDED IN PLACE (C1.16 / G12). See `TheNineWrites`
         // above for why 9 is not a new deviation: the ninth has been written by deployed code
         // since `5b222da` and the audit did not know. ⛔ The headline 47 -> 8 shed is intact.
-        Check("S222b/S235: exactly NINE boxes are written (47 before the 2026-09-08 directive; the 9th was already being written)",
-              AscentProfile.CountOf(AscentDisposition.Write) == 9,
+        // ⚠ S250 — THIS PIN READ `== 9`. SUPERSEDED IN PLACE (C1.16). The owner's option (b)
+        // withdrew six and added five, and the ARITHMETIC is the check: 9 - 6 + 5 = 8... except that
+        // `AscentType` and `Autostage` were TWO of the six and neither was ever a real exemption, so
+        // the table now carries SIX `Write` rows. ⭐ The NINE the prompt names are these six plus
+        // the three RuntimeMission destination rows, which `Configure` also writes — asserted
+        // separately below, because "written by Configure" and "carries the Write disposition" are two
+        // different questions and conflating them is how a row goes missing.
+        Check("S250: exactly SIX boxes carry the Write disposition (47 -> 9 -> 6)",
+              AscentProfile.CountOf(AscentDisposition.Write) == 6,
               "written=" + AscentProfile.CountOf(AscentDisposition.Write));
+        Check("S250: ...and NINE settings are written by Configure in all (6 Write + 3 RuntimeMission)",
+              AscentProfile.CountOf(AscentDisposition.Write)
+              + AscentProfile.CountOf(AscentDisposition.RuntimeMission) - 1 == 9,
+              "write=" + AscentProfile.CountOf(AscentDisposition.Write)
+              + " runtime=" + AscentProfile.CountOf(AscentDisposition.RuntimeMission)
+              + " (LaunchingToPlane is RuntimeMission but written by the plane launch, not Configure)");
         Check("S222b: ...and it is not still 47",
               AscentProfile.CountOf(AscentDisposition.Write) != 47, "");
 
         // ...and they are THESE eight, by name. Adding a ninth fails here even if it is plausible.
         for (int i = 0; i < TheNineWrites.Length; i++)
-            Check("S222b: '" + TheNineWrites[i] + "' is one of the eight surviving writes",
+            Check("S250: '" + TheNineWrites[i] + "' is one of the six surviving writes",
                   AscentProfile.Row(TheNineWrites[i]).How == AscentDisposition.Write,
                   "how=" + AscentProfile.Row(TheNineWrites[i]).How);
 
@@ -188,9 +226,13 @@ public static class AscentProfileTest
             AscentSetting r = AscentProfile.Audit[i];
             if (r.How != AscentDisposition.Write && r.How != AscentDisposition.RuntimeMission) continue;
             string w = r.Why;
+            // ⭐ S250 ADDED THE TWO REASONS THE OWNER USED ON 2026-09-09, and no others: an
+            // explicit OWNER ruling, or a value MEASURED off real mission telemetry. ⛔ A build
+            // chat still cannot justify a write any other way — that is what this list is for.
             bool justified = w.Contains("MISSION FACT") || w.Contains("UI WORKFLOW")
                           || w.Contains("UI control") || w.Contains("deviation") || w.Contains("§B12.7")
-                          || w.Contains("BUTTON") || w.Contains("box");
+                          || w.Contains("BUTTON") || w.Contains("box")
+                          || w.Contains("OWNER") || w.Contains("MEASURED") || w.Contains("SAFETY");
             Check("S222b: the write of '" + r.Name + "' names a control or an admissible reason",
                   justified, "why=" + (w.Length > 70 ? w.Substring(0, 70) : w));
         }
@@ -203,16 +245,36 @@ public static class AscentProfileTest
         // ⭐ The two deviations that are the OWNER's to make, not a build chat's (C1.8/C1.12/C1.14).
         // ⛔ S222b did NOT close either of them: the 2026-09-08 directive settles the interim answer
         // (fly RO's default) and defers the question to T22, so they stay surfaced.
-        Check("S219: PitchRate is an owner question, not a build chat's tune",
-              AscentProfile.Row("PitchRate").How == AscentDisposition.OwnerQuestion, "");
-        Check("S219: max-Q throttle-down is an owner question, not a build chat's tune",
-              AscentProfile.Row("Core.Thrust.LimitDynamicPressure").How == AscentDisposition.OwnerQuestion, "");
-        Check("S222b: there are still exactly TWO owner questions — neither was quietly closed",
-              AscentProfile.CountOf(AscentDisposition.OwnerQuestion) == 2,
+        // 🟢🟢 S250 — BOTH OWNER QUESTIONS ARE CLOSED BY THE OWNER HIMSELF, 2026-09-09.
+        // ~~PitchRate and max-Q throttle-down are owner questions, not a build chat's tune~~ — that
+        // was right for as long as nobody had asked him. He answered: "set max q to true", and
+        // "derive them from real crew dragon mission stats". ⛔ The rule they enforced is UNCHANGED
+        // and still enforced above: a build chat may not open one. What changed is who answered.
+        Check("S250: PitchRate is now WRITTEN — Q1 closed by the owner on real-mission telemetry",
+              AscentProfile.Row("PitchRate").How == AscentDisposition.Write, "");
+        Check("S250: max-Q throttle-down is now WRITTEN — Q2 closed by the owner",
+              AscentProfile.Row("Core.Thrust.LimitDynamicPressure").How == AscentDisposition.Write, "");
+        Check("S250: there are NO owner questions left open in this table",
+              AscentProfile.CountOf(AscentDisposition.OwnerQuestion) == 0,
               "open=" + AscentProfile.CountOf(AscentDisposition.OwnerQuestion));
-        Check("S219: and the render surfaces every owner question by name",
-              AscentProfile.Render().Contains("PitchRate")
-              && AscentProfile.Render().Contains("LimitDynamicPressure"), "");
+        // ⛔ AND THE VALUES THEMSELVES, so a later edit cannot quietly move one: the magnitude is
+        // MEASURED (the mean of three real ascent peaks), the rate is the owner's own corroborated
+        // value, and the height is OWNER-CHOSEN inside a band and says so in its own row.
+        Check("S250: the max-Q threshold is the measured 24000 Pa, not RO's 50000",
+              AscentProfile.MaxDynamicPressurePa == 24000.0, "" + AscentProfile.MaxDynamicPressurePa);
+        Check("S250: the pitch rate is 0.75 deg/s and falls inside the 0.42-1.0 band the data bounds",
+              AscentProfile.PitchRateDegPerS == 0.75
+              && AscentProfile.PitchRateDegPerS > 0.42 && AscentProfile.PitchRateDegPerS < 1.0,
+              "" + AscentProfile.PitchRateDegPerS);
+        Check("S250: the pitch start height is 1000 m and its row says OWNER-CHOSEN, not measured",
+              AscentProfile.PitchStartHeightM == 1000.0
+              && AscentProfile.Row("PitchStartHeight").Why.Contains("OWNER-CHOSEN, NOT MEASURED"),
+              "" + AscentProfile.PitchStartHeightM);
+        // ⛔⛔ AND THE ONE THAT WOULD BE THE EASIEST TO GET WRONG: our last flight peaked at
+        // 48,971 Pa and RO's threshold is 50,000, so the limiter could never fire. A threshold at or
+        // above that peak is the defect, whatever the number is.
+        Check("S250: the threshold is BELOW our last flight's 48,971 Pa peak, or it can never fire",
+              AscentProfile.MaxDynamicPressurePa < 48971.0, "");
         Check("S222b: the render also reports the UI-derived count, so the log answers the owner's question",
               AscentProfile.Render().Contains("UI-derived"), "");
     }
@@ -240,9 +302,11 @@ public static class AscentProfileTest
                   "how=" + AscentProfile.Row(RoSeeded[i]).How);
         }
 
-        // ...and the exemption list may not grow. Three, named by the owner on 2026-09-08.
-        Check("S222b: exactly THREE RO-seeded boxes are exempt, and the owner named all three",
-              OwnerNamedExemptions.Length == 3, "n=" + OwnerNamedExemptions.Length);
+        // ...and the exemption list may not grow WITHOUT AN OWNER RULING. ⚠ S250: ~~three, named
+        // by the owner on 2026-09-08~~ — now SIX, and every one of the six is an owner ruling
+        // quoted in its own audit row. ⛔ A build chat may still not add a seventh.
+        Check("S250: exactly SIX RO-seeded boxes are exempt, and the owner ruled every one",
+              OwnerNamedExemptions.Length == 6, "n=" + OwnerNamedExemptions.Length);
         for (int j = 0; j < OwnerNamedExemptions.Length; j++)
             Check("S222b: the exempt '" + OwnerNamedExemptions[j] + "' really is one RO seeds",
                   System.Array.IndexOf(RoSeeded, OwnerNamedExemptions[j]) >= 0, "");
@@ -252,8 +316,10 @@ public static class AscentProfileTest
         int left = 0;
         for (int i = 0; i < RoSeeded.Length; i++)
             if (AscentProfile.Row(RoSeeded[i]).How != AscentDisposition.Write) left++;
-        Check("S222b: ...and the rule bites — at least 30 RO-seeded boxes are now left alone",
-              left >= 30, "left=" + left);
+        // ⚠ S250: 30 -> 29. Five RO-seeded boxes became owner-ruled writes and one
+        // (`Autostage`) went the other way, from a write to RO's own default.
+        Check("S250: ...and the rule bites — at least 29 RO-seeded boxes are still left alone",
+              left >= 29, "left=" + left);
     }
 
     // =====================================================================================
@@ -303,23 +369,52 @@ public static class AscentProfileTest
               && AscentProfile.Row("OverrideWarpToPlane").Why.Contains("non-persisted"), "");
 
         // ⭐ ONE autowarp flag, and all three phases read it. UNCHANGED by S222b — the owner's KEEP.
-        Check("S219: the autowarp flag is Core.Node.Autowarp, written true",
-              AscentProfile.Row("Core.Node.Autowarp").How == AscentDisposition.Write
-              && AscentProfile.Row("Core.Node.Autowarp").Value == "true", "");
+        // ⚠ S250: ~~written true~~ — WITHDRAWN by option (b), and the flown value does not
+        // move because MechJeb's own field default is already true. The ROW and its reasoning stay,
+        // because why the flag matters is unchanged (C1.16).
+        Check("S250: the autowarp flag is Core.Node.Autowarp, left at its own default true",
+              AscentProfile.Row("Core.Node.Autowarp").How == AscentDisposition.RoDefault
+              && AscentProfile.Row("Core.Node.Autowarp").Value.Contains("true"), "");
         Check("S219: ...and its reason names all three phases, because it is one field",
               AscentProfile.Row("Core.Node.Autowarp").Why.Contains("ascent")
               && AscentProfile.Row("Core.Node.Autowarp").Why.Contains("node executor")
               && AscentProfile.Row("Core.Node.Autowarp").Why.Contains("rendezvous")
               && AscentProfile.Row("Core.Node.Autowarp").Why.Contains("Docking"), "");
 
-        // §B12.7 boundary lines — MechJeb must not actuate what we own. UNCHANGED: these are the
-        // second half of the owner's sanctioned deviation ("our direct part activation").
-        Check("S219/§B12.7: SkipCircularization is written TRUE (it would place an unowned node)",
-              AscentProfile.Row("SkipCircularization").How == AscentDisposition.Write
-              && AscentProfile.Row("SkipCircularization").Value.Contains("true"), "");
-        Check("S219/§B12.7: the two auto-deploys are written FALSE (they actuate real hardware)",
-              AscentProfile.Row("AutoDeploySolarPanels").Value.Contains("false")
-              && AscentProfile.Row("AutoDeployAntennas").Value.Contains("false"), "");
+        // ⛔⛔ S250 — THE §B12.7 BOUNDARY WRITES ARE WITHDRAWN, AND THAT IS THE SHARPEST
+        // CONSEQUENCE OF OPTION (b). ~~SkipCircularization is written TRUE~~ and ~~the two auto-deploys
+        // are written FALSE~~ — the owner asked for RO's defaults everywhere except the nine named
+        // writes, and none of these three is among them.
+        // ⚠⚠ SO THE CHECK BECOMES THE OPPOSITE ONE, AND IT IS NOT A WEAKER CHECK: each row must
+        // now NAME the consequence of leaving it, so the next reader cannot mistake the withdrawal for
+        // an absence of thought. If someone silently re-adds a write, `TheNineWrites` fails; if someone
+        // deletes the reasoning, this fails. Raised together as BOB-55, because §B12.7 says direct
+        // part control is ours and option (b) does not say §B12.7 is lifted.
+        Check("S250: SkipCircularization is left at MechJeb's false, and its row names the unowned node",
+              AscentProfile.Row("SkipCircularization").How == AscentDisposition.RoDefault
+              && AscentProfile.Row("SkipCircularization").Why.Contains("MANEUVER NODE"), "");
+        Check("S250: the solar-panel row names the PAD HOLD that leaving it true produces",
+              AscentProfile.Row("AutoDeploySolarPanels").How == AscentDisposition.RoDefault
+              && AscentProfile.Row("AutoDeploySolarPanels").Why.Contains("PRELAUNCH"), "");
+        Check("S250: the antenna row names the hardware it will now extend",
+              AscentProfile.Row("AutoDeployAntennas").How == AscentDisposition.RoDefault
+              && AscentProfile.Row("AutoDeployAntennas").Why.Contains("RealAntennas"), "");
+        Check("S250: the SAS-on-warp row names the controller it will now fight",
+              AscentProfile.Row("Core.Warp.activateSASOnWarp").Why.Contains("attitude controller"), "");
+        Check("S250: the countdown row names the PSG cold start it no longer covers",
+              AscentProfile.Row("WarpCountDown").Why.Contains("IgnitionGate"), "");
+        // ⛔ AND ALL FIVE ARE RAISED, not merely commented — a consequence nobody was told about
+        // is a consequence nobody can rule on.
+        int raised = 0;
+        string[] withConsequences =
+        {
+            "SkipCircularization", "AutoDeploySolarPanels", "AutoDeployAntennas",
+            "Core.Warp.activateSASOnWarp", "WarpCountDown",
+        };
+        for (int i = 0; i < withConsequences.Length; i++)
+            if (AscentProfile.Row(withConsequences[i]).Why.Contains("BOB-55")) raised++;
+        Check("S250: every withdrawal with a named consequence carries the raise (BOB-55)",
+              raised == withConsequences.Length, "raised=" + raised);
 
         // The CLASSIC path is on the screen and is never read under PSG — a decision, not an omission.
         Check("S219: the classic gravity-turn boxes are marked ClassicOnly, not silently ignored",

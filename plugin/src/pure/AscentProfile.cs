@@ -259,6 +259,63 @@ namespace DragonScreen
         public const bool AttachAltFollowsMissionApsis = false;
 
         // =========================================================================================
+        // ⭐⭐ S250 — THE THREE ASCENT NUMBERS, DERIVED FROM REAL CREW DRAGON MISSIONS
+        //
+        // 🟢 OWNER 2026-09-09: "derive them from real crew dragon mission stats", then "stream
+        // telemetry data bases", then "raise it to 1000, add all three to the prompt".
+        //
+        // SOURCE: `shahar603/Telemetry-Data` — SpaceX webcast telemetry, `<mission>/JSON/analysed.json`
+        // + `events.json`. Falcon 9 + Dragon to the ISS at 51.6°: the same vehicle, the same target
+        // orbit, the same trajectory family we fly.
+        //
+        //     mission   ascent max Q       throttle-down   velocity off-vertical     MECO
+        //     CRS-16    24,347 Pa @ 54 s     48 - 68 s     t=34 s  alt 2,466 m       145 s
+        //     CRS-14    21,943 Pa @ 63 s     51 - 93 s     t=41 s  alt 3,061 m       164 s
+        //     CRS-13    23,814 Pa @ 65 s     51 - 75 s     t=34 s  alt 2,019 m       143 s
+        //     CRS-12 / CRS-11 peak at t≈410 s — that is STAGE-1 RE-ENTRY, not ascent. EXCLUDED.
+        //
+        // ⛔⛔ THE CAVEAT THAT MAKES TWO OF THESE A BAND AND NOT A POINT: this telemetry carries the
+        // VELOCITY angle, and vehicle ATTITUDE LEADS VELOCITY. The real attitude pitchover therefore
+        // begins EARLIER than t=34 s and is STEEPER than 0.42 °/s. What the data bounds is a BAND —
+        // pitch rate 0.42–1.0 °/s, pitch start well above 100 m and below ~2,000 m — and the owner
+        // picked inside it. ⛔ These are NOT measured attitude values and must never be written up as
+        // such.
+        // =========================================================================================
+
+        /// <summary>
+        /// ⭐ The max-Q throttle-down threshold, in Pa. **MEASURED**: the mean of the three clean
+        /// ascent peaks above (21,943 / 23,814 / 24,347 → 23,368, taken as 24,000).
+        /// ⛔⛔ OUR LAST FLIGHT PEAKED AT 48,971 Pa — TWICE THE REAL VEHICLE — and RO's own threshold
+        /// is 50,000, above even that, so the limiter could never fire. The real vehicle throttles
+        /// down at t≈48–51 s on every flight in the set.
+        /// ⭐ CONFIDENCE HIGH, and it is the only one of the three that is: `q` is measured directly,
+        /// not inferred through an attitude/velocity relationship.
+        /// </summary>
+        public const double MaxDynamicPressurePa = 24000.0;
+
+        /// <summary>
+        /// ⭐ The PSG pitch rate, deg/s. The OWNER's own tuned value, from
+        /// `docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:53`, against RO's
+        /// `PITCH_RATE_DEFAULT = 5.0`. ⭐ CORROBORATED, NOT INVENTED: it falls inside the 0.42–1.0 °/s
+        /// band the mission telemetry bounds. ⚠ It is a band because attitude leads velocity — see the
+        /// block above. ⛔ [[S222b]] withdrew an earlier prompt's "set PitchRate to 0.75" as invented
+        /// tuning and was right to: what changed is not the number but that there is now a MEASURED
+        /// band around it and an owner ruling on top.
+        /// </summary>
+        public const double PitchRateDegPerS = 0.75;
+
+        /// <summary>
+        /// ⛔⛔ **OWNER-CHOSEN, NOT MEASURED** — and a future reader must not mistake it for telemetry.
+        /// 🟢 Owner, 2026-09-09: "raise it to 1000". The band the data bounds is "well above 100 m and
+        /// below ~2,000 m" (the three missions leave vertical at 2,019 / 2,466 / 3,061 m of VELOCITY
+        /// angle, and attitude leads that); 1000 is a DECISION inside it, against RO's
+        /// `PITCH_START_HEIGHT_DEFAULT = 100`.
+        /// ⭐ IT IS `VesselState.AltitudeBottom` (`MechJebModuleAscentPSGAutopilot.cs:135`) — height
+        /// above TERRAIN, not ASL. ⚠ The pad sits at ~92 m ASL; do not confuse the two.
+        /// </summary>
+        public const double PitchStartHeightM = 1000.0;
+
+        // =========================================================================================
         // 2. THE AUDIT — every box the ascent stack puts on the screen, and our decision on it
         // =========================================================================================
         // Enumerated from the vendored menus themselves, not from memory:
@@ -277,30 +334,30 @@ namespace DragonScreen
             //  this to fly THIS mission?" Each names its control and one of the three admissible
             //  reasons: MISSION FACT · UI WORKFLOW · the autostage deviation. (S222b)
             // =====================================================================================
-            R("AscentType",          AscentDisposition.Write,     "PSG",
-              "UI WORKFLOW — the ascent-path dropdown (MechJebModuleAscentMenu.cs `_ascentPathList`, 'PSG (RSS/RO)'). The owner's KEEP list names it. RO seeds PSG too, so this write only asserts what a persisted craft value could have made CLASSIC."),
-            R("Autostage",           AscentDisposition.Write,     "false (RO seeds TRUE)",
-              "⭐ THE OWNER'S ONE SANCTIONED DEVIATION, 2026-09-08 verbatim: 'the only change should be the auto stage being our way'. UI control: the 'Autostage' toggle in the Ascent Settings menu. Through the PROPERTY, never the `_autostage` field — only the property removes the ascent autopilot from `Core.Staging.Users`. §B8/§B12.7, with IgnitionGate owning the pad."),
-            R("AutostageLimit",      AscentDisposition.Write,     "the S1/S2 separation stage, DERIVED from the live part list (6 on Crew-2)",
-              "⭐⭐ S235 JOB 4 — ADDED BECAUSE THE AUDIT COULD NOT SEE IT. [[S228]] R-03 wrote this box as the cascade backstop and `grep -c AutostageLimit pure/AscentProfile.cs` returned **0**: the instrument built to catch re-seeds was blind to the one setting that bounds a runaway staging cascade. ⛔ It is not on `MechJebModuleAscentSettings` at all — it lives on `MechJebModuleStagingController` (`:35`, `readonly EditableInt AutostageLimit = 0`), which is why every earlier pass missed it: this table had only ever read one module. THE SAME SANCTIONED DEVIATION as `Autostage` above (§B8/§B12.7) — MechJeb actuates no separation, so a floor costs a nominal flight nothing. Value DERIVED per craft by `pure/StagingFloor.For` (the stage carrying the interstage; `ForbidAll` when none is found), never a literal — sixteen .craft files, and a hardcoded 6 would be silently wrong for fifteen of them. `MechJebModuleStagingController.cs:284` refuses to stage while `currentStage <= AutostageLimit`. ⚠ Its default of **0** is exactly the value that let flight 002 cascade 6 -> 1 unbounded (F-102), expending the drogues at 33.9 km."),
-            R("WarpCountDown",       AscentDisposition.Write,     "32 s (MechJeb's own box defaults to 11)",
-              "UI WORKFLOW + the autostage deviation. It is MechJeb's own 'Launch countdown:' box (MechJebModuleAscentMenu.cs:230) and RO does NOT seed it. It is 32 rather than 11 for a reason that IS the deviation: our T-0 is `IgnitionGate`, which refuses to light a stage with no guidance solution (S214), so the solver must finish BEFORE our terminal count — 20 s (the vendored tree's own PSG cold-start note, MechJebKos/AscentPSGBinding.cs:113-115) + 12 s (WarpPlan.BurnLeadS). ⛔ It shapes NO part of the trajectory; it is a ground-ops lead time."),
-            R("SkipCircularization", AscentDisposition.Write,     "true (MechJeb's field default is false)",
-              "The autostage deviation's family — it stops an ACTUATION we own, it does not shape a trajectory. UI control: the 'Skip Circularization' toggle in the Ascent Settings menu. On EXIT, DriveCircularizationBurn:244-286 PLACES A MANEUVER NODE and hands it to Core.Node, which would collide with T19's own node executor and with the conductor's ClearNodes. RO does not seed it; the owner's own flown cfg has it on (docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:34 `SkipCircularization = True`)."),
-            R("AutoDeploySolarPanels", AscentDisposition.Write,   "false (MechJeb's field default is true)",
-              "§B12.7 — direct part activation is OURS, which is the second half of the owner's sanctioned deviation. UI control: the 'Auto-deploy solar panels' toggle. Left true, DrivePrelaunch:202-214 retracts panels and HOLDS the prelaunch mode until they are all retracted — a pad hold nobody commanded — and DriveDeployableComponents extends them above the atmosphere. RO does not seed it."),
-            R("AutoDeployAntennas",    AscentDisposition.Write,   "false (MechJeb's field default is true)",
-              "UI control: the 'Auto-deploy antennas' toggle — same rule and same §B12.7 control family as the panels, and RealAntennas is installed (docs/reference/INSTALLED_MODS.md), so this one really would extend hardware the crew procedure owns. RO does not seed it."),
-            R("Core.Node.Autowarp", AscentDisposition.Write, "true",
-              "⭐ THE owner's 'auto warp for all modes'. UI control: the ascent window's own 'Auto-warp' toggle. It is ONE field and all three phases read it: the ascent countdown warps only `if (Core.Node.Autowarp)` (MechJebModuleAscentBaseAutopilot.cs:132); the node executor gates both of its warps on it (:242, :293); and the rendezvous autopilot NARROWS the same field rather than owning one (`Core.Node.Autowarp = Core.Node.Autowarp && Core.Target.Distance > 1000`). Docking never warps at all."),
-            R("Core.Warp.activateSASOnWarp", AscentDisposition.Write, "false",
-              "§B12.7 again — an ACTION GROUP on our vehicle is direct part control. Left on, SetTimeWarpRate calls ActionGroups.SetGroup(SAS, true) on the way into warp, and SAS then fights MechJeb's own attitude controller. RO does not seed it."),
+            R("AscentType",          AscentDisposition.RoDefault, "PSG (RO)",
+              "⛔⛔ S250 — ~~Write, one of only three exemptions~~ SUPERSEDED IN PLACE (C1.16). **`ApplyRODefaults()` SETS THIS ITSELF**: `MechJebModuleAscentSettings.cs:375`, `AscentType = AscentType.PSG`, under its own comment `// turn on PSG by default`. So it was never an exemption to 'if RO sets it, we do not' — it was a redundant write of RO's own value, and the audit row said the opposite. ⭐ We still READ and ASSERT it in the read-back; we no longer WRITE it."),
+            R("Autostage",           AscentDisposition.RoDefault, "true (RO)",
+              "⛔⛔ S250 — ~~Write false, the owner's one sanctioned deviation~~ **LIFTED BY THE OWNER, 2026-09-09**: 'reset our mechjeb back to 100% default settings', option (b). ⭐ AND THE ROW WAS ALSO WRONG ABOUT RO: `ApplyRODefaults()` sets `Autostage = true` itself (`MechJebModuleAscentSettings.cs:361`), so writing `false` was a DEVIATION **FROM** RO recorded as if it preserved RO's default. ⛔ WHY IT MATTERS BEYOND BOOKKEEPING: RP-1's first principle is 'PVG Must Be Able To Predict The Future' — the solver plans the ascent INCLUDING staging, so with autostaging off it predicts an event that never happens. ⚠ A HYPOTHESIS for the NaN throws and the 25 km-low MECOs, NOT a proven cause. The staging FLOOR below is what remains, and it is a SAFETY device rather than this deviation."),
+            R("AutostageLimit",      AscentDisposition.Write,     "the FIRST SPACECRAFT-SIDE DECOUPLER's stage, DERIVED from the live part list (3 on New Crew-2, 4 on the flown Crew-2)",
+              "⭐⭐ S235 JOB 4 — ADDED BECAUSE THE AUDIT COULD NOT SEE IT. [[S228]] R-03 wrote this box as the cascade backstop and `grep -c AutostageLimit pure/AscentProfile.cs` returned **0**: the instrument built to catch re-seeds was blind to the one setting that bounds a runaway staging cascade. ⛔ It is not on `MechJebModuleAscentSettings` at all — it lives on `MechJebModuleStagingController` (`:35`, `readonly EditableInt AutostageLimit = 0`), which is why every earlier pass missed it: this table had only ever read one module. THE SAME SANCTIONED DEVIATION as `Autostage` above (§B8/§B12.7) — MechJeb actuates no separation, so a floor costs a nominal flight nothing. ⛔⛔ S250 RE-ANCHORED IT, AND THE OLD ANCHOR IS WHY: ~~the stage carrying the INTERSTAGE~~ IS THE S1/S2 SEPARATION ITSELF, which is exactly the event PVG must be allowed to perform — on `New Crew-2` it derives 5 and `currentStage 5 <= 5` stops autostaging before S1 ever separates. Now the FIRST SPACECRAFT-SIDE DECOUPLER (the Dragon decoupler where one exists, the trunk otherwise): 3 on `New Crew-2`, 4 on the flown `Crew-2`, both read out of the .craft files by the suite. 🟢 The owner ruled the VALUE ('confirmed, set autostage limit 3'); the RULE stays DERIVED — sixteen .craft files, and a hardcoded 3 would be silently wrong for fifteen of them. `ForbidAll` when no such decoupler is found. `MechJebModuleStagingController.cs:284` refuses to stage while `currentStage <= AutostageLimit`. ⚠ Its default of **0** is exactly the value that let flight 002 cascade 6 -> 1 unbounded (F-102), expending the drogues at 33.9 km."),
+            R("WarpCountDown",       AscentDisposition.RoDefault, "11 s (MechJeb's own field default; RO does not seed it)",
+              "⛔⛔ S250 — ~~Write 32 s~~ WITHDRAWN by the owner's option (b): RO's defaults everywhere except the nine named writes, and this is not one of them. ⚠⚠ **AND IT HAS A NAMED CONSEQUENCE, PREDICTED HERE RATHER THAN DISCOVERED ON THE PAD.** `AscentProfile.WarpCountDownS`s reasoning is unchanged and still true: our T-0 is `IgnitionGate`, which refuses to light a stage with no guidance solution (S214), and the vendored tree's own note says PSG can take ~20 s to converge from a cold start. At 11 s the solver may not have converged when the terminal count arrives. ⛔ The constant is KEPT and unreferenced (C1.16 — the reasoning outlives the write). ⚠ RAISED as BOB-55. ~~It is MechJeb's own 'Launch countdown:' box (MechJebModuleAscentMenu.cs:230) and RO does NOT seed it. It is 32 rather than 11 for a reason that IS the deviation: our T-0 is `IgnitionGate`, which refuses to light a stage with no guidance solution (S214), so the solver must finish BEFORE our terminal count — 20 s (the vendored tree's own PSG cold-start note, MechJebKos/AscentPSGBinding.cs:113-115) + 12 s (WarpPlan.BurnLeadS). ⛔ It shapes NO part of the trajectory; it is a ground-ops lead time."),
+            R("SkipCircularization", AscentDisposition.RoDefault, "false (MechJeb's field default; RO does not seed it)",
+              "⛔⛔ S250 — ~~Write true~~ WITHDRAWN by option (b). ⚠⚠ **NAMED CONSEQUENCE:** on EXIT, `DriveCircularizationBurn:244-286` PLACES A MANEUVER NODE and hands it to `Core.Node`, which collides with T19's own node executor and with the conductor's `ClearNodes`. ⚠ The owner's own flown cfg has it ON (`mechjeb_settings_type_Crew-Dragon.cfg:34`), so this reverts a value he himself flew. RAISED as BOB-55. ~~The autostage deviation's family, it stops an ACTUATION we own, it does not shape a trajectory. UI control: the 'Skip Circularization' toggle in the Ascent Settings menu. On EXIT, DriveCircularizationBurn:244-286 PLACES A MANEUVER NODE and hands it to Core.Node, which would collide with T19's own node executor and with the conductor's ClearNodes. RO does not seed it; the owner's own flown cfg has it on (docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:34 `SkipCircularization = True`)."),
+            R("AutoDeploySolarPanels", AscentDisposition.RoDefault, "true (MechJeb's field default; RO does not seed it)",
+              "⛔⛔ S250 — ~~Write false~~ WITHDRAWN by option (b). ⚠⚠ **THE SHARPEST OF THE FOUR CONSEQUENCES:** left true, `DrivePrelaunch:202-214` retracts the panels and HOLDS THE PRELAUNCH MODE until they are all retracted — a pad hold nobody commanded — and `DriveDeployableComponents` extends them above the atmosphere. ⛔ §B12.7 says direct part control is ours, and option (b) does not say §B12.7 is lifted; this row is where the two meet. RAISED as BOB-55. ~~direct part activation is OURS, which is the second half of the owner's sanctioned deviation. UI control: the 'Auto-deploy solar panels' toggle. Left true, DrivePrelaunch:202-214 retracts panels and HOLDS the prelaunch mode until they are all retracted — a pad hold nobody commanded — and DriveDeployableComponents extends them above the atmosphere. RO does not seed it."),
+            R("AutoDeployAntennas",    AscentDisposition.RoDefault, "true (MechJeb's field default; RO does not seed it)",
+              "⛔⛔ S250 — ~~Write false~~ WITHDRAWN by option (b). ⚠ RealAntennas IS installed (docs/reference/INSTALLED_MODS.md), so this one really does extend hardware the crew procedure owns. RAISED as BOB-55. ~~the 'Auto-deploy antennas' toggle, same rule and same §B12.7 control family as the panels, and RealAntennas is installed (docs/reference/INSTALLED_MODS.md), so this one really would extend hardware the crew procedure owns. RO does not seed it."),
+            R("Core.Node.Autowarp", AscentDisposition.RoDefault, "true (MechJebModuleNodeExecutor.cs:24 field default)",
+              "⛔ S250 — ~~Write true~~ WITHDRAWN by option (b). ⭐⭐ **AND THIS IS THE ONE WITHDRAWAL THAT COSTS NOTHING:** MechJeb's own field default is ALREADY true (`MechJebModuleNodeExecutor.cs:24`), so the flown value does not move and the owner's 'auto warp for all modes' is satisfied by the default. UI control: the ascent window's own 'Auto-warp' toggle. It is ONE field and all three phases read it: the ascent countdown warps only `if (Core.Node.Autowarp)` (MechJebModuleAscentBaseAutopilot.cs:132); the node executor gates both of its warps on it (:242, :293); and the rendezvous autopilot NARROWS the same field rather than owning one (`Core.Node.Autowarp = Core.Node.Autowarp && Core.Target.Distance > 1000`). Docking never warps at all."),
+            R("Core.Warp.activateSASOnWarp", AscentDisposition.RoDefault, "true (MechJebModuleWarpController.cs:35 field default)",
+              "⛔⛔ S250 — ~~Write false~~ WITHDRAWN by option (b). ⚠⚠ **NAMED CONSEQUENCE:** an ACTION GROUP on our vehicle is direct part control, and SAS then fights MechJebs own attitude controller. RAISED as BOB-55. Left on, SetTimeWarpRate calls ActionGroups.SetGroup(SAS, true) on the way into warp, and SAS then fights MechJeb's own attitude controller. RO does not seed it."),
 
             // =====================================================================================
             //  ⭐ THE DESTINATION — §B5's ONE named exception. A destination is data, not a knob.
             // =====================================================================================
             R("DesiredOrbitAltitude",   AscentDisposition.RuntimeMission, "mission periapsis (215 km ISS)",
-              "MISSION FACT. Owner, 2026-09-08 verbatim: 'we can set the orbit to 215km'. From `AscentTargets.For`. ⛔ RO seeds 145000 here, which is why this is one of only three exemptions to 'if RO sets it, we do not' — the other two are AscentType and Autostage, and the owner named all three."),
+              "MISSION FACT. Owner, 2026-09-08 verbatim: 'we can set the orbit to 215km'. From `AscentTargets.For`. ⛔⛔ **S250 — THE CLAIM THAT FOLLOWED WAS WRONG ON TWO OF THREE, AND IT IS CORRECTED IN PLACE RATHER THAN DELETED (C1.16), BECAUSE IT IS LOAD-BEARING HISTORY.** ~~one of only three exemptions to 'if RO sets it, we do not' — the other two are AscentType and Autostage~~. **`ApplyRODefaults()` SETS BOTH OF THOSE ITSELF**: `AscentType = AscentType.PSG` (`MechJebModuleAscentSettings.cs:375`) and `Autostage = true` (`:361`). So neither was ever an exemption — one was a redundant write of RO's own value and the other was a DEVIATION **FROM** RO recorded as if it preserved it. ⭐ **`DesiredOrbitAltitude` IS THE ONLY REAL ONE**: RO seeds 145000 here and the mission is 215 km."),
             R("DesiredApoapsis",        AscentDisposition.RuntimeMission, "mission apoapsis (215 km ISS)",
               "MISSION FACT, same source. ⚠ RO does NOT seed this one at all and its field default is 0, so an unwritten apoapsis would leave the glue ball to clamp `apR` up to `peR` — the right answer, reached by accident. Writing the destination is the exception the owner named."),
             R("DesiredInclination",  AscentDisposition.RuntimeMission, "the plane solve — or the mission fact when there is no plane to solve",
@@ -322,11 +379,11 @@ namespace DragonScreen
             //  Both fly RO's default TODAY, which is also what the 2026-09-08 directive asks for; what
             //  is still open is whether they should EVER deviate, and that is T22's, from a flight.
             // =====================================================================================
-            R("PitchRate",          AscentDisposition.OwnerQuestion, "5.0 deg/s (RO default) — the owner's own flown cfg says 0.75",
-              "⛔ Q1, STILL OPEN. docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:53 records PitchRate 0.75 on this very craft against ApplyRODefaults' PITCH_RATE_DEFAULT = 5.0. ⭐ S222b: an earlier overseer prompt directed 'set PitchRate to 0.75' and it was WITHDRAWN as invented tuning — it is not written. The 2026-09-08 directive settles the INTERIM answer (fly RO's 5.0, unwritten) and defers the question itself to T22, from captured values."),
-            R("Core.Thrust.LimitDynamicPressure", AscentDisposition.OwnerQuestion,
-              "false (RO default) — the owner asked for max-Q throttle-down",
-              "⛔ Q2, STILL OPEN. Owner, verbatim: 'We should also be ticking/selecting max q throttle down etc.' RO's ApplyRODefaults sets this FALSE twice, deliberately, and turning it on needs a Q magnitude — which is precisely the T22 tune the Part-B gate defers. S222b drops the redundant write of RO's own false; the flown value is unchanged and the question is unchanged."),
+            R("PitchRate",          AscentDisposition.Write, "0.75 deg/s (RO seeds 5.0)",
+              "🟢🟢 **S250 — Q1 IS CLOSED BY THE OWNER, 2026-09-09**, on captured + real data: 'derive them from real crew dragon mission stats'. ⭐ The value is the OWNER'S OWN, from his flown cfg, and it is CORROBORATED rather than invented: Falcon 9 + Dragon ISS telemetry (shahar603/Telemetry-Data, CRS-13/14/16) bounds the pitch rate to **0.42—1.0 deg/s** and 0.75 falls inside it. ⚠⚠ IT IS A BAND, NOT A POINT, BECAUSE THE TELEMETRY CARRIES THE **VELOCITY** ANGLE AND ATTITUDE LEADS VELOCITY — see `AscentProfile.PitchRateDegPerS`. ⛔ This is NOT a measured attitude value. ~~Q1, still open. docs/reference/mechjeb_settings_type_Crew-Dragon.cfg:53 records PitchRate 0.75 on this very craft against ApplyRODefaults' PITCH_RATE_DEFAULT = 5.0. ⭐ S222b: an earlier overseer prompt directed 'set PitchRate to 0.75' and it was WITHDRAWN as invented tuning — it is not written. The 2026-09-08 directive settles the INTERIM answer (fly RO's 5.0, unwritten) and defers the question itself to T22, from captured values."),
+            R("Core.Thrust.LimitDynamicPressure", AscentDisposition.Write,
+              "true (RO seeds false, twice)",
+              "🟢🟢 **S250 — Q2 IS CLOSED BY THE OWNER, 2026-09-09**, verbatim: 'set max q to true'. The magnitude it needed is `Core.Thrust.MaxDynamicPressure` below, and that one is MEASURED (24000 Pa, the mean of three real ascent peaks). ⛔⛔ **OUR LAST FLIGHT PEAKED AT 48,971 Pa — TWICE THE REAL VEHICLE — AND RO'S 50,000 THRESHOLD SITS ABOVE EVEN THAT, SO THE LIMITER COULD NEVER FIRE.** ~~Q2, still open. Owner, verbatim: 'We should also be ticking/selecting max q throttle down etc.' RO's ApplyRODefaults sets this FALSE twice, deliberately, and turning it on needs a Q magnitude — which is precisely the T22 tune the Part-B gate defers. S222b drops the redundant write of RO's own false; the flown value is unchanged and the question is unchanged."),
 
             // =====================================================================================
             //  EVERYTHING BELOW IS LEFT AT RO's / MechJeb's OWN DEFAULT. ⛔ "If RO sets it, we do not."
@@ -364,8 +421,8 @@ namespace DragonScreen
               "UI control: the 'Override Warp to Plane' toggle. StartCountdown:102-107 branches on it — true means 'launch NOW' — but it is in the same non-persisted block, so it is false at every scene load and only that toggle can set it. Nothing we do can leave it stale."),
 
             // ---- the pitch program ------------------------------------------------------------------
-            R("PitchStartHeight",   AscentDisposition.RoDefault,     "100 m (RO)",
-              "PITCH_START_HEIGHT_DEFAULT. Where the vertical rise ends — an ascent-SHAPING value, which is exactly the class the 2026-09-08 directive returns to RO."),
+            R("PitchStartHeight",   AscentDisposition.Write,         "1000 m (RO seeds 100)",
+              "🟢 **OWNER, 2026-09-09: 'raise it to 1000'.** ⛔⛔ **AND IT IS OWNER-CHOSEN, NOT MEASURED — a future reader must not mistake it for telemetry.** What the mission data bounds is a BAND (well above 100 m, below ~2,000 m); 1000 is a DECISION inside it. ⭐ It is `VesselState.AltitudeBottom` — height above TERRAIN, not ASL, and the pad sits at ~92 m ASL. Full provenance and the attitude-leads-velocity caveat: `AscentProfile.PitchStartHeightM`. ~~PITCH_START_HEIGHT_DEFAULT, an ascent-SHAPING value returned to RO by the 2026-09-08 directive~~ SUPERSEDED."),
             R("CorrectiveSteering",     AscentDisposition.RoDefault, "false",
               "CLASSIC-path steering correction; MechJebModuleAscentPSGAutopilot never reads it."),
             R("CorrectiveSteeringGain",AscentDisposition.RoDefault, "3.0",
@@ -420,8 +477,8 @@ namespace DragonScreen
             R("Aref",               AscentDisposition.RoDefault, "0 (field default = auto)", "UI box. Reference area; 0 lets the glue ball derive it."),
 
             // ---- the thrust controller: RO seeds every one of these ---------------------------------
-            R("Core.Thrust.MaxDynamicPressure", AscentDisposition.RoDefault, "50000 Pa (RO)",
-              "⚠ ApplyRODefaults sets it TWICE — 20000 early, then 50000 at the end ('a less restrictive initial limit on maxQ'), so RO's real seed is 50000. Unread while Q2's limiter is off."),
+            R("Core.Thrust.MaxDynamicPressure", AscentDisposition.Write, "24000 Pa (RO seeds 50000)",
+              "⭐⭐ **S250 — MEASURED OFF REAL DRAGON MISSIONS**, the mean of three clean ascent peaks (CRS-14 21,943 / CRS-13 23,814 / CRS-16 24,347 Pa). ⭐ **CONFIDENCE HIGH, and it is the only one of the three ascent numbers that is** — `q` is measured directly rather than inferred through an attitude relationship. ⚠ ApplyRODefaults sets it TWICE (20000 early, 50000 at the end), so RO's real seed is 50000 — above our own last flight's 48,971 Pa peak, which is why nothing throttled. Full provenance: `AscentProfile.MaxDynamicPressurePa`."),
             R("Core.Thrust.MinThrottle",        AscentDisposition.RoDefault, "0.05 (RO)", "The floor RO gives an RO/RF engine."),
             R("Core.Thrust.LimiterMinThrottle", AscentDisposition.RoDefault, "true (RO)",  "Clamp to that floor rather than command below it."),
             R("Core.Thrust.LimitToPreventUnstableIgnition", AscentDisposition.RoDefault, "false (RO)",
@@ -429,7 +486,8 @@ namespace DragonScreen
             R("Core.Thrust.AutoRCSUllaging",    AscentDisposition.RoDefault, "true (RO)",  "RCS settling before an RO relight."),
             R("Core.Thrust.LimitThrottle",      AscentDisposition.RoDefault, "false (RO)", "No blanket throttle cap."),
             R("Core.Thrust.LimitAcceleration",  AscentDisposition.RoDefault, "false (RO)", "No g-limit; the crew limit is not modelled here."),
-            R("Core.Thrust.LimitToPreventOverheats", AscentDisposition.RoDefault, "false (RO)", "RealHeat owns heating."),
+            R("Core.Thrust.LimitToPreventOverheats", AscentDisposition.Write, "true (RO seeds false)",
+              "🟢 **OWNER OVERRIDE, 2026-09-09.** A plain bool with no magnitude to choose. ⛔⛔ **IT IS NOT TRUNK PROTECTION AND MUST NOT BE DESCRIBED AS SUCH:** `MechJebModuleThrustController` reads `p.temperature / p.maxTemp` only and NEVER `skinTemperature`, so it sees a part's bulk temperature, not its skin. ~~RealHeat owns heating~~ — still true of the MODEL; this is a throttle limiter on top of it."),
 
             // ---- CLASSIC-PATH ONLY: on the screen, never read while AscentType is PSG --------------
             R("TurnStartAltitude", AscentDisposition.ClassicOnly, "500 m",   "CLASSIC gravity turn."),

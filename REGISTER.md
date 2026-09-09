@@ -29314,3 +29314,181 @@ owner-gated. **Should `test` (or a new verb) MEASURE the repo-vs-live delta and 
 writing anything?**
 ⭐ `BOB-51` · `BOB-46` · `BOB-47` · `BOB-53` — **settled by the overseer in this prompt's §4**, carried
 forward, and none of them acted on here. `BOB-49` and `BOB-52` remain with the owner.
+
+---
+
+### S250 [O] Stop overriding RO, and move the staging floor to the right anchor — **DONE 2026-09-09 — ALL SUITES PASSED (24,753 checks, four affected suites all ROSE), previewdiff 0 of 140, installed, and the reset performed by deleting the latched global cfg. ⚠ FOUR WITHDRAWN WRITES HAVE NAMED CONSEQUENCES AND ONE OF THEM CAN HOLD THE PAD. ⛔ And the tune switch does not reach the game** — [overseer `PROMPT_MECHJEB_RESET.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim:** *"reset our mechjeb back to 100% default settings"* + option (b) · *"set max q to
+true"* · *"confirmed, set autostage limit 3"* · *"derive them from real crew dragon mission stats"* ·
+*"raise it to 1000"* · *"install permitted, add it"*.
+
+#### ⭐⭐ THE HEADLINE, AND THE PROMPT WAS RIGHT: TWO OF THE THREE "EXEMPTIONS" WERE NEVER EXEMPTIONS
+
+Verified in the vendored source myself, line by line, rather than taken from the prompt:
+`ApplyRODefaults()` sets **`Autostage = true` (`:361`)** and **`AscentType = AscentType.PSG` (`:375`)**
+itself, and re-asserts **`MaxDynamicPressure.Val = 50000` (`:390`)** over its own `:358`'s 20000.
+⛔ So `AscentProfile.cs`'s claim — *"one of only THREE exemptions … the other two are AscentType and
+Autostage"* — **was wrong on two of three**, and §B8's `Autostage = false` was a **DEVIATION *FROM* RO
+recorded as if it preserved RO's default**. ⭐ Corrected **IN PLACE** (C1.16) in the row, in the enum's
+own docstring, in the conductor and in the test's exemption list. `DesiredOrbitAltitude` is the only
+real one.
+
+#### ⛔ THE FLOOR — RE-ANCHORED, AND THE PROMPT'S OWN SECOND CRAFT NUMBER WAS WRONG THE OTHER WAY
+
+⚠ The prompt says *"add the flown stack (trunk at 4) as a second case"*. ⛔ **READ OUT OF THE FILES:
+the trunk is at istg 3 on BOTH craft.** What sits at 4 on the flown `Crew-2.craft` is the **Dragon
+decoupler** (`TE.19.C.Dragon.Decoupler`, with the S2 tank and the S2 RCS). ⭐ **The NUMBER 4 is right
+and the LABEL was wrong**, and the rule that produces both numbers is the one the prompt actually
+describes: **the HIGHEST stage carrying a spacecraft-side decoupler** — the Dragon decoupler where one
+exists, the trunk otherwise.
+
+| craft | parts | interstage (old anchor) | spacecraft-side decoupler (new) | floor |
+|---|---:|---:|---|---:|
+| `New Crew-2.craft` (as saved 2026-09-09) | 22 | 5 | TRUNK at **3** | **3** 🟢 the owner's ruled value |
+| `Crew-2.craft` (the stack that FLEW) | 27 | 6 | DRAGON DECOUPLER at **4** (trunk 3) | **4** |
+
+⛔ **THE OLD ANCHOR BLOCKED THE ONE EVENT PVG MUST PERFORM.** On `New Crew-2` it derives 5, and
+`currentStage 5 <= 5` stops autostaging **before S1 ever separates**. ⚠ That is a HYPOTHESIS for the NaN
+throws and the 25 km-low MECOs, **not a proven cause**, and nothing in the code or the tests says
+otherwise. ⭐⭐ **F-102's PROPERTY IS UNCHANGED AND IS ASSERTED ON BOTH CRAFT:** the drogues and the
+mains are unreachable under either numbering, which is the whole reason this file exists separately.
+⛔ **`ForbidAll` still clamps shut** — and it now also fires for an interstage with no Dragon above it,
+which the old rule would have floored happily.
+
+#### ⚠⚠ SIX WRITES WITHDRAWN, AND FOUR OF THEM HAVE NAMED CONSEQUENCES — `BOB-55`
+
+⛔ **THE PROMPT IS EXPLICIT** (*"EVERYTHING ELSE THE CONDUCTOR CURRENTLY WRITES COMES OUT"*) and the
+owner's option (b) is explicit, so all six came out. ⚠ **Four of them move a flown value, and every one
+is §B12.7's family — "direct part control is ours" — which option (b) does not say is lifted:**
+
+| withdrawn | what now happens |
+|---|---|
+| `AutoDeploySolarPanels` false | ⛔⛔ **THE SHARPEST.** `DrivePrelaunch:202-214` retracts the panels and **HOLDS THE PRELAUNCH MODE until they are all retracted** — a pad hold nobody commanded. |
+| `SkipCircularization` true | `DriveCircularizationBurn:244-286` **PLACES A MANEUVER NODE** on exit, colliding with T19's node executor and the conductor's own `ClearNodes`. ⚠ The owner's own flown cfg had it ON. |
+| `WarpCountDown` 32 s | back to MechJeb's **11 s**, against a PSG cold start the vendored tree itself puts at **~20 s**, and `IgnitionGate` will not light a stage with no solution (S214). |
+| `Core.Warp.activateSASOnWarp` false | SAS is set on the way into warp and **fights MechJeb's own attitude controller**. |
+| `AscentType` PSG | ⭐ no change — RO sets it. |
+| `Core.Node.Autowarp` true | ⭐ no change — MechJeb's field default is already true. |
+
+⭐ Each consequence is written into that setting's own audit row, and `AscentProfileTest` now **asserts
+that every one of the five carries its consequence AND the `BOB-55` raise** — so deleting the reasoning
+fails the suite just as loudly as re-adding the write.
+
+#### ⭐ THE NINE WRITES, AND WHAT THE TABLES NOW SAY
+
+**6 `Write` + 3 `RuntimeMission` that `Configure` writes = the nine.** (The 4th `RuntimeMission`,
+`LaunchingToPlane`, is written by §7.5's plane launch, not by `Configure`.)
+
+```
+AutostageLimit  ·  Core.Thrust.LimitDynamicPressure  ·  Core.Thrust.MaxDynamicPressure
+Core.Thrust.LimitToPreventOverheats  ·  PitchRate  ·  PitchStartHeight
+DesiredOrbitAltitude  ·  DesiredApoapsis  ·  DesiredInclination (free-flyer path only)
+```
+
+| table | composition |
+|---|---|
+| `AscentProfile.Audit`, 78 rows | **6** Write · 4 RuntimeMission · 2 UiDerived · 8 ClassicOnly · **58** RoDefault · ⭐ **0 OwnerQuestion** |
+| `AscentReadback.Expected`, 78 rows | **6** OurWrite · 4 MissionFact · 2 MenuDerived · 1 StatusFlag · 27 RoDefault · 38 FieldDefault |
+
+🟢 **BOTH OWNER QUESTIONS ARE CLOSED BY THE OWNER HIMSELF** — Q1 (`PitchRate`) and Q2 (max-Q
+throttle-down). ⛔ The rule they enforced is unchanged and still enforced: a build chat may not open or
+close one. What changed is who answered.
+
+#### ⭐⭐ THE THREE ASCENT NUMBERS — AND ONLY ONE OF THEM IS A MEASUREMENT
+
+Source cited in the code, not restated: `shahar603/Telemetry-Data`, SpaceX webcast telemetry, Falcon 9 +
+Dragon to the ISS at 51.6°.
+
+| setting | value | provenance | confidence |
+|---|---|---|---|
+| `MaxDynamicPressure` | **24000 Pa** | mean of three clean ascent peaks (21,943 / 23,814 / 24,347) | ⭐ **HIGH — `q` is measured directly** |
+| `PitchRate` | **0.75 °/s** | the owner's own flown cfg, and it falls INSIDE the 0.42–1.0 band the data bounds | ⭐ corroborated |
+| `PitchStartHeight` | **1000 m** | ⛔ **OWNER-CHOSEN, mid-band** | ⚠ **A DECISION, NOT A MEASUREMENT** |
+
+⛔⛔ **THE CAVEAT IS IN THE CODE, TWICE:** the telemetry carries the **VELOCITY** angle and vehicle
+**ATTITUDE LEADS VELOCITY**, so the real pitchover begins earlier and steeper than the numbers above.
+Two of the three are a BAND with an owner's pick inside it. ⛔ Neither may ever be written up as a
+measured attitude value, and `AscentProfileTest` asserts that `PitchStartHeight`'s row says
+**OWNER-CHOSEN, NOT MEASURED** in those words.
+⭐ `PitchStartHeight` is `VesselState.AltitudeBottom` — height above **TERRAIN**; the pad is ~92 m ASL.
+⛔⛔ **OUR LAST FLIGHT PEAKED AT 48,971 Pa AND RO'S THRESHOLD IS 50,000**, so the limiter could never
+fire. The suite asserts the new threshold is **below that peak**, which is the property, not the number.
+
+#### ⛔⛔ THE TUNE SWITCH DOES NOT REACH THE GAME — `BOB-56`
+
+§5 says *"SET THE SHIPPED DEFAULT TO EMPTY"* and names `DragonMechJebCore.tuneFile` (`MechHost.cs:228`).
+⭐ Done — `MechProfile.TuneFileDefault = ""`, and `ApplyTune` is untouched, as instructed.
+⛔ **AND ON ITS OWN IT CHANGES NOTHING.** `tuneFile` is a `[KSPField]`, and the shipped part config sets
+it: **`plugin/GameData/DragonScreen/DragonScreen.cfg:214  tuneFile = mechjeb_settings_type_Crew-Dragon.cfg`**.
+A `[KSPField]` in the MODULE node overrides the field initialiser, so **the TUNED Crew-2 profile still
+loads on every load** and `ApplyTune` still logs *"This is the TUNED Crew-2 profile … not the RSS-RO
+default baseline"*. ⚠ §6 forbids `.cfg` work and §8 requires the shipped cfg's md5 to be unchanged, so
+**the line was NOT touched** — the fix is one line and it is the owner's call.
+
+#### ⭐ THE INSTALL — AND THE DELETION IS THE ACTUAL RESET
+
+⛔ **VERIFIED MYSELF BEFORE ACTING:** the live `mechjeb_settings_global.cfg:68` held
+`ForceResetROSettings = False` against the vendored field default `true` (`:26`) and the latch at
+`:309-312`. ⭐ So RO's defaults were **not** being re-applied on load, and that 31 KB file WAS MechJeb's
+permanent starting state. **Deleting it is the reset; the code changes only decide what we put back.**
+
+| step | result |
+|---|---|
+| backup, **before anything** | 4 files → `Desktop/BOB/backup_mechjeb_settings_2026-09-09/`, **every md5 verified against the live original** |
+| install | 1 file written (`DragonScreen.dll`); all 170 shipped files then match the repo byte for byte |
+| delete (live only) | `mechjeb_settings_global.cfg` · `mechjeb_settings_type_New Crew-2.cfg` — ⛔ **each deleted only after re-verifying its backup's md5 in the same command** |
+| kept | `mechjeb_settings_type_Crew-Dragon.cfg` (shipped; §B5's TUNING TARGET) · `tuning.reference.cfg` |
+| repo `DragonScreen.cfg` | `7588f071d69b25a278bacf9e64a2b47b` |
+| live `DragonScreen.cfg` | `7588f071d69b25a278bacf9e64a2b47b` — ⭐ **IDENTICAL AND UNCHANGED, so S247's match survives** |
+| ⛔ `LocalFixes/frost_mod_b9partswitch_fix.cfg` | **still present, 3122 bytes, mtime 2026-08-04 — untouched** |
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, 24,753 checks |
+| the four affected suites | `AscentProfileTest` 196→**201** · `ConductorEngageTest` 139→**153** · `AscentReadbackTest` 360→**361** · `ConfigWipeTest` 54→**63** — ⭐ **every one ROSE** |
+| `previewdiff HEAD` | **0 of 140 changed** — and NOT vacuous: four `src/pure` files moved, so it actually rendered |
+| the floor, on both craft | 3 on `New Crew-2`, 4 on the flown `Crew-2`, **both read out of the .craft files** |
+
+⭐⭐ **THE SUITE CAUGHT ALL 61 CONSEQUENCES OF THIS CHANGE, AND THAT IS THE STORY OF THE TASK.** It pins
+the write set from THREE independent directions — the audit table, the RO-seeded rule, and the literal
+assignment text of `MechConductor.cs` — and every one of them fired. ⛔ **Each was re-stated to the new
+ruling, never relaxed**, and two fixtures had to MOVE rather than be deleted: the read-back's seeded
+divergence used PitchRate 0.75, which is now the EXPECTED value, so it would have read green while
+measuring nothing (the S220 shape). It now seeds RO's 5.0 arriving instead — **our write not landing**,
+which is the failure mode `OurWrite` exists to catch.
+⚠ **AND ONE OF MY OWN EDITS WAS CAUGHT BY IT:** rewriting the conductor's block (1) deleted the
+reasoning behind the `Autostage` PROPERTY write along with the write. C1.16's 2026-09-06 extension
+forbids exactly that. Restored verbatim, marked as superseded-in-place; the rule it protects
+(`_autostage` is never assigned directly) is still asserted.
+
+#### ⚠ ONE FILE ADDED THAT THE PROMPT DID NOT NAME — `BOB-57`
+
+⛔ **`New Crew-2.craft` WAS NOT IN THE REPO.** It exists only in the KSP install
+(`saves/test/Ships/VAB/`), and C7 forbids the install as a build source. §7 requires the test to *"read
+the real files"*. ⭐ Copied into **`docs/reference/New Crew-2.craft`** (md5 `4b19a022…`, byte-identical
+to the live file), which is where this project's other **sixteen** .craft files already live as tier-1
+evidence. **Flagged rather than done silently.**
+
+#### ⛔ WHAT THE OWNER'S NEXT LAUNCH CARRIES — I CANNOT CHECK ANY OF IT
+
+1. `conductor: PVG configured` — **autostage ON**, `AutostageLimit` **3**, target **215 × 215 km**,
+   max-Q limiter **ON at 24000**, PitchRate **0.75**, PitchStartHeight **1000**.
+2. **`ASCENT READ-BACK` disagreement count.** ⚠ Two rows read WRONG before this task and should now come
+   right ON THEIR OWN, because the latched global cfg is gone and `ApplyRODefaults()` runs again:
+   `Core.Thrust.MinThrottle` (was 0, RO wants 0.05) and `SpinupStageFlag` (was true, RO wants false).
+3. ⭐ **A THROTTLE-DOWN AROUND T+50 s.** Every real Dragon mission does it at t≈48–51 s. ⛔ **If it does
+   not fire, the limiter is not reaching the vehicle — say so, do not explain it away.**
+4. ⚠ **MechJeb now fires the S1/S2 separation itself.** That is the point of the task and it is NEW
+   BEHAVIOUR.
+5. ⚠ **The tune STILL LOADS** (`BOB-56`) — the log will still say *"the TUNED Crew-2 profile"*. Until
+   cfg line 214 is emptied, the reset is only partial.
+
+#### ⚠ QUESTIONS RAISED — `BOB-55`, `BOB-56`, `BOB-57`
+
+`BOB-55` four withdrawn §B12.7 writes have named consequences — the pad hold is the sharp one; option
+(b) did not say §B12.7 is lifted, and it is the owner's call whether it is ·
+`BOB-56` the tune switch cannot take effect while `DragonScreen.cfg:214` sets `tuneFile` ·
+`BOB-57` `New Crew-2.craft` copied into `docs/reference/` so the test could read a repo file.

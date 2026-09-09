@@ -39,6 +39,49 @@
 // so the vehicle is never stranded on the pad — and **cannot fire 6 or anything below it**. The launch
 // vehicle, the second stage, the trunk and both parachute stages are out of its reach.
 //
+// ============================================================================================
+// ⛔⛔ SUPERSEDED IN PLACE — S250, 2026-09-09 (C1.16). THE ANCHOR MOVED; EVERYTHING ABOVE STANDS.
+//
+// Everything above this line is the ORIGINAL reasoning and it is still why this file exists: the
+// cascade, the expended drogues, the derive-don't-type rule, the clamp-shut rule. ⛔ One thing in it
+// is now wrong, and it is the ANCHOR:
+//
+//     ~~"setting the limit to the S1/S2 separation stage means MechJeb ... cannot fire 6"~~
+//
+// ---- WHY THAT WAS THE WRONG STAGE, AND IT COST US THE FEATURE IT WAS PROTECTING ----
+// RP-1's own troubleshooting page is titled by its first principle — "PVG Must Be Able To Predict The
+// Future" — and PVG plans the whole ascent INCLUDING STAGING. ⛔ So the S1/S2 separation is precisely
+// the event the solver must be allowed to perform. Anchoring the floor ON it blocked the one thing
+// that makes PVG work: on `New Crew-2` the old rule derives 5 and `currentStage 5 <= 5` stops
+// autostaging before S1 ever separates. ⚠ THAT IS A HYPOTHESIS for the NaN solver throws and the
+// 25 km-low MECOs, NOT a proven cause — this change makes it testable, and nothing here claims more.
+//
+// ---- THE NEW ANCHOR: THE FIRST SPACECRAFT-SIDE DECOUPLER ----
+// 🟢 OWNER RULED THE VALUE, 2026-09-09: "confirmed, set autostage limit 3".
+// ⛔ THE VALUE IS RULED; THE RULE IS STILL DERIVED, because `StagingFloor`'s own argument above has
+// not changed — sixteen .craft files, and a literal 3 would be silently wrong for fifteen of them.
+// The floor is the HIGHEST stage carrying a decoupler on the SPACECRAFT side of the launch vehicle:
+// the Dragon decoupler where one exists, the trunk otherwise. Below that stage there is nothing but
+// spacecraft — trunk, pod, heat shield, docking port, drogues, mains — and above it is launch
+// vehicle, which PVG is entitled to stage.
+//
+//   `New Crew-2.craft` (22 parts, the craft as saved 2026-09-09) -> 3
+//       6 S1 engine + erector | 5 S1 interstage + tank + fins + legs | 4 S2 engine + CGT
+//       3 TRUNK + S2 tank   <- floor      2 pod + heatshield + NDS   1 drogues   0 mains
+//   `Crew-2.craft`     (27 parts, the stack that FLEW)             -> 4
+//       8 S1 engine | 7 erector | 6 interstage + tank + fins + legs | 5 S2 engine
+//       4 DRAGON DECOUPLER + S2 tank + RCS  <- floor    3 trunk   2 drogues   1 mains   0 pod
+//
+// ⚠ THE TWO NUMBERINGS DIFFER AND THE RULE FITS BOTH — which is the whole point of deriving it. ⛔ On
+// the flown stack the floor is the DRAGON DECOUPLER at 4, not the trunk at 3: the decoupler fires
+// FIRST and is therefore the first spacecraft-side separation. `AscentProfileTest` asserts both
+// numbers by reading the two .craft files, not by restating this comment.
+//
+// ⭐ AND THE F-102 PROPERTY IS UNCHANGED, WHICH IS THE TEST THAT MATTERS: on both craft the floor
+// still sits ABOVE every parachute stage, so the cascade that expended the drogues at 33.9 km cannot
+// reach them under either numbering.
+// ============================================================================================
+//
 // ---- ⛔ WHY IT IS DERIVED AND NOT TYPED IN AS "6" ----
 // The number is a property of the CRAFT, and this repo holds sixteen `.craft` files. A literal 6 would
 // be right for `Crew-2` and silently wrong for the next vehicle — and "silently wrong safety limit" is
@@ -82,13 +125,32 @@ namespace DragonScreen
         public const int ForbidAll = 99;
 
         /// <summary>
-        /// The stage at or below which MechJeb must not autostage. ⭐ Returns the stage carrying the
-        /// INTERSTAGE — the S1/S2 separation — so ignition and liftoff stay reachable and everything
-        /// from stage separation downward does not.
+        /// A decoupler on the SPACECRAFT side of the launch vehicle — the two parts that can perform
+        /// the first separation Dragon owns. ⭐ Named as a predicate so the rule reads as the sentence
+        /// the owner ruled, and so a third such part is one line rather than an edit to the loop.
         ///
-        /// ⛔ Returns <see cref="ForbidAll"/> when no interstage is present, which forbids autostaging
-        /// outright. See the header: "I do not know which stage is safe" must never resolve to
-        /// "then anything goes".
+        /// ⚠ BOTH, NOT EITHER, AND THE ORDER IS THE CRAFT'S. `Crew-2` carries a dedicated
+        /// `C.Dragon.Decoupler` above its trunk; `New Crew-2` has none, and its TRUNK is the
+        /// decoupler. Asking for the HIGHEST match answers both without knowing which craft it is on.
+        /// </summary>
+        public static bool IsSpacecraftSideDecoupler(string partName)
+        {
+            return VehicleParts.IsDragonDecoupler(partName) || VehicleParts.IsTrunk(partName);
+        }
+
+        /// <summary>
+        /// The stage at or below which MechJeb must not autostage. ⭐ Returns the stage carrying the
+        /// FIRST SPACECRAFT-SIDE DECOUPLER, so the launch vehicle's own events — ignition, liftoff and
+        /// ⭐ the S1/S2 SEPARATION PVG PLANS FOR — stay reachable, and nothing from the first Dragon
+        /// separation downward does.
+        ///
+        /// ⛔ Returns <see cref="ForbidAll"/> when no such decoupler is present, which forbids
+        /// autostaging outright. See the header: "I do not know which stage is safe" must never
+        /// resolve to "then anything goes".
+        ///
+        /// ⚠ ~~the stage carrying the INTERSTAGE~~ SUPERSEDED 2026-09-09 — see the header block. The
+        /// old anchor blocked the S1/S2 separation itself, which is the event the solver must be
+        /// allowed to perform.
         /// </summary>
         public static int For(StagePart[] parts)
         {
@@ -99,10 +161,11 @@ namespace DragonScreen
             for (int i = 0; i < parts.Length; i++)
             {
                 if (parts[i].Name == null) continue;
-                if (!VehicleParts.IsInterstage(parts[i].Name)) continue;
+                if (!IsSpacecraftSideDecoupler(parts[i].Name)) continue;
                 // ⚠ HIGHEST, not first. Symmetry counterparts and a re-flown booster can both put more
                 // than one matching part in the list; the SAFEST reading of several is the one that
-                // stops the cascade earliest.
+                // stops the cascade earliest. ⭐ It is also what makes ONE predicate serve both craft:
+                // where a Dragon decoupler and a trunk both exist, the decoupler fires first and wins.
                 if (!found || parts[i].Stage > sep) { sep = parts[i].Stage; found = true; }
             }
             if (!found) return ForbidAll;

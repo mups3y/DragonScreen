@@ -137,6 +137,23 @@ namespace DragonScreen.Pure
         // either way: §14.4(a) holds, the screens' flight commands are still an honest no-op.
         public const string TuneFileName = "mechjeb_settings_type_Crew-Dragon.cfg";
 
+        /// <summary>
+        /// ⭐⭐ S250 — WHAT `DragonMechJebCore.tuneFile` DEFAULTS TO, WHICH IS NOW **NOTHING**.
+        ///
+        /// 🟢 The owner, 2026-09-09: *"reset our mechjeb back to 100% default settings"*, option (b) —
+        /// MechJeb genuinely untouched, and only the nine named writes added back. ⛔ `ApplyTune`
+        /// applying the TUNED Crew-2 profile on every load is exactly what that reset must not do.
+        ///
+        /// ⛔ IT IS A SEPARATE CONSTANT AND <see cref="TuneFileName"/> IS UNCHANGED. The file still
+        /// SHIPS and still has a name: it is §B5's TUNING TARGET, the black box records the name
+        /// (`BlackBoxRecorder.cs`), and `MechHostTest` proves the shipped copy matches the evidence
+        /// copy under `docs/reference/`. What changed is which of them the core LOADS, and that is one
+        /// field, not the file's existence.
+        /// ⚠ Empty is a REAL state, not a null-object hack — `ApplyTune` has always returned early on
+        /// `IsNullOrEmpty(tuneFile)`.
+        /// </summary>
+        public const string TuneFileDefault = "";
+
         // ── HOW MANY MODULES THE TUNE ACTUALLY TOUCHES ──────────────────────────────────
         //
         // ⚠ T15d, RESOLVING T15b's GLASS ROW 3. That row said the log line

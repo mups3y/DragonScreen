@@ -277,17 +277,64 @@ public static class ConfigWipeTest
         Check("S228 J3 the craft file parsed", parts.Count > 20, "got " + parts.Count + " parts");
 
         int floor = StagingFloor.For(parts.ToArray());
-        // The interstage sits at istg 6 — and the recording's fatal line is `from: 6 -> to: 1`.
-        Check("S228 J3 ⭐ the floor derived from Crew-2.craft is the S1/S2 separation stage (6)",
-              floor == 6, "got " + floor);
+        // ⛔⛔ S250 RE-ANCHORED THE FLOOR, AND THE NUMBER MOVED 6 -> 4. ~~the S1/S2
+        // separation stage (6)~~ SUPERSEDED IN PLACE (C1.16). The old anchor was the INTERSTAGE, which
+        // IS the S1/S2 separation — the one event PVG must be allowed to perform, because the solver
+        // plans the whole ascent INCLUDING staging. The new anchor is the FIRST SPACECRAFT-SIDE
+        // DECOUPLER, which on this stack is the DRAGON DECOUPLER at istg 4 (the trunk is at 3 and
+        // fires after it).
+        // ⭐⭐ AND THE PROPERTY THIS FILE EXISTS FOR IS UNCHANGED, WHICH IS THE TEST THAT
+        // MATTERS: the drogues (2) and the mains (1) are still unreachable, so the cascade that
+        // expended them at 33.9 km still cannot happen.
+        Check("S250 J3 ⭐ the floor derived from Crew-2.craft is the Dragon decoupler stage (4)",
+              floor == 4, "got " + floor);
+        Check("S250 J3 ⚠ ...and it is NOT the old interstage anchor, which blocked PVG's own staging",
+              floor != 6, "the interstage anchor is back");
 
-        // ⛔ THE ACTUAL CLAIM: the stage the recording says was fired cannot be fired.
-        Check("S228 J3 ⛔⛔ stage 6 — the S1/S2 separation that discarded the launch vehicle — is BLOCKED",
-              !StagingFloor.WouldStage(6, floor), "");
-        Check("...and so is everything below it: S2 engine (5)",
-              !StagingFloor.WouldStage(5, floor), "");
-        Check("...the S2 tank and Dragon decoupler (4)", !StagingFloor.WouldStage(4, floor), "");
+        // ⛔ THE ACTUAL CLAIM, RE-STATED FOR THE NEW ANCHOR.
+        Check("S250 J3 ⭐ stage 6 — the S1/S2 separation — is now PERMITTED, which is the point",
+              StagingFloor.WouldStage(6, floor), "");
+        Check("...and so is the S2 engine (5), the rest of what PVG plans for",
+              StagingFloor.WouldStage(5, floor), "");
+        Check("S250 J3 ⛔⛔ the DRAGON DECOUPLER (4) is BLOCKED — the first spacecraft-side event",
+              !StagingFloor.WouldStage(4, floor), "");
         Check("...the trunk (3)", !StagingFloor.WouldStage(3, floor), "");
+
+        // ⭐⭐ S250 — THE SECOND CRAFT, AND IT IS WHAT MAKES THIS A RULE RATHER THAN A
+        // NUMBER. `New Crew-2.craft` is the stack as the owner saved it on 2026-09-09: 22 parts, no
+        // Dragon decoupler at all, and its TRUNK does that job at istg 3. The two numberings differ and
+        // ONE predicate answers both. 🟢 The owner ruled the value for this craft: "confirmed, set
+        // autostage limit 3".
+        // ⚠ READ OUT OF THE FILE, never restated — the prompt's own rule, and the prompt's own
+        // description of this craft ("the flown stack, trunk at 4") is what reading it corrected.
+        var nparts = new List<StagePart>();
+        foreach (string block in Regex.Split(
+                     File.ReadAllText(Repo("docs", "reference", "New Crew-2.craft")), "\nPART\\s*\n\\{"))
+        {
+            Match nm = Regex.Match(block, @"\bpart\s*=\s*([^\s_]+)");
+            Match ist = Regex.Match(block, @"\bistg\s*=\s*(-?\d+)");
+            if (nm.Success && ist.Success)
+                nparts.Add(StagePart.Of(int.Parse(ist.Groups[1].Value), nm.Groups[1].Value));
+        }
+        Check("S250 J3 the CURRENT craft file parsed", nparts.Count == 22, "got " + nparts.Count);
+        int nfloor = StagingFloor.For(nparts.ToArray());
+        Check("S250 J3 🟢 the floor on New Crew-2 is the owner-ruled 3",
+              nfloor == 3, "got " + nfloor);
+        Check("S250 J3 ⭐ the S1/S2 separation (5) is PERMITTED on this craft too",
+              StagingFloor.WouldStage(5, nfloor) && StagingFloor.WouldStage(4, nfloor), "");
+        Check("S250 J3 ⛔ the trunk + S2 tank (3) and everything below are BLOCKED",
+              !StagingFloor.WouldStage(3, nfloor) && !StagingFloor.WouldStage(2, nfloor)
+              && !StagingFloor.WouldStage(1, nfloor) && !StagingFloor.WouldStage(0, nfloor), "");
+        Check("S250 J3 ⛔⛔ ...which is both parachute stages on this craft: drogues 1, mains 0",
+              !StagingFloor.WouldStage(1, nfloor) && !StagingFloor.WouldStage(0, nfloor), "");
+        // ⛔ AND THE OLD ANCHOR WOULD HAVE BLOCKED THE SEPARATION ITSELF. This is the defect the
+        // re-anchor exists to remove, asserted rather than described: the interstage sits at 5.
+        int oldAnchor = 0;
+        for (int i = 0; i < nparts.Count; i++)
+            if (VehicleParts.IsInterstage(nparts[i].Name) && nparts[i].Stage > oldAnchor)
+                oldAnchor = nparts[i].Stage;
+        Check("S250 J3 ⛔ the OLD interstage anchor would have derived 5 and stopped S1 separating",
+              oldAnchor == 5 && !StagingFloor.WouldStage(5, oldAnchor), "oldAnchor=" + oldAnchor);
         // ⭐ THE ONES THAT KILLED THE CREW. Drogues at istg 2, mains at istg 1, both expended at 33.9 km.
         Check("S228 J3 ⭐⭐ the DROGUES (2) cannot be fired by a cascade",
               !StagingFloor.WouldStage(2, floor), "");
@@ -301,8 +348,13 @@ public static class ConfigWipeTest
               StagingFloor.WouldStage(7, floor), "");
 
         // ⛔ UNDERIVABLE CLAMPS SHUT, IT DOES NOT OPEN.
-        Check("S228 J3 ⛔ no interstage -> autostaging forbidden outright, not permitted",
+        Check("S250 J3 ⛔ no spacecraft-side decoupler -> forbidden outright, not permitted",
               StagingFloor.For(new[] { StagePart.Of(3, "TE.18.DRAGONV2.POD") }) == StagingFloor.ForbidAll,
+              "");
+        // ⛔⛔ AND AN INTERSTAGE ALONE IS NO LONGER ENOUGH — a launch vehicle with no Dragon
+        // on top is a craft we cannot reason about, and it gets NO autostaging rather than a guess.
+        Check("S250 J3 ⛔ an interstage WITHOUT a Dragon decoupler or trunk is still underivable",
+              StagingFloor.For(new[] { StagePart.Of(6, "TE.19.F9.S1.Interstage") }) == StagingFloor.ForbidAll,
               "");
         Check("...an empty part list too", StagingFloor.For(new StagePart[0]) == StagingFloor.ForbidAll, "");
         Check("...and a null list", StagingFloor.For(null) == StagingFloor.ForbidAll, "");
@@ -310,21 +362,29 @@ public static class ConfigWipeTest
               !StagingFloor.WouldStage(20, StagingFloor.ForbidAll), "");
         Check("S228 J3 a null part name does not throw",
               StagingFloor.For(new[] { StagePart.Of(2, null) }) == StagingFloor.ForbidAll, "");
-        // ⚠ Several interstages -> the SAFEST reading, which is the highest (stops earliest).
-        Check("S228 J3 ⚠ with two interstages the HIGHER stage wins — stop the cascade earliest",
-              StagingFloor.For(new[] { StagePart.Of(2, "TE.19.F9.S1.Interstage"),
-                                       StagePart.Of(6, "TE.19.F9.S1.Interstage") }) == 6, "");
+        // ⚠ Several candidates -> the SAFEST reading, which is the highest (stops earliest).
+        // ⭐ AND THIS IS ALSO WHAT MAKES ONE PREDICATE SERVE BOTH CRAFT: where a Dragon decoupler
+        // and a trunk both exist, the decoupler is higher and wins, which is the flown stack exactly.
+        Check("S250 J3 ⚠ with a decoupler AND a trunk the HIGHER stage wins",
+              StagingFloor.For(new[] { StagePart.Of(3, "TE.18.DRAGONV2.TRUNK"),
+                                       StagePart.Of(4, "TE.19.C.Dragon.Decoupler") }) == 4, "");
+        Check("S250 J3 ⚠ ...and with two trunks, likewise",
+              StagingFloor.For(new[] { StagePart.Of(2, "TE.18.DRAGONV2.TRUNK"),
+                                       StagePart.Of(6, "TE.18.DRAGONV2.TRUNK") }) == 6, "");
         // A negative stage cannot bound anything, so it is underivable rather than a limit.
-        Check("S228 J3 a negative interstage stage is treated as underivable, not as a floor",
-              StagingFloor.For(new[] { StagePart.Of(-1, "TE.19.F9.S1.Interstage") }) == StagingFloor.ForbidAll,
+        Check("S250 J3 a negative stage is treated as underivable, not as a floor",
+              StagingFloor.For(new[] { StagePart.Of(-1, "TE.18.DRAGONV2.TRUNK") }) == StagingFloor.ForbidAll,
               "");
     }
 
     static void J3_TheFloorIsWiredAndIndependent()
     {
         string src = Live(File.ReadAllText(Repo("plugin", "src", "MechConductor.cs")));
-        Check("S228 J3 the floor is applied from Configure, beside the Autostage write",
-              Regex.IsMatch(src, @"a\.Autostage = false;[\s\S]{0,200}?ApplyStagingFloor\(v\);"), "");
+        // ⚠ S250: ~~beside the Autostage write~~ — that write is withdrawn, so the anchor moves
+        // to `Configure` itself. ⭐ The floor is now the FIRST thing Configure does, which is
+        // stronger than "beside": nothing can return early before the safety device is set.
+        Check("S250 J3 the floor is applied from Configure, before anything else it writes",
+              Regex.IsMatch(src, @"static void Configure\(Vessel v\)[\s\S]{0,3000}?ApplyStagingFloor\(v\);"), "");
         Check("S228 J3 ⛔ it writes MechJeb's own AutostageLimit",
               Regex.IsMatch(src, @"AutostageLimit\.Val = floor"), "");
         Check("S228 J3 the floor is DERIVED from the live parts, never a literal",
@@ -349,13 +409,21 @@ public static class ConfigWipeTest
         // the property is what we use, because its setter also fixes `Core.Staging.Users`.
         string src = File.ReadAllText(Repo("plugin", "src", "MechConductor.cs"));
         string live = Live(src);
-        Check("S228 ⛔ the conductor writes the Autostage PROPERTY",
-              Regex.IsMatch(live, @"a\.Autostage = false;"), "");
-        Check("S228 ⛔ ...and never assigns the _autostage FIELD directly",
+        // ⚠⚠ S250 — ~~the conductor writes the Autostage PROPERTY~~ — IT NO LONGER
+        // WRITES IT AT ALL: the owner lifted §B8's deviation on 2026-09-09 and `ApplyRODefaults()`
+        // sets `Autostage = true` itself (`MechJebModuleAscentSettings.cs:361`).
+        // ⛔ THE HALF THAT SURVIVES IS THE HALF THAT WAS ALWAYS THE RULE: the `_autostage` FIELD is
+        // never assigned directly. NTSB asked for the field; the property is what fixes
+        // `Core.Staging.Users`, and a future re-instatement must go through the property again. A
+        // check that only fired while the write existed would have taken the rule with it.
+        Check("S250 ⛔ the conductor no longer writes Autostage at all — RO's default stands",
+              !Regex.IsMatch(live, @"a\.Autostage\s*="), "");
+        Check("S228 ⛔ ...and it never assigns the _autostage FIELD directly, which is the standing rule",
               !Regex.IsMatch(live, @"\b_autostage\s*="), "");
-        // The existing comment is load-bearing and was not to be edited away.
-        Check("S228 the reason the property is used is still recorded in the file",
-              src.Contains("`Autostage` goes through the PROPERTY, never the `_autostage` field"), "");
+        // The existing reasoning is load-bearing and is KEPT (C1.16) even though the write is gone.
+        Check("S250 the reason the PROPERTY would be used is still recorded in the file",
+              src.Contains("`Autostage` goes through the PROPERTY, never the `_autostage` field")
+              || src.Contains("only the property removes the ascent autopilot"), "");
 
         // ⛔ AND THE VENDORED TREE IS UNTOUCHED (§B12.1). The fix is entirely on our side of the seam.
         Check("S228 ⛔ the vendored MechJeb source still carries the property with its side effects",

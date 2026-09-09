@@ -159,18 +159,29 @@ public static class AscentReadbackTest
             { noCite = AscentReadback.Expected[i].Name; break; }
         Check("S223 every expectation cites where its value comes from", noCite == null, "no cite: " + noCite);
 
-        // ⭐ THE ROW THE WHOLE TASK IS ABOUT. The shipped tune carries PitchRate 0.75 and the flight flew
-        // ~5. The expectation must be RO's 5.0 — the value the audit CLAIMS this row flies at — so that
-        // the tune landing anywhere is reported rather than silently accepted.
+        // 🟢🟢 S250 — ~~PitchRate is expected at RO's 5.0~~ SUPERSEDED IN PLACE (C1.16).
+        // ⭐ THE ROW THE WHOLE FILE WAS BUILT AROUND HAS CHANGED SIDES, and that is the right
+        // outcome rather than a loss: the shipped tune carried 0.75 against an audit that claimed 5.0,
+        // and this instrument existed to make that gap REPORTABLE. The owner has now ruled 0.75 on
+        // real-mission telemetry, so the expectation IS 0.75 and the instrument now reports the
+        // opposite failure — our write not landing.
+        // ⛔ AND THAT IS THE FAILURE MODE WITH NO OTHER SYMPTOM AT ALL, which is exactly what
+        // `ExpectSource.OurWrite` is documented to catch.
         int pr = IndexOf("PitchRate");
-        Check("S223 PitchRate is expected at RO's 5.0, from ApplyRODefaults",
+        Check("S250 PitchRate is expected at the OWNER's 0.75, and declared as OUR write",
               pr >= 0 && AscentReadback.Expected[pr].IsNumber
-              && AscentReadback.Expected[pr].Number == 5.0
-              && AscentReadback.Expected[pr].Source == ExpectSource.RoDefault, "");
-        Check("S223 ...and the audit still has it AWAITING THE OWNER, unwritten (S222b unchanged)",
-              AscentProfile.Row("PitchRate").How == AscentDisposition.OwnerQuestion, "");
-        Check("S223 ...as is Core.Thrust.LimitDynamicPressure (Q2, also untouched)",
-              AscentProfile.Row("Core.Thrust.LimitDynamicPressure").How == AscentDisposition.OwnerQuestion, "");
+              && AscentReadback.Expected[pr].Number == 0.75
+              && AscentReadback.Expected[pr].Source == ExpectSource.OurWrite, "");
+        Check("S250 ...and the audit agrees it is written, not awaiting the owner",
+              AscentProfile.Row("PitchRate").How == AscentDisposition.Write, "");
+        Check("S250 ...as is Core.Thrust.LimitDynamicPressure (Q2, closed by the owner)",
+              AscentProfile.Row("Core.Thrust.LimitDynamicPressure").How == AscentDisposition.Write, "");
+        // ⛔ AND THE MEASURED MAGNITUDE, because a limiter with no threshold is decoration: RO's
+        // 50000 sits above our own last flight's 48,971 Pa peak, so it could never have fired.
+        int mq = IndexOf("Core.Thrust.MaxDynamicPressure");
+        Check("S250 the max-Q threshold is expected at the measured 24000 Pa, as our write",
+              mq >= 0 && AscentReadback.Expected[mq].Number == 24000.0
+              && AscentReadback.Expected[mq].Source == ExpectSource.OurWrite, "");
 
         // ⚠ RO ASSIGNS DesiredAttachAlt TWICE and the LAST one is 145 km, not the 110 km the audit's
         // prose says. The expectation follows RO's actual behaviour; if this is ever "corrected" to
@@ -193,37 +204,42 @@ public static class AscentReadbackTest
               AscentReadback.Headline(v).Contains("0 disagree")
               && !AscentReadback.Headline(v).Contains("DISAGREE"), AscentReadback.Headline(v));
 
-        // ⛔ NOW SEED THE REAL ONE: the tune's 0.75 landing on a box the audit says flies RO's 5.0.
-        // This is the exact disagreement the last flight contained and could not report.
+        // ⚠⚠ S250 — THE SEED HAD TO MOVE, AND IT IS THE SAME DEFECT IN THE MIRROR.
+        // ~~seed the tune's 0.75 onto a box the audit says flies RO's 5.0~~ — 0.75 IS the expected
+        // value now, so that seed is a PASS and the check would have proved nothing while still
+        // reading green. ⛔ A test whose fixture quietly stops diverging is the S220 shape.
+        // ⭐ So it seeds RO's OWN 5.0 arriving on a box we declare we write: our write did not
+        // land, which is the failure mode `OurWrite` exists to catch and the one with no other symptom.
         int pr = IndexOf("PitchRate");
-        obs[pr] = AscentObserved.Num("PitchRate", 0.75);
+        obs[pr] = AscentObserved.Num("PitchRate", 5.0);
         v = AscentReadback.Verdicts(obs);
 
-        Check("S223 ⭐ a seeded divergence turns the verdict RED",
+        Check("S250 ⭐ a seeded divergence turns the verdict RED",
               AscentReadback.CountDisagreements(v) == 1,
               AscentReadback.CountDisagreements(v) + " disagreed, expected exactly 1");
-        Check("S223 ...and the headline NAMES it as a disagreement",
+        Check("S250 ...and the headline NAMES it as a disagreement",
               AscentReadback.Headline(v).Contains("⛔") && AscentReadback.Headline(v).Contains("1 row(s) DISAGREE"),
               AscentReadback.Headline(v));
-        Check("S223 ...and the row is PitchRate, carrying both values and the citation",
-              v[pr].Disagrees && v[pr].Live == "0.75" && v[pr].Expected == "5"
+        Check("S250 ...and the row is PitchRate: RO's 5 where OUR 0.75 should be",
+              v[pr].Disagrees && v[pr].Live == "5" && v[pr].Expected == "0.75"
               && !string.IsNullOrEmpty(v[pr].Cite), v[pr].Live + " vs " + v[pr].Expected);
         string table = AscentReadback.Render("a test", v);
-        Check("S223 ...and the rendered table leads with it rather than burying it among 77 rows",
-              table.Contains("⛔ PitchRate = 0.75")
+        Check("S250 ...and the rendered table leads with it rather than burying it among 77 rows",
+              table.Contains("⛔ PitchRate = 5")
               && table.IndexOf("⛔ PitchRate") < table.IndexOf("---- every box"), "");
 
         // A BOOLEAN divergence too — the numeric path and the word path are different code.
         obs = Perfect();
         int au = IndexOf("Autostage");
-        obs[au] = AscentObserved.Flag("Autostage", true);      // our write did not land
+        // ⚠ S250: Autostage is RO's `true` now, so the divergence is the OPPOSITE value.
+        obs[au] = AscentObserved.Flag("Autostage", false);     // RO's seed did not land
         v = AscentReadback.Verdicts(obs);
         Check("S223 a BOOLEAN box that lost our write is a disagreement too",
               AscentReadback.CountDisagreements(v) == 1 && v[au].Disagrees, "");
 
         // ...and case must not manufacture one: MechJeb renders bools through our own Flag(), but a
         // future reader that hands "True" must not be reported as a fault.
-        obs[au] = AscentObserved.Word("Autostage", "FALSE");
+        obs[au] = AscentObserved.Word("Autostage", "TRUE");
         v = AscentReadback.Verdicts(obs);
         Check("S223 ...but a case difference is NOT a disagreement",
               AscentReadback.CountDisagreements(v) == 0, "");
@@ -337,17 +353,21 @@ public static class AscentReadbackTest
         Check("S223 two identical readings report that NOTHING MOVED — a result, not an absence",
               AscentReadback.Delta(a, Perfect()).Contains("NOTHING MOVED"), "");
 
+        // ⚠ S250: `Perfect()` now holds the owner-ruled 0.75, so seeding 0.75 would be NO
+        // change at all and this check would read green while measuring nothing. The seeded value is
+        // RO's own 5.0 arriving instead — a re-seed after our write, which is precisely what the
+        // delta exists to catch (`MechJebCore.FixedUpdate` reloading modules mid-flight, F-102).
         AscentObserved[] b = Perfect();
-        b[IndexOf("PitchRate")] = AscentObserved.Num("PitchRate", 0.75);
+        b[IndexOf("PitchRate")] = AscentObserved.Num("PitchRate", 5.0);
         string d = AscentReadback.Delta(a, b);
-        Check("S223 ⭐ a box that changed between the two readings is NAMED, with both values",
-              d.Contains("1 SETTING(S) CHANGED") && d.Contains("PitchRate: 5  ->  0.75"), d);
+        Check("S250 ⭐ a box that changed between the two readings is NAMED, with both values",
+              d.Contains("1 SETTING(S) CHANGED") && d.Contains("PitchRate: 0.75  ->  5"), d);
 
         // A field that became unreadable between the two readings is a change worth seeing too.
         b = Perfect();
         b[IndexOf("PitchRate")] = AscentObserved.Unreadable("PitchRate", "gone");
-        Check("S223 a box that became UNREADABLE between readings is also reported",
-              AscentReadback.Delta(a, b).Contains("PitchRate: 5  ->  ?"), "");
+        Check("S250 a box that became UNREADABLE between readings is also reported",
+              AscentReadback.Delta(a, b).Contains("PitchRate: 0.75  ->  ?"), "");
     }
 
     // ---------------------------------------------------------------- 7. R-04's manifest lines
@@ -358,7 +378,7 @@ public static class AscentReadbackTest
               lines.Count == AscentReadback.Expected.Length, lines.Count.ToString());
         Check("S223 every line is prefixed MechJeb., so it can never be read as one of ours",
               lines.TrueForAll(delegate (string s) { return s.StartsWith("MechJeb."); }), "");
-        Check("S223 the values are the LIVE ones", lines.Contains("MechJeb.PitchRate = 5"), "");
+        Check("S250 the values are the LIVE ones", lines.Contains("MechJeb.PitchRate = 0.75"), "");
 
         List<string> none = AscentReadback.ManifestLines(null);
         Check("S223 an unread box records '?', never a plausible number (§4.6)",

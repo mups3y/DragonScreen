@@ -769,14 +769,17 @@ namespace DragonScreen
                 st.AutostageLimit.Val = floor;
                 Debug.Log("[DragonScreen] conductor: STAGING FLOOR — AutostageLimit = " + floor
                           + (floor == StagingFloor.ForbidAll
-                             ? " (⛔ NO INTERSTAGE FOUND, so autostaging is forbidden outright — an "
-                               + "underivable floor clamps shut, it does not open)"
-                             : " (the S1/S2 separation stage, derived from this vehicle's own parts). "
-                               + "MechJeb may still stage above it — ignition and liftoff — and cannot "
-                               + "fire it or anything below, so the second stage, the trunk and both "
-                               + "parachute stages are out of its reach.")
-                          + " ⭐ This does NOT depend on Autostage, by design: §B8's deviation is one "
-                          + "flag and it failed once already. (S228 R-03)");
+                             ? " (⛔ NO SPACECRAFT-SIDE DECOUPLER FOUND, so autostaging is forbidden "
+                               + "outright — an underivable floor clamps shut, it does not open)"
+                             : " (the FIRST SPACECRAFT-SIDE DECOUPLER's stage, derived from this "
+                               + "vehicle's own parts). MechJeb may still stage above it — ignition, "
+                               + "liftoff AND the S1/S2 separation PVG plans for — and cannot fire it "
+                               + "or anything below, so the trunk, the pod and both parachute stages "
+                               + "are out of its reach.")
+                          + " ⭐ This does NOT depend on Autostage, by design: it is a SAFETY device, "
+                          + "and a true 100% default MechJeb sets this to 0 — the value that let "
+                          + "flight 002 cascade 6 -> 1 and expend the drogues at 33.9 km. "
+                          + "(S228 R-03, re-anchored by S250)");
             }
             catch (Exception e)
             {
@@ -876,31 +879,53 @@ namespace DragonScreen
             MuMech.MechJebModuleAscentSettings a = core.AscentSettings;
             if (a == null) { note = "the core has no AscentSettings module"; return; }
 
-            // ---- (1) THE PATH — a UI WORKFLOW write and the OWNER'S ONE DEVIATION -----------------
-            // ⛔ `Autostage` goes through the PROPERTY, never the `_autostage` field: the property is
-            // what removes the ascent autopilot from `Core.Staging.Users`, and the field alone would
-            // leave the StagingController still holding a user and still able to actuate.
-            a.AscentType = MuMech.AscentType.PSG;                      // the ascent-path dropdown
-            a.Autostage = false;                                       // §B8 — the sanctioned deviation
-            ApplyStagingFloor(v);                                      // ⛔⛔ S228 R-03 — and if it isn't
+            // ---- (1) ⛔⛔ S250 — THE PATH AND THE AUTOSTAGE FLAG ARE NO LONGER WRITTEN -------------
+            // 🟢 OWNER, 2026-09-09: *"reset our mechjeb back to 100% default settings"*, option (b):
+            // MechJeb genuinely untouched, and only the nine named writes added back.
+            // ⛔ AND TWO OF THE THREE "EXEMPTIONS" WERE NEVER EXEMPTIONS. `ApplyRODefaults()` sets
+            // BOTH itself — `AscentType = AscentType.PSG` (`MechJebModuleAscentSettings.cs:375`) and
+            // `Autostage = true` (`:361`). So `a.AscentType = PSG` was a redundant write of RO's own
+            // value, and `a.Autostage = false` was a DEVIATION **FROM** RO that §B8 recorded as if it
+            // preserved RO's default. Both are gone; the read-back still ASSERTS both values.
+            // ⛔ AND THE REASONING BEHIND THE OLD WRITE IS KEPT, NOT DELETED WITH IT (C1.16 as extended
+            // 2026-09-06 — reasoning outlives the code it described). It was, verbatim:
+            //     "`Autostage` goes through the PROPERTY, never the `_autostage` field: the property is
+            //      what removes the ascent autopilot from `Core.Staging.Users`, and the field alone
+            //      would leave the StagingController still holding a user and still able to actuate."
+            // ⚠ That is still TRUE and still binding: if the deviation is ever re-instated it goes
+            // through the property again, and `ConfigWipeTest` still forbids assigning `_autostage`.
+            // ⚠ WHY IT MATTERS BEYOND BOOKKEEPING: PVG plans the whole ascent INCLUDING STAGING
+            // (RP-1: *"PVG Must Be Able To Predict The Future"*), so with autostaging off the solver
+            // predicted a staging event that never happened. ⛔ A HYPOTHESIS for the NaN throws and
+            // the 25 km-low MECOs, NOT a proven cause — this change makes it testable.
+            // ⭐⭐ THE FLOOR STAYS, AND IT IS NOT PART OF THAT DEVIATION. It is a SAFETY device: a
+            // true "100 % default" MechJeb has `AutostageLimit = 0`, which is exactly the value that
+            // let flight 002 cascade 6 → 1 and expend the drogues at 33.9 km (F-102).
+            ApplyStagingFloor(v);                                      // ⛔⛔ S228 R-03, re-anchored by S250
 
-            // ---- (2) WHAT MECHJEB WOULD OTHERWISE ACTUATE ON OUR VEHICLE --------------------------
-            // ⛔ NOT TUNING — the second half of the same deviation. §B12.7: direct part control is
-            // ours. `SkipCircularization` stops `DriveCircularizationBurn` PLACING A MANEUVER NODE on
-            // exit (it would collide with T19's own node executor); the two auto-deploys stop MechJeb
-            // extending real hardware the crew procedure owns. RO seeds none of these three.
-            a.SkipCircularization = true;
-            a.AutoDeploySolarPanels = false;
-            a.AutoDeployAntennas = false;
+            // ---- (2) ⛔ S250 — SIX WRITES WITHDRAWN, AND FOUR OF THEM HAVE NAMED CONSEQUENCES ------
+            // `AscentType` · `Autostage` · `SkipCircularization` · `AutoDeploySolarPanels` ·
+            // `AutoDeployAntennas` · `WarpCountDown` · `Core.Node.Autowarp` ·
+            // `Core.Warp.activateSASOnWarp` all revert to RO's or MechJeb's own default, per option
+            // (b). ⚠ Each consequence is written into that setting's own `AscentProfile` row rather
+            // than here, and all four are raised together as `BOB-55`:
+            //   • solar panels — `DrivePrelaunch:202-214` retracts them and HOLDS the prelaunch mode
+            //     until they are all retracted: a pad hold nobody commanded. ⛔ The sharpest one.
+            //   • SkipCircularization — `DriveCircularizationBurn:244-286` PLACES A MANEUVER NODE on
+            //     exit, colliding with T19's node executor and the conductor's own `ClearNodes`.
+            //   • WarpCountDown 32 → 11 — PSG can take ~20 s to converge from cold, and `IgnitionGate`
+            //     will not light a stage with no solution (S214).
+            //   • activateSASOnWarp — SAS is set on the way into warp and fights MechJeb's attitude
+            //     controller.
+            // ⭐ `Core.Node.Autowarp` is the one withdrawal that costs nothing: MechJeb's own field
+            // default is already `true`, so the flown value does not move.
 
-            // ---- (3) MECHJEB'S OWN "Launch countdown:" BOX ----------------------------------------
-            // A UI box RO does not seed, and 32 rather than stock's 11 for a reason that IS the
-            // deviation: our T-0 is `IgnitionGate`, which refuses to light a stage with no guidance
-            // solution (S214), so PSG must have converged BEFORE our terminal count. It shapes no part
-            // of the trajectory. See `AscentProfile.WarpCountDownS` for the two composed numbers.
-            a.WarpCountDown.Val = AscentProfile.WarpCountDownS;
-
-            // ---- (4) ⭐ AUTOWARP — ONE FLAG, AND ALL THREE PHASES READ IT --------------------------
+            // ---- (4) ⛔ S250 — AUTOWARP IS NO LONGER WRITTEN, AND THE VALUE DOES NOT MOVE ----------
+            // ⭐ MechJeb's own field default is already `true` (`MechJebModuleNodeExecutor.cs:24`), so
+            // withdrawing this write under option (b) leaves the owner's "auto warp for all modes"
+            // exactly as it was. ⚠ `activateSASOnWarp` is withdrawn too and that one DOES move — see
+            // the consequence list in (2). The reasoning below is KEPT because it is why the flag
+            // matters at all, and C1.16's extension forbids deleting it with the write (BOB-55).
             // The owner: *"It must also select auto warp for all modes."* Established from the vendored
             // source rather than assumed: the ascent countdown warps only `if (Core.Node.Autowarp)`
             // (`MechJebModuleAscentBaseAutopilot.cs:132`); the node executor gates both of its warps on
@@ -913,13 +938,30 @@ namespace DragonScreen
             // ⚠ `activateSASOnWarp` is §B12.7 again: left on, `SetTimeWarpRate` calls
             //   `ActionGroups.SetGroup(SAS, true)` on the way into warp — an action group on our
             //   vehicle, and SAS fighting MechJeb's own attitude controller besides.
+            // ---- (4b) ⭐⭐ S250 — THE THREE ASCENT NUMBERS AND THE TWO OWNER OVERRIDES -------------
+            // 🟢 OWNER, 2026-09-09: *"set max q to true"*, *"derive them from real crew dragon mission
+            // stats"*, *"raise it to 1000"*.
+            // ⛔ THE MAGNITUDE IS MEASURED, THE OTHER TWO ARE A BAND AND A DECISION INSIDE IT, and
+            // `AscentProfile`'s three constants carry the provenance and the confidence for each. ⚠ The
+            // telemetry gives the VELOCITY angle and attitude LEADS velocity, so `PitchRate` and
+            // `PitchStartHeight` are NOT measured attitude values and must never be written up as such.
+            // ⛔⛔ OUR LAST FLIGHT PEAKED AT 48,971 Pa — twice the real vehicle — and RO's threshold is
+            // 50,000, above even that, so the limiter could never fire. At 24,000 it must.
+            a.PitchRate.Val = AscentProfile.PitchRateDegPerS;
+            a.PitchStartHeight.Val = AscentProfile.PitchStartHeightM;
             try
             {
-                if (core.Node != null) core.Node.Autowarp = true;
-                if (core.Warp != null) core.Warp.activateSASOnWarp = false;
+                if (core.Thrust != null)
+                {
+                    core.Thrust.LimitDynamicPressure = true;
+                    core.Thrust.MaxDynamicPressure.Val = AscentProfile.MaxDynamicPressurePa;
+                    // ⛔ NOT TRUNK PROTECTION, and it must not be described as such: the controller
+                    // reads `p.temperature / p.maxTemp` and never `skinTemperature`.
+                    core.Thrust.LimitToPreventOverheats = true;
+                }
             }
             catch (Exception e)
-            { Debug.LogWarning("[DragonScreen] conductor: could not set the autowarp flags: " + e.Message); }
+            { Debug.LogWarning("[DragonScreen] conductor: could not set the thrust limiters: " + e.Message); }
 
             // ---- (5) ⛔⛔ EVERYTHING THAT USED TO BE HERE IS GONE, AND IT IS ALL RO's ---------------
             // Dropped by S222b, every one of them a value `ApplyRODefaults()` already seeds to exactly
@@ -990,7 +1032,12 @@ namespace DragonScreen
             // in `KSP.log` without the measurement beside it. ⛔ It READS ONLY (see MechAscentReadback).
             AscentObserved[] readback = MechAscentReadback.TakeAtConfigure(core);
 
-            Debug.Log("[DragonScreen] conductor: PVG configured — autostage OFF (§B8), AscentType PSG, "
+            Debug.Log("[DragonScreen] conductor: PVG configured — autostage ON (RO's own default; "
+                      + "§B8's deviation LIFTED by the owner 2026-09-09), AscentType PSG (RO's), "
+                      + "max-Q limiter ON at " + AscentProfile.MaxDynamicPressurePa.ToString("F0")
+                      + " Pa, overheat limiter ON, PitchRate "
+                      + AscentProfile.PitchRateDegPerS.ToString("F2") + " deg/s, PitchStartHeight "
+                      + AscentProfile.PitchStartHeightM.ToString("F0") + " m (AltitudeBottom), "
                       + "target " + (t.PeriapsisM / 1000.0).ToString("F0") + " x "
                       + (t.ApoapsisM / 1000.0).ToString("F0") + " km "
                       + (t.FromProfileApsides ? "(mission apsides)" : "(standard ISS insertion)")
@@ -999,8 +1046,9 @@ namespace DragonScreen
                                           : "written " + t.InclinationDeg.ToString("F4") + "° (no rendezvous)")
                       + ", attach altitude LEFT AT RO's 110 km — unread, because OptimizeStageFlag is "
                       + "UI-derived and AttachAltFlag is RO's false, so MechJebLib forces attach = "
-                      + "periapsis for a circular target (S222b). Countdown " + AscentProfile.WarpCountDownS
-                      + " s, autowarp ON. " + AscentProfile.Render()
+                      + "periapsis for a circular target (S222b). ⚠ Countdown LEFT AT MECHJEB'S OWN 11 s "
+                      + "(S250 withdrew our 32 s; PSG can take ~20 s to converge from cold), autowarp "
+                      + "left at its own default true. " + AscentProfile.Render()
                       + "  ⭐ " + MechAscentReadback.HeadlineOf(readback) + " (S223)");
 
             // ...and then the table itself, box by box, as the core holds it.

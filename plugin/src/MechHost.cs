@@ -223,9 +223,23 @@ namespace DragonScreen
         /// The tune loaded out of GameData/DragonScreen/PluginData/. Empty means "load nothing"
         /// - a real state, and the one §B5's two-profile split will want when T22 decides that
         /// flight 1 flies RSS-RO defaults rather than this Crew-2 target.
+        ///
+        /// ⭐⭐ S250 — **THE FIELD DEFAULT IS NOW EMPTY: "load nothing".** 🟢 The owner, 2026-09-09:
+        /// *"reset our mechjeb back to 100% default settings"*, option (b). `ApplyTune` applies the
+        /// TUNED Crew-2 profile on every load, which is precisely what a reset to RO's defaults must
+        /// not do. ⛔ `ApplyTune` is NOT ripped out — this field is the designed off-switch and the
+        /// shipped file stays where it is (§B5's TUNING TARGET, wanted back once T22 has real figures).
+        ///
+        /// ⛔⛔ **AND ON ITS OWN THIS CHANGES NOTHING, WHICH IS A FINDING AND NOT A CAVEAT.**
+        /// `tuneFile` is a `[KSPField]`, and the SHIPPED PART CONFIG SETS IT:
+        ///     `plugin/GameData/DragonScreen/DragonScreen.cfg:214   tuneFile = mechjeb_settings_type_Crew-Dragon.cfg`
+        /// A `[KSPField]` value in the part's MODULE node overrides the field initialiser, so the tune
+        /// still loads and the reset is defeated until that ONE cfg line is emptied. ⚠ S250's own
+        /// prompt forbids `.cfg` work and requires the shipped cfg's md5 to be unchanged, so the line
+        /// was NOT touched. **Raised as `BOB-56`.**
         /// </summary>
         [KSPField]
-        public string tuneFile = MechProfile.TuneFileName;
+        public string tuneFile = MechProfile.TuneFileDefault;
 
         /// <summary>Log the tune once per core, not once per part load.</summary>
         private bool _tuneLogged;

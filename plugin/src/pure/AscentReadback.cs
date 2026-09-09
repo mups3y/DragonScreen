@@ -216,22 +216,22 @@ namespace DragonScreen
         public static readonly AscentExpect[] Expected =
         {
             // ---- the eight the conductor WRITES (AscentProfile's `Write` rows) ---------------------
-            W("AscentType",            ExpectSource.OurWrite, "PSG",
-              "MechConductor.Configure writes AscentType = PSG; ApplyRODefaults ends with the same value"),
-            B("Autostage",             ExpectSource.OurWrite, false,
-              "the owner's one sanctioned deviation — Configure writes the PROPERTY false; RO seeds true"),
-            N("WarpCountDown",         ExpectSource.OurWrite, 32.0,
-              "AscentProfile.WarpCountDownS = 20 (PSG cold start) + 12 (WarpPlan.BurnLeadS); MechJeb's own box default is 11"),
-            B("SkipCircularization",   ExpectSource.OurWrite, true,
-              "Configure writes true; MechJebModuleAscentSettings.cs field default is false"),
-            B("AutoDeploySolarPanels", ExpectSource.OurWrite, false,
-              "Configure writes false (§B12.7); MechJebModuleAscentSettings.cs field default is true"),
-            B("AutoDeployAntennas",    ExpectSource.OurWrite, false,
-              "Configure writes false (§B12.7); MechJebModuleAscentSettings.cs field default is true"),
-            B("Core.Node.Autowarp",    ExpectSource.OurWrite, true,
-              "Configure writes true; MechJebModuleNodeExecutor.cs:24 field default is also true"),
-            B("Core.Warp.activateSASOnWarp", ExpectSource.OurWrite, false,
-              "Configure writes false; MechJebModuleWarpController.cs:35 field default is true"),
+            W("AscentType",            ExpectSource.RoDefault, "PSG",
+              "S250: Configure no longer writes it. ApplyRODefaults sets AscentType = AscentType.PSG itself (MechJebModuleAscentSettings.cs:375)"),
+            B("Autostage",             ExpectSource.RoDefault, true,
+              "S250: the deviation is LIFTED (owner, 2026-09-09). ApplyRODefaults sets Autostage = true (:361) and Configure no longer writes it"),
+            N("WarpCountDown",         ExpectSource.FieldDefault, 11.0,
+              "S250: withdrawn by the owner's option (b). MechJeb's own field default is 11 and RO does not seed it. ⚠ AscentProfile's row names the consequence (PSG cold start ~20 s)"),
+            B("SkipCircularization",   ExpectSource.FieldDefault, false,
+              "S250: withdrawn by option (b). MechJebModuleAscentSettings.cs field default is false; RO does not seed it"),
+            B("AutoDeploySolarPanels", ExpectSource.FieldDefault, true,
+              "S250: withdrawn by option (b). Field default is true — and DrivePrelaunch then HOLDS the prelaunch mode until the panels retract"),
+            B("AutoDeployAntennas",    ExpectSource.FieldDefault, true,
+              "S250: withdrawn by option (b). Field default is true, and RealAntennas is installed"),
+            B("Core.Node.Autowarp",    ExpectSource.FieldDefault, true,
+              "S250: withdrawn by option (b) — and the VALUE does not move, because MechJebModuleNodeExecutor.cs:24's field default is also true"),
+            B("Core.Warp.activateSASOnWarp", ExpectSource.FieldDefault, true,
+              "S250: withdrawn by option (b). MechJebModuleWarpController.cs:35 field default is true — SAS will now be set on the way into warp"),
 
             // ---- the destination: read and printed, never judged (the profile decides it) -----------
             U("DesiredOrbitAltitude", ExpectSource.MissionFact, "AscentTargets.For(profile).PeriapsisM, at runtime — recorded as tgt_pe_km"),
@@ -250,10 +250,10 @@ namespace DragonScreen
             // this exact field and the vehicle flew ~5. The expectation here is RO's 5.0 because RO's
             // default is what the audit CLAIMS this row flies at — so if the tune ever does land, this
             // line goes RED and says so, instead of the disagreement being invisible for a second flight.
-            N("PitchRate", ExpectSource.RoDefault, 5.0,
-              "ApplyRODefaults: PitchRate.Val = PITCH_RATE_DEFAULT = 5.0 (MechJebModuleAscentSettings.cs)"),
-            B("Core.Thrust.LimitDynamicPressure", ExpectSource.RoDefault, false,
-              "ApplyRODefaults sets it false TWICE (the second at the end of the method)"),
+            N("PitchRate", ExpectSource.OurWrite, 0.75,
+              "S250: Q1 CLOSED by the owner on real-mission telemetry. Configure writes AscentProfile.PitchRateDegPerS = 0.75; RO seeds 5.0"),
+            B("Core.Thrust.LimitDynamicPressure", ExpectSource.OurWrite, true,
+              "S250: Q2 CLOSED by the owner ('set max q to true'). Configure writes true; ApplyRODefaults sets it false TWICE"),
 
             // ---- the attach altitude ---------------------------------------------------------------
             N("DesiredAttachAltFixed", ExpectSource.RoDefault, 110000.0,
@@ -282,7 +282,8 @@ namespace DragonScreen
             B("OverrideWarpToPlane",   ExpectSource.FieldDefault, false, "same non-persisted block; only its own toggle sets it"),
 
             // ---- the pitch program -----------------------------------------------------------------
-            N("PitchStartHeight",      ExpectSource.RoDefault, 100.0, "ApplyRODefaults: PITCH_START_HEIGHT_DEFAULT = 100"),
+            N("PitchStartHeight",      ExpectSource.OurWrite, 1000.0,
+              "S250: Configure writes AscentProfile.PitchStartHeightM = 1000, OWNER-CHOSEN inside a measured band; RO seeds 100"),
             B("CorrectiveSteering",    ExpectSource.FieldDefault, false, "field initialiser `= false`; RO does not seed it"),
             N("CorrectiveSteeringGain", ExpectSource.FieldDefault, 3.0, "field initialiser `new EditableDouble(3.0)`"),
 
@@ -339,7 +340,7 @@ namespace DragonScreen
             N("Aref", ExpectSource.FieldDefault, 0.0, "field initialiser `new EditableDouble(0.0)` — 0 means 'derive it'"),
 
             // ---- the thrust controller: RO seeds every one of these ------------------------------------
-            N("Core.Thrust.MaxDynamicPressure", ExpectSource.RoDefault, 50000.0,
+            N("Core.Thrust.MaxDynamicPressure", ExpectSource.OurWrite, 24000.0,
               "ApplyRODefaults sets it TWICE — 20000 early, 50000 at the end; the LAST is RO's real seed"),
             N("Core.Thrust.MinThrottle",        ExpectSource.RoDefault, 0.05,  "ApplyRODefaults: Core.Thrust.MinThrottle.Val = 0.05"),
             B("Core.Thrust.LimiterMinThrottle", ExpectSource.RoDefault, true,  "ApplyRODefaults: LimiterMinThrottle = true"),
@@ -347,7 +348,8 @@ namespace DragonScreen
             B("Core.Thrust.AutoRCSUllaging",    ExpectSource.RoDefault, true,  "ApplyRODefaults: AutoRCSUllaging = true"),
             B("Core.Thrust.LimitThrottle",      ExpectSource.RoDefault, false, "ApplyRODefaults: LimitThrottle = false"),
             B("Core.Thrust.LimitAcceleration",  ExpectSource.RoDefault, false, "ApplyRODefaults: LimitAcceleration = false"),
-            B("Core.Thrust.LimitToPreventOverheats", ExpectSource.RoDefault, false, "ApplyRODefaults: LimitToPreventOverheats = false"),
+            B("Core.Thrust.LimitToPreventOverheats", ExpectSource.OurWrite, true,
+              "S250: owner OVERRIDE. Configure writes true; ApplyRODefaults sets it false. ⛔ It reads p.temperature/p.maxTemp only, never skinTemperature — NOT trunk protection"),
 
             // ---- CLASSIC-path only: unread while AscentType is PSG, but still READ BACK, because
             // ---- "unread by the solver" is a claim and this is how it stops being one. ----------------

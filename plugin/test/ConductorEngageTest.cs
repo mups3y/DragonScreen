@@ -137,9 +137,12 @@ public static class ConductorEngageTest
               engAsc >= 0, "");
         Check("S219: ...and Configure runs before the engage", cfgCall >= 0 && engAsc > cfgCall,
               "configure@" + cfgCall + " engage@" + engAsc);
-        Check("S222b: ...and Configure writes the boxes a user WOULD type",
-              Body(src, "Configure").Contains("a.AscentType = MuMech.AscentType.PSG")
-              && Body(src, "Configure").Contains("a.Autostage = false"), "");
+        // ⚠ S250: ~~Configure writes the boxes a user WOULD type (AscentType, Autostage)~~ —
+        // both are RO's own defaults and are no longer written. What must still be true is that
+        // Configure writes SOMETHING before the engage, and the owner-ruled ascent numbers are it.
+        Check("S250: ...and Configure still writes the owner-ruled boxes before the engage",
+              Body(src, "Configure").Contains("a.PitchRate.Val = AscentProfile.PitchRateDegPerS")
+              && Body(src, "Configure").Contains("core.Thrust.LimitDynamicPressure = true"), "");
 
         // ⭐⭐ S222b — **THE TWO MENU-DERIVED BOXES ARE SET BEFORE THE ENGAGE, NOT ONLY AFTER IT.**
         // "Set the options, THEN engage" applies to these as much as to the module's own settings:
@@ -494,7 +497,10 @@ public static class ConductorEngageTest
         // proves the TABLE says we do not write them, this one proves the CODE does not.
         string[] roSeededWrites =
         {
-            "PitchStartHeight", "PitchRate", "DesiredAttachAlt", "DesiredAttachAltFixed", "DesiredFPA",
+            // 🟢 S250 — ~~"PitchStartHeight", "PitchRate"~~ REMOVED FROM THIS LIST: the owner
+            // closed Q1 and ruled both values on 2026-09-09. They are now WRITES and are asserted as
+            // such below. ⛔ Everything else on this list stays, and the rule is unchanged.
+            "DesiredAttachAlt", "DesiredAttachAltFixed", "DesiredFPA",
             "AttachAltFlag", "DesiredArgP", "DesiredArgPFlag", "LimitQa", "MinDeltaV", "MaxCoast",
             "MinCoast", "LaunchLANDifference", "PreStageTime", "OptimizerPauseTime",
             "SpinupStageFlag", "SpinupStageInternal", "CoastStageFlag", "CoastStageInternal",
@@ -504,11 +510,35 @@ public static class ConductorEngageTest
             Check("S222b: ⛔ Configure no longer ASSIGNS '" + roSeededWrites[i] + "' — RO seeds it",
                   !Assigns(cfg, roSeededWrites[i]), "an assignment is still present");
 
-        // ⛔ THE WHOLE `Core.Thrust` BLOCK IS GONE — nine fields, RO seeds every one, and Q2's
-        // `LimitDynamicPressure` was one of them. Nothing here reads the thrust controller either, so
-        // a bare mention is enough: if the name is back in live code, the block is back.
-        Check("S222b: ⛔ the entire Core.Thrust baseline block is gone (RO seeds all nine)",
-              !cfg.Contains("Thrust"), "still present");
+        // ⚠⚠ S250 — ~~the entire Core.Thrust baseline block is gone (RO seeds all
+        // nine)~~ SUPERSEDED IN PLACE (C1.16). THREE of the nine are back, by OWNER RULING, and the
+        // check is now the precise one rather than the blanket one: the three he named are present
+        // and the other six are still absent. ⛔ A blanket `!cfg.Contains("Thrust")` would have
+        // to be deleted to let any of them through, and deleting a check is exactly how the next six
+        // creep back in.
+        string[] thrustWrites =
+        {
+            "core.Thrust.LimitDynamicPressure = true",
+            "core.Thrust.MaxDynamicPressure.Val = AscentProfile.MaxDynamicPressurePa",
+            "core.Thrust.LimitToPreventOverheats = true",
+        };
+        for (int i = 0; i < thrustWrites.Length; i++)
+            Check("S250: the owner-ruled thrust write '" + thrustWrites[i] + "' is present",
+                  cfg.Contains(thrustWrites[i]), "");
+        string[] thrustStillAbsent =
+        {
+            "LimitAcceleration", "LimitAcceleration.Val", "LimitToTerminalVelocity",
+            "ElectricThrottle", "DifferentialThrottle", "SmoothThrottle",
+        };
+        for (int i = 0; i < thrustStillAbsent.Length; i++)
+            Check("S250: ⛔ and the rest of the Core.Thrust baseline is STILL not written: '"
+                  + thrustStillAbsent[i] + "'",
+                  !cfg.Contains(thrustStillAbsent[i]), "a write is present");
+        // ⛔ MinThrottle and LimiterMinThrottle are RO's and stay RO's — the read-back expects
+        // 0.05 / true and reported them WRONG before this task, which is one of the two rows the
+        // owner is checking after the restart.
+        Check("S250: ⛔ MinThrottle is still RO's, never ours",
+              !cfg.Contains("MinThrottle"), "a write is present");
 
         // ...and the field defaults we used to re-assert for no gain. ⚠ `MinDeltaV` and `LastStage` are
         // deliberately NOT in the absence list as bare names: `MirrorTheMenus` READS both, exactly as
@@ -525,9 +555,12 @@ public static class ConductorEngageTest
 
         // ⛔ AND THE ABSENCE CHECKS ARE NOT VACUOUS. `Assigns` must actually FIND the writes that DO
         // survive, or every line above would pass against a matcher that never matches anything.
-        Check("S222b: the assignment matcher is not vacuous — it finds the KEEPs it should",
-              Assigns(cfg, "Autostage") && Assigns(cfg, "SkipCircularization")
-              && Assigns(cfg, "AutoDeployAntennas") && Assigns(cfg, "WarpCountDown"), "");
+        // ⚠ S250: the four names this probe used are all WITHDRAWN writes now, so it had to move
+        // to writes that survive — otherwise the absence checks above would be passing against a
+        // matcher that never matches anything, which is the one way this whole block could go quiet.
+        Check("S250: the assignment matcher is not vacuous — it finds the writes that survive",
+              Assigns(cfg, "PitchRate") && Assigns(cfg, "PitchStartHeight")
+              && Assigns(cfg, "MaxDynamicPressure"), "");
         Check("S222b: ...and it does not fire on a READ of the same field",
               !Assigns("x = a.MinDeltaV.Val;", "MinDeltaV")
               && !Assigns("if (a.LastStage.Val > 0) { }", "LastStage"), "");
@@ -535,11 +568,20 @@ public static class ConductorEngageTest
               Assigns("a.PitchRate.Val = 0.75;", "PitchRate")
               && Assigns("a.AttachAltFlag = true;", "AttachAltFlag"), "");
 
-        // ⭐⭐ THE ONE THE WITHDRAWN PROMPT ASKED FOR. An earlier overseer prompt directed "set PitchRate
-        // to 0.75" and it was WITHDRAWN as invented tuning. 0.75 must appear nowhere near the ascent
-        // configuration, and neither must the rest of the tuned Crew-2 profile's shaping numbers.
-        Check("S222b: ⛔⛔ the withdrawn PitchRate = 0.75 is NOT written anywhere in Configure",
-              !cfg.Contains("0.75"), "the withdrawn tuning value is present");
+        // 🟢🟢 S250 — ~~the withdrawn PitchRate = 0.75 is NOT written anywhere in Configure~~
+        // SUPERSEDED IN PLACE (C1.16), AND THE DISTINCTION IS THE WHOLE POINT. S222b was right to
+        // withdraw it: an overseer prompt directing a tuning value with no provenance is invented
+        // tuning, whoever types it. What changed is not the number but its AUTHORITY — the OWNER
+        // ruled it on 2026-09-09 from real Falcon 9 + Dragon mission telemetry, and it is now a named
+        // constant carrying that provenance rather than a literal in the glue.
+        // ⛔ SO THE CHECK INVERTS RATHER THAN DISAPPEARING: the value must reach MechJeb THROUGH
+        // `AscentProfile`, and must still never be a bare literal here.
+        Check("S250: PitchRate is written from the named constant, not from a literal",
+              cfg.Contains("a.PitchRate.Val = AscentProfile.PitchRateDegPerS")
+              && !cfg.Contains("0.75"), "a bare 0.75 is in the glue");
+        Check("S250: ...and so are the other two ascent numbers",
+              cfg.Contains("a.PitchStartHeight.Val = AscentProfile.PitchStartHeightM")
+              && !cfg.Contains("24000"), "a bare magnitude is in the glue");
 
         // ⭐ AND `OptimizeStageFlag = false` — the write that CREATED the attach-altitude defect S219
         // then compensated for. It must never be written as a literal again; it is derived.
@@ -590,7 +632,24 @@ public static class ConductorEngageTest
         // ⭐ THE EIGHT SURVIVING WRITES ARE ALL PRESENT — the other half of "stays removed".
         // =================================================================================
         // Without this, deleting a KEEP would pass every check above. Each is the owner's, by name.
+        // ⛔⛔ S250 — THE KEEP LIST IS NOW THE OWNER'S 2026-09-09 LIST, AND THE OLD ONE IS
+        // KEPT ABOVE IT SO THE SHED IS VISIBLE. ~~AscentType — Autostage — WarpCountDown —
+        // SkipCircularization — AutoDeploySolarPanels — AutoDeployAntennas — Core.Node.Autowarp
+        // — Core.Warp.activateSASOnWarp~~ all WITHDRAWN by option (b).
         string[] mustSurvive =
+        {
+            "a.PitchRate.Val = AscentProfile.PitchRateDegPerS",
+            "a.PitchStartHeight.Val = AscentProfile.PitchStartHeightM",
+            "core.Thrust.LimitDynamicPressure = true",
+            "core.Thrust.MaxDynamicPressure.Val = AscentProfile.MaxDynamicPressurePa",
+            "core.Thrust.LimitToPreventOverheats = true",
+            "ApplyStagingFloor(v)",
+        };
+        for (int i = 0; i < mustSurvive.Length; i++)
+            Check("S250: the KEEP '" + mustSurvive[i] + "' is still written",
+                  configureOnly.Contains(mustSurvive[i]), "");
+        // ...and the eight withdrawals really are gone from the live code, not merely renamed.
+        string[] mustBeGone =
         {
             "a.AscentType = MuMech.AscentType.PSG",
             "a.Autostage = false",
@@ -601,9 +660,9 @@ public static class ConductorEngageTest
             "core.Node.Autowarp = true",
             "core.Warp.activateSASOnWarp = false",
         };
-        for (int i = 0; i < mustSurvive.Length; i++)
-            Check("S222b: the KEEP '" + mustSurvive[i] + "' is still written",
-                  configureOnly.Contains(mustSurvive[i]), "");
+        for (int i = 0; i < mustBeGone.Length; i++)
+            Check("S250: the WITHDRAWN write '" + mustBeGone[i] + "' is gone from Configure",
+                  !configureOnly.Contains(mustBeGone[i]), "still written");
 
         // ⛔ AND THE AUDIT IS STILL LOGGED, so the flight's own KSP.log answers "what did we fly".
         Check("S222b: Configure still logs the audit, so the count is on the flight record",
@@ -629,8 +688,12 @@ public static class ConductorEngageTest
         //   rendezvous  -> the node executor, gated on the SAME field, which the rendezvous autopilot
         //                  NARROWS (`Autowarp && Target.Distance > 1000`) rather than replacing
         //   docking     -> nobody. Pure RCS from the keep-out sphere inward.
-        Check("S222b/warp: ascent — Configure sets the one flag the countdown reads",
-              Body(src, "Configure").Contains("core.Node.Autowarp = true"), "");
+        // ⚠ S250: ~~Configure sets the one flag the countdown reads~~ — WITHDRAWN by option (b),
+        // and the VALUE does not move: `MechJebModuleNodeExecutor.cs:24`'s field default is already
+        // true. ⭐ The rendezvous re-assert below is the one that still matters, because the
+        // rendezvous autopilot LATCHES the flag false and nothing else puts it back.
+        Check("S250: ascent — the countdown's flag is left at MechJeb's own default true",
+              !Body(src, "Configure").Contains("core.Node.Autowarp = true"), "");
         Check("S222b/warp: rendezvous — the runner RE-ASSERTS it, because the autopilot latches it false",
               Body(src, "RunRendezvousAutopilot").Contains("core.Node.Autowarp = true"), "");
         Check("S222b/warp: ...and only outside 1 km, which is where the autopilot's own narrowing bites",
