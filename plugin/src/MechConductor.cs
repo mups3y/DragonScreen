@@ -903,29 +903,58 @@ namespace DragonScreen
             // let flight 002 cascade 6 → 1 and expend the drogues at 33.9 km (F-102).
             ApplyStagingFloor(v);                                      // ⛔⛔ S228 R-03, re-anchored by S250
 
-            // ---- (2) ⛔ S250 — SIX WRITES WITHDRAWN, AND FOUR OF THEM HAVE NAMED CONSEQUENCES ------
-            // `AscentType` · `Autostage` · `SkipCircularization` · `AutoDeploySolarPanels` ·
-            // `AutoDeployAntennas` · `WarpCountDown` · `Core.Node.Autowarp` ·
-            // `Core.Warp.activateSASOnWarp` all revert to RO's or MechJeb's own default, per option
-            // (b). ⚠ Each consequence is written into that setting's own `AscentProfile` row rather
-            // than here, and all four are raised together as `BOB-55`:
-            //   • solar panels — `DrivePrelaunch:202-214` retracts them and HOLDS the prelaunch mode
-            //     until they are all retracted: a pad hold nobody commanded. ⛔ The sharpest one.
-            //   • SkipCircularization — `DriveCircularizationBurn:244-286` PLACES A MANEUVER NODE on
-            //     exit, colliding with T19's node executor and the conductor's own `ClearNodes`.
-            //   • WarpCountDown 32 → 11 — PSG can take ~20 s to converge from cold, and `IgnitionGate`
-            //     will not light a stage with no solution (S214).
-            //   • activateSASOnWarp — SAS is set on the way into warp and fights MechJeb's attitude
-            //     controller.
-            // ⭐ `Core.Node.Autowarp` is the one withdrawal that costs nothing: MechJeb's own field
-            // default is already `true`, so the flown value does not move.
+            // ---- (2) ⛔⛔ S251 — THE FOUR §B12.7 WRITES ARE BACK, AND THE FIRST ONE IS WHY --------
+            // ~~S250 withdrew eight writes under option (b)~~ — ⛔ SIX OF THEM STAY WITHDRAWN AND FOUR
+            // COME BACK. `BOB-55` was right: option (b) reset MECHJEB'S SETTINGS; it did not lift
+            // §B12.7's *"direct part control is ours"*, and S250's own prompt withdrew these four
+            // without checking what they were preventing.
+            //
+            // ⛔⛔ (a) THE PAD HANG. `MechJebModuleAscentBaseAutopilot.DrivePrelaunch:202-214`:
+            //     if (AutoDeploySolarPanels && MainBody.atmosphere) {
+            //         Core.Solarpanel.RetractAll();
+            //         if (Core.Solarpanel.AllRetracted()) _mode = ASCEND;      // the ONLY exit
+            //         else Status = "Retracting solar panels";                 // stays in PRELAUNCH
+            //     } else _mode = ASCEND;
+            // MechJeb's field default is `true` (`MechJebModuleAscentSettings.cs:104`) and
+            // `ApplyRODefaults()` never touches it — verified, 0 matches — so withdrawing our write
+            // hands the vehicle to that branch. 🟢 OWNER, 2026-09-09: *"auto retract solar panels will
+            // not do anything on crew dragon so set it to false."*
+            // ⚠ AND THE MECHANISM IS NARROWER THAN "THEY CANNOT RETRACT" — see `AscentProfile`'s own
+            // row and `BOB-58`. Both calls filter on the SAME predicate, so a panel that is not
+            // deployable at all is skipped by both and does NOT hang. What hangs is a panel that IS
+            // deployable and never reaches RETRACTED — and `RetractAll` skips `ShieldedFromAirstream`
+            // parts while `AllRetracted` still counts them, which is a permanent hang by construction.
+            //
+            // (b) `SkipCircularization` — `DriveCircularizationBurn:244-286` plants a maneuver node
+            //     nobody owns, colliding with T19's node executor and this file's own `ClearNodes`.
+            // (c) `WarpCountDown` 32 s — MechJeb's 11 s is shorter than the ~20 s PSG cold start the
+            //     vendored tree itself documents, and `IgnitionGate` will not light a stage with no
+            //     solution (S214). A ground-ops lead time; it shapes no part of the trajectory.
+            // (d) `Core.Warp.activateSASOnWarp` — SAS set on the way into warp fights MechJeb's own
+            //     attitude controller.
+            //
+            // ⭐ `AscentType` AND `Core.Node.Autowarp` STAY WITHDRAWN, and S250 showed why: RO sets the
+            // first (`MechJebModuleAscentSettings.cs:375`) and MechJeb's own field default for the
+            // second is already `true`, so neither write moved a flown value.
+            a.SkipCircularization = true;
+            a.AutoDeploySolarPanels = false;
+            a.WarpCountDown.Val = AscentProfile.WarpCountDownS;
+            try
+            {
+                if (core.Warp != null) core.Warp.activateSASOnWarp = false;
+            }
+            catch (Exception e)
+            { Debug.LogWarning("[DragonScreen] conductor: could not clear activateSASOnWarp: " + e.Message); }
+            // ⚠ `AutoDeployAntennas` IS NOT RESTORED. §2's table names four writes and it is not one of
+            // them; RealAntennas is installed, so MechJeb will extend the antennas above the
+            // atmosphere. ⛔ Left as the owner's list says, and reported rather than quietly re-added.
 
             // ---- (4) ⛔ S250 — AUTOWARP IS NO LONGER WRITTEN, AND THE VALUE DOES NOT MOVE ----------
             // ⭐ MechJeb's own field default is already `true` (`MechJebModuleNodeExecutor.cs:24`), so
             // withdrawing this write under option (b) leaves the owner's "auto warp for all modes"
-            // exactly as it was. ⚠ `activateSASOnWarp` is withdrawn too and that one DOES move — see
-            // the consequence list in (2). The reasoning below is KEPT because it is why the flag
-            // matters at all, and C1.16's extension forbids deleting it with the write (BOB-55).
+            // exactly as it was. ⚠ S251: `activateSASOnWarp` is RESTORED in (2) above — it was the one
+            // of this pair that DID move a flown value. The reasoning below is KEPT because it is why
+            // the flag matters at all, and C1.16's extension forbids deleting it with the write.
             // The owner: *"It must also select auto warp for all modes."* Established from the vendored
             // source rather than assumed: the ascent countdown warps only `if (Core.Node.Autowarp)`
             // (`MechJebModuleAscentBaseAutopilot.cs:132`); the node executor gates both of its warps on

@@ -131,6 +131,10 @@ public static class AscentProfileTest
         "Core.Thrust.LimitToPreventOverheats",
         // the two ascent numbers — one corroborated by real telemetry, one owner-CHOSEN inside a band
         "PitchRate", "PitchStartHeight",
+        // ⛔⛔ S251 — THE FOUR §B12.7 WRITES, BACK. `BOB-55` was right: option (b)
+        // reset MechJeb's SETTINGS and did not lift "direct part control is ours". The first of these
+        // is what keeps the vehicle launching at all — see `AutoDeploySolarPanels` below.
+        "AutoDeploySolarPanels", "SkipCircularization", "WarpCountDown", "Core.Warp.activateSASOnWarp",
     };
 
     public static int Run()
@@ -190,12 +194,14 @@ public static class AscentProfileTest
         // the three RuntimeMission destination rows, which `Configure` also writes — asserted
         // separately below, because "written by Configure" and "carries the Write disposition" are two
         // different questions and conflating them is how a row goes missing.
-        Check("S250: exactly SIX boxes carry the Write disposition (47 -> 9 -> 6)",
-              AscentProfile.CountOf(AscentDisposition.Write) == 6,
+        // ⚠ S251: ~~SIX~~ — TEN. Four §B12.7 writes came back (`BOB-55` settled), and
+        // `AscentType` / `Core.Node.Autowarp` stay withdrawn because S250 showed they cost nothing.
+        Check("S251: exactly TEN boxes carry the Write disposition (47 -> 9 -> 6 -> 10)",
+              AscentProfile.CountOf(AscentDisposition.Write) == 10,
               "written=" + AscentProfile.CountOf(AscentDisposition.Write));
-        Check("S250: ...and NINE settings are written by Configure in all (6 Write + 3 RuntimeMission)",
+        Check("S251: ...and THIRTEEN settings are written by Configure in all (10 Write + 3 RuntimeMission)",
               AscentProfile.CountOf(AscentDisposition.Write)
-              + AscentProfile.CountOf(AscentDisposition.RuntimeMission) - 1 == 9,
+              + AscentProfile.CountOf(AscentDisposition.RuntimeMission) - 1 == 13,
               "write=" + AscentProfile.CountOf(AscentDisposition.Write)
               + " runtime=" + AscentProfile.CountOf(AscentDisposition.RuntimeMission)
               + " (LaunchingToPlane is RuntimeMission but written by the plane launch, not Configure)");
@@ -204,7 +210,7 @@ public static class AscentProfileTest
 
         // ...and they are THESE eight, by name. Adding a ninth fails here even if it is plausible.
         for (int i = 0; i < TheNineWrites.Length; i++)
-            Check("S250: '" + TheNineWrites[i] + "' is one of the six surviving writes",
+            Check("S251: '" + TheNineWrites[i] + "' is one of the ten writes",
                   AscentProfile.Row(TheNineWrites[i]).How == AscentDisposition.Write,
                   "how=" + AscentProfile.Row(TheNineWrites[i]).How);
 
@@ -390,31 +396,34 @@ public static class AscentProfileTest
         // an absence of thought. If someone silently re-adds a write, `TheNineWrites` fails; if someone
         // deletes the reasoning, this fails. Raised together as BOB-55, because §B12.7 says direct
         // part control is ours and option (b) does not say §B12.7 is lifted.
-        Check("S250: SkipCircularization is left at MechJeb's false, and its row names the unowned node",
-              AscentProfile.Row("SkipCircularization").How == AscentDisposition.RoDefault
+        // ⛔⛔ S251 — THE FOUR ARE WRITTEN AGAIN, AND EACH ROW MUST STILL CARRY THE
+        // CONSEQUENCE THAT BROUGHT IT BACK. ⚠ Deleting the reasoning has to fail as loudly as
+        // deleting the write, or the next reset repeats S250 with nothing to warn it. That is the
+        // prompt's own requirement and it is why these are paired checks rather than one.
+        Check("S251: SkipCircularization is WRITTEN true, and its row still names the unowned node",
+              AscentProfile.Row("SkipCircularization").How == AscentDisposition.Write
+              && AscentProfile.Row("SkipCircularization").Value.Contains("true")
               && AscentProfile.Row("SkipCircularization").Why.Contains("MANEUVER NODE"), "");
-        Check("S250: the solar-panel row names the PAD HOLD that leaving it true produces",
-              AscentProfile.Row("AutoDeploySolarPanels").How == AscentDisposition.RoDefault
-              && AscentProfile.Row("AutoDeploySolarPanels").Why.Contains("PRELAUNCH"), "");
-        Check("S250: the antenna row names the hardware it will now extend",
+        Check("S251: ⛔⛔ AutoDeploySolarPanels is WRITTEN false — the one that keeps it launching",
+              AscentProfile.Row("AutoDeploySolarPanels").How == AscentDisposition.Write
+              && AscentProfile.Row("AutoDeploySolarPanels").Value.Contains("false"), "");
+        Check("S251: ...and its row still names the PRELAUNCH hold that leaving it true produces",
+              AscentProfile.Row("AutoDeploySolarPanels").Why.Contains("PRELAUNCH"), "");
+        Check("S251: ...and it records that ApplyRODefaults never touches the field",
+              AscentProfile.Row("AutoDeploySolarPanels").Why.Contains("NEVER TOUCHES IT"), "");
+        Check("S251: the SAS-on-warp row is WRITTEN false and still names the controller it protects",
+              AscentProfile.Row("Core.Warp.activateSASOnWarp").How == AscentDisposition.Write
+              && AscentProfile.Row("Core.Warp.activateSASOnWarp").Why.Contains("attitude controller"), "");
+        Check("S251: the countdown row is WRITTEN 32 s and still names the PSG cold start it covers",
+              AscentProfile.Row("WarpCountDown").How == AscentDisposition.Write
+              && AscentProfile.Row("WarpCountDown").Value.Contains("32")
+              && AscentProfile.Row("WarpCountDown").Why.Contains("IgnitionGate"), "");
+        // ⚠ AND THE ONE THAT DID NOT COME BACK. §2's table names four and `AutoDeployAntennas`
+        // is not among them, so it stays withdrawn — left as the owner's list says rather than
+        // quietly re-added, with its consequence still on the record. Raised as BOB-59.
+        Check("S251: ⚠ AutoDeployAntennas is STILL withdrawn, and its row still names the hardware",
               AscentProfile.Row("AutoDeployAntennas").How == AscentDisposition.RoDefault
               && AscentProfile.Row("AutoDeployAntennas").Why.Contains("RealAntennas"), "");
-        Check("S250: the SAS-on-warp row names the controller it will now fight",
-              AscentProfile.Row("Core.Warp.activateSASOnWarp").Why.Contains("attitude controller"), "");
-        Check("S250: the countdown row names the PSG cold start it no longer covers",
-              AscentProfile.Row("WarpCountDown").Why.Contains("IgnitionGate"), "");
-        // ⛔ AND ALL FIVE ARE RAISED, not merely commented — a consequence nobody was told about
-        // is a consequence nobody can rule on.
-        int raised = 0;
-        string[] withConsequences =
-        {
-            "SkipCircularization", "AutoDeploySolarPanels", "AutoDeployAntennas",
-            "Core.Warp.activateSASOnWarp", "WarpCountDown",
-        };
-        for (int i = 0; i < withConsequences.Length; i++)
-            if (AscentProfile.Row(withConsequences[i]).Why.Contains("BOB-55")) raised++;
-        Check("S250: every withdrawal with a named consequence carries the raise (BOB-55)",
-              raised == withConsequences.Length, "raised=" + raised);
 
         // The CLASSIC path is on the screen and is never read under PSG — a decision, not an omission.
         Check("S219: the classic gravity-turn boxes are marked ClassicOnly, not silently ignored",

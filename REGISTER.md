@@ -29492,3 +29492,153 @@ evidence. **Flagged rather than done silently.**
 (b) did not say §B12.7 is lifted, and it is the owner's call whether it is ·
 `BOB-56` the tune switch cannot take effect while `DragonScreen.cfg:214` sets `tuneFile` ·
 `BOB-57` `New Crew-2.craft` copied into `docs/reference/` so the test could read a repo file.
+
+---
+
+### S251 [O] Put the four §B12.7 writes back, and blank the tune — **DONE 2026-09-09 — ALL SUITES PASSED (24,769 checks, up from 24,753), previewdiff 0 of 140, installed, both cfg md5s moved together to `7297bda3…`. ⭐⭐ AND BLANKING THE TUNE REMOVED A LIVE ELLIPTICAL-INSERTION CONSTRAINT NOBODY HAD SEEN** — [overseer `PROMPT_MECHJEB_RESTORE.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim:** *"auto retract solar panels will not do anything on crew dragon so set it to
+false, apply ro defaults ticked or true."* · *"yes empty it, fold it in"* (BOB-56) · install permitted.
+
+#### ⭐ THE FOUR ARE BACK — `BOB-55` SETTLED, AND `AutoDeployAntennas` DELIBERATELY IS NOT
+
+| restored | value | why |
+|---|---|---|
+| `AutoDeploySolarPanels` | **false** | ⛔⛔ `DrivePrelaunch:202-214` has **no exit but `AllRetracted()`** |
+| `SkipCircularization` | **true** | a maneuver node nobody owns, colliding with T19's executor |
+| `WarpCountDown` | **32 s** | MechJeb's 11 s against a ~20 s PSG cold start + `IgnitionGate` (S214) |
+| `Core.Warp.activateSASOnWarp` | **false** | SAS on the way into warp, fighting MechJeb's own attitude controller |
+
+⭐ `AscentType` and `Core.Node.Autowarp` **stay withdrawn** — S250 showed they move no flown value.
+⚠ **`AutoDeployAntennas` IS NOT IN §2's TABLE AND SO IS NOT RESTORED**, even though §B12.7's argument
+covers it identically and RealAntennas is installed — MechJeb will extend the antennas above the
+atmosphere. ⛔ Left as the owner's list says rather than quietly re-added. **`BOB-59`.**
+
+⛔ **THE COUNTS:** `Write` 6 → **10**; **THIRTEEN settings written by `Configure`** (10 `Write` + 3 of
+the 4 `RuntimeMission`; the 4th, `LaunchingToPlane`, is §7.5's plane launch, not `Configure`).
+Read-back: **10 `OurWrite`** + 3 `MissionFact` = the same thirteen. Audit still 78 rows: 10 / 4 / 2 / 8
+/ 54 RoDefault, **0 OwnerQuestion**.
+
+#### ⚠⚠ THE PAD HANG IS REAL, BUT "CERTAIN" IS ONE CONDITION STRONGER THAN THE FILE SHOWS — `BOB-58`
+
+⭐ **VERIFIED, THE PROMPT'S THREE WAYS:** `AutoDeploySolarPanels = true` is MechJeb's field default
+(`MechJebModuleAscentSettings.cs:104`); `ApplyRODefaults()` **never touches it** (0 matches, checked in
+the method body); `DrivePrelaunch:202-214`'s only route to `ASCEND` is `AllRetracted()`.
+⛔ **AND ONE THING THE PROMPT DOES NOT SAY, WHICH CHANGES WHEN IT BITES.** Both calls filter on the
+SAME predicate — `IsDeployable(sa) => sa.Events["Extend"].active || sa.Events["Retract"].active`
+(`MechJebModuleDeployableController.cs:48`). So a panel that is **not deployable at all** is skipped by
+`RetractAll()` **and** by `AllRetracted()`, which then returns **true** → `ASCEND` → **no hang**.
+⚠ The craft file cannot settle it either: `New Crew-2.craft`'s `ModuleDeployableSolarPanel` is
+`deployState = EXTENDED` with an **EMPTY `EVENTS { }` node**, and event availability is runtime state,
+not persisted state.
+⛔⛔ **WHAT DOES HANG, UNCONDITIONALLY, IS THE ASYMMETRY:** `RetractAll()` skips
+`!part.ShieldedFromAirstream` parts (`:60`) while `AllRetracted()` does **not** (`:67`) — so an
+extended, deployable, shielded panel is **never commanded to retract and always counted as not
+retracted**. That is a permanent PRELAUNCH hold by construction.
+⭐ **THE WRITE IS RIGHT EITHER WAY** and the owner's own experience says the retract does nothing on
+this vehicle. Only the CERTAINTY is qualified, and it is qualified in the row itself.
+
+#### ⭐⭐ BLANKING THE TUNE REMOVED A LIVE ATTACH-ALTITUDE CONSTRAINT — the real weight of `BOB-56`
+
+🟢 **OWNER: *"yes empty it, fold it in"*.** `DragonScreen.cfg:226` is now `tuneFile =` (empty), and the
+cfg's own paragraph — which said *"Blank this field to load nothing. T22 makes that call"* — is updated
+**IN PLACE** (C1.16) with who made the call and when. ⛔ The tune FILE still ships and stays in the repo.
+
+⛔⛔ **AND IT WAS NOT HOUSEKEEPING.** `MechHost.OnStart` runs `base.OnStart()` — which reaches
+`ApplyRODefaults()` — and **then** `ApplyTune()`, so **the tune was the last writer before the
+conductor**. Comparing the shipped tune's 97 value-carrying nodes against the read-back's own
+expectations, **15 audited settings appear in the tune and 5 differ from what we expect**:
+
+| the tune set | we expect | consequence |
+|---|---|---|
+| ⛔ **`AttachAltFlag = True`** | `false` (RO) | **see below — the big one** |
+| `CorrectiveSteering = True` | `false` | the setting §4 of the prompt named |
+| `AutoTurnPerc 0.0500000007` | `0.05` | float widening only; `SameNumber`'s tolerance covers it |
+| `LimitingAoA` · `OptimizeStageFlag` | not checkable | StatusFlag / MenuDerived |
+
+⛔⛔ **THE CHAIN, READ OUT OF THE VENDORED SOURCE** (`MechJebModuleAscentPSGAutopilot.cs:101,109`):
+```
+attR          = radius + (OptimizeStageFlag ? DesiredAttachAlt : DesiredAttachAltFixed)
+attachAltFlag = !OptimizeStageFlag || AttachAltFlag
+```
+`OptimizeStageFlag` is TRUE (menu-derived, `MirrorTheMenus` sets it), so with the tune's
+`AttachAltFlag = True` the flag was **TRUE** and the solver was handed a **hard attach constraint at
+RO's `DesiredAttachAlt` (145 km) against a 215 km target.** ⭐ That is exactly the *"attach &lt; peR =
+periapsis insertion (elliptical)"* hazard `docs/MECHJEB_MASTER_MAP.md` §7.2 documents on this very
+craft, and exactly what `AscentProfile.AttachAltFollowsMissionApsis`'s S222b unwind depends on being
+FALSE. ⛔ **The unwind was correct and the tune was quietly undoing it every load.**
+⚠ **I AM NOT CLAIMING IT CAUSED THE 25 km-LOW MECO.** The mechanism is verified and is now removed;
+whether it moved the flown trajectory is a flight question, and 145 vs 215 is not 25.
+
+#### ⭐ "APPLY RO DEFAULTS TICKED OR TRUE" — WHAT WAS ASSERTED, AND WHAT WAS NOT
+
+⛔ `ForceResetROSettings` is a **one-shot latch**: field default `true` (`:26`), `:309` runs
+`ApplyRODefaults()`, `:312` clears it. The only thing that makes the clear **stick** is persisting it to
+a settings file. ⭐ **So the property asserted is: NOTHING WE SHIP WRITES MECHJEB'S SETTINGS FILES** —
+`DragonMechJebCore.OnSave` refuses MechJeb's own *"save my global/type cfg now"* call (`node == null`),
+which is the only path in `MechJebCore.OnSave` that touches a file, and no shipped cfg mentions
+`ForceResetROSettings` at all (asserted across every shipped `.cfg`).
+⭐ **NO WRITE WAS ADDED**, because none is needed: a latch that never re-arms holds true on its own, and
+§3 said to prove it is needed first.
+⚠ **ONE OBSERVATION IS NOT A PROPERTY.** The deleted file has not come back — confirmed in the live
+folder — and `MechCoreNameGuard` fired in this flight's log (*"our 'MechJebCore' is out of KSP's
+PartModule name table (2 entries)"*), which is why. **The owner must re-check after his next launch.**
+
+#### ⚠ WHAT THE CURRENT `KSP.log` DOES AND DOES NOT SHOW — looked, rather than assumed
+
+The live log is from the **14:54 launch**, after S249's install. In it:
+- ⭐ **`MechJeb tune applied from the mod: mechjeb_settings_type_Crew-Dragon.cfg — 51 module(s) matched`**
+  — **direct confirmation from the game that the tune WAS loading**, which is `BOB-56` proved rather
+  than argued. After this task that line must not appear.
+- ⭐ the core name guard line, above.
+- ⛔ **NO `conductor:` lines and NO `ASCENT READ-BACK` table** — that launch never configured PVG. ⚠ So
+  the prompt's *"two rows were wrong before"* (`MinThrottle`, `SpinupStageFlag`) is from an earlier log
+  and **I could not corroborate it**; the prediction that they come right stands on the reasoning, not
+  on a reading.
+- ⛔ **NO `S249` FONT LINES EITHER** — `EnsureFont` runs on the first paint in flight, and that launch
+  never reached a screen. **S249's instrument has not fired yet.**
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,769** checks (S250 left 24,753 — ⭐ it rose) |
+| `previewdiff HEAD` | **0 of 140 changed**, and ⛔ **NOT vacuous**: it named its 3 changed inputs (the cfg + two `src/pure` files) and rendered both trees |
+| repo `DragonScreen.cfg` | **`7297bda3ecaf269f04289c24ea4df036`** |
+| live `DragonScreen.cfg` | **`7297bda3ecaf269f04289c24ea4df036`** — ⭐ **moved off `7588f071…` together**, so §4a landed and repo==deployed is re-established at the NEW value |
+| the live field | `tuneFile =` — **empty**, read back out of the installed cfg |
+| PluginData | `mechjeb_settings_type_Crew-Dragon.cfg` + `tuning.reference.cfg` — ⭐ **neither deleted file has returned** |
+| all 170 shipped files | identical repo↔live |
+| ⛔ `LocalFixes/frost_mod_b9partswitch_fix.cfg` | still present, 3122 bytes, mtime 2026-08-04 |
+
+⭐ **THE NEW CHECKS ARE PAIRED, WHICH IS WHAT §7 ASKED FOR:** each restored write is asserted **with the
+consequence still in its row** — deleting the reasoning fails exactly as loudly as deleting the write,
+so the next reset cannot repeat S250 with nothing to warn it. And the `tuneFile` check **reads the
+shipped cfg** rather than restating the line, because the C# default cannot express it — which is the
+whole of `BOB-56`.
+
+#### ⛔ WHAT THE OWNER CHECKS ON HIS NEXT LAUNCH
+
+1. ⛔ **IT LEAVES THE PAD.** Status must not stick on *"Retracting solar panels"*.
+2. `conductor: PVG configured` — autostage **ON**, `AutostageLimit` **3**, 215 × 215 km, max-Q **ON at
+   24000**, `PitchRate` **0.75**, `PitchStartHeight` **1000**.
+3. ⭐ **A throttle-down around T+50 s.** ⛔ If it does not fire, say so — do not explain it away.
+4. MechJeb fires the **S1/S2 separation** itself. New behaviour, and the point of S250.
+5. ⛔⛔ **THE LOG MUST NO LONGER SAY *"the TUNED Crew-2 profile"*** (`MechHost.cs:524`). It said it on the
+   14:54 launch. If it still appears, §4a did not reach the game.
+6. ⚠ **Neither deleted settings file has reappeared** in `PluginData/`.
+7. ⭐ **AND THE ROWS THE TUNE WAS MOVING SHOULD NOW READ RO's VALUES** — `AttachAltFlag` **False** and
+   `CorrectiveSteering` **False** in the `ASCENT READ-BACK`, alongside `MinThrottle` 0.05 and
+   `SpinupStageFlag` false.
+
+#### ⚠ QUESTIONS RAISED — `BOB-58`, `BOB-59`
+
+`BOB-58` the pad hang is real but conditional — the hang needs a panel that is DEPLOYABLE and never
+reaches RETRACTED, and the unconditional case is the `ShieldedFromAirstream` asymmetry; the write is
+right either way, but the record should not say "certain" without the condition ·
+`BOB-59` `AutoDeployAntennas` was not in §2's table and so was not restored, while §B12.7's argument
+covers it identically and RealAntennas is installed — deliberate omission, or should it come back with
+its three siblings?
+⭐ `BOB-55` **SETTLED** by the overseer (all four back) · `BOB-56` **AUTHORISED and DONE** ·
+`BOB-57` **ANSWERED** — `docs/reference/` is the home, and refreshing it whenever the owner re-saves the
+craft is now a standing rule.

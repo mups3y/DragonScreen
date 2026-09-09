@@ -558,9 +558,9 @@ public static class ConductorEngageTest
         // ⚠ S250: the four names this probe used are all WITHDRAWN writes now, so it had to move
         // to writes that survive — otherwise the absence checks above would be passing against a
         // matcher that never matches anything, which is the one way this whole block could go quiet.
-        Check("S250: the assignment matcher is not vacuous — it finds the writes that survive",
+        Check("S251: the assignment matcher is not vacuous — it finds the writes that survive",
               Assigns(cfg, "PitchRate") && Assigns(cfg, "PitchStartHeight")
-              && Assigns(cfg, "MaxDynamicPressure"), "");
+              && Assigns(cfg, "MaxDynamicPressure") && Assigns(cfg, "AutoDeploySolarPanels"), "");
         Check("S222b: ...and it does not fire on a READ of the same field",
               !Assigns("x = a.MinDeltaV.Val;", "MinDeltaV")
               && !Assigns("if (a.LastStage.Val > 0) { }", "LastStage"), "");
@@ -644,21 +644,26 @@ public static class ConductorEngageTest
             "core.Thrust.MaxDynamicPressure.Val = AscentProfile.MaxDynamicPressurePa",
             "core.Thrust.LimitToPreventOverheats = true",
             "ApplyStagingFloor(v)",
+            // ⛔⛔ S251 — the four §B12.7 writes, back. The first is the one without
+            // which `DrivePrelaunch` has no exit: `AllRetracted()` is its only route to ASCEND.
+            "a.AutoDeploySolarPanels = false",
+            "a.SkipCircularization = true",
+            "a.WarpCountDown.Val = AscentProfile.WarpCountDownS",
+            "core.Warp.activateSASOnWarp = false",
         };
         for (int i = 0; i < mustSurvive.Length; i++)
             Check("S250: the KEEP '" + mustSurvive[i] + "' is still written",
                   configureOnly.Contains(mustSurvive[i]), "");
         // ...and the eight withdrawals really are gone from the live code, not merely renamed.
+        // ⚠ S251: four names left this list and are asserted PRESENT above. What stays gone is
+        // what S250 showed costs nothing (`AscentType`, `Core.Node.Autowarp`), the lifted §B8
+        // deviation (`Autostage`), and the one §2's table does not name (`AutoDeployAntennas`).
         string[] mustBeGone =
         {
             "a.AscentType = MuMech.AscentType.PSG",
             "a.Autostage = false",
-            "a.WarpCountDown.Val = AscentProfile.WarpCountDownS",
-            "a.SkipCircularization = true",
-            "a.AutoDeploySolarPanels = false",
             "a.AutoDeployAntennas = false",
             "core.Node.Autowarp = true",
-            "core.Warp.activateSASOnWarp = false",
         };
         for (int i = 0; i < mustBeGone.Length; i++)
             Check("S250: the WITHDRAWN write '" + mustBeGone[i] + "' is gone from Configure",

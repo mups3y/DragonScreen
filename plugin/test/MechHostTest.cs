@@ -177,6 +177,77 @@ public static class MechHostTest
                   wildcardModuleAdds.Count == 0 ? "" : string.Join(" ; ", wildcardModuleAdds.ToArray()));
         }
 
+        // ---- (3b) 🟢🟢 S251 / BOB-56 — THE SHIPPED cfg's `tuneFile` FIELD IS EMPTY -----
+        // 🟢 OWNER, 2026-09-09: "yes empty it, fold it in".
+        // ⛔⛔ THE C# DEFAULT ALONE CANNOT EXPRESS THIS, WHICH IS THE WHOLE OF `BOB-56`.
+        // `DragonMechJebCore.tuneFile` is a `[KSPField]`, and a value in the part's MODULE node
+        // OVERRIDES the field initialiser — so S250 setting `MechProfile.TuneFileDefault = ""`
+        // changed nothing at all while the cfg still named the file. This check reads the SHIPPED
+        // CFG, because that is the only place the answer lives.
+        // ⚠ AND IT IS LOAD-BEARING, NOT COSMETIC: `MechHost.OnStart` runs `base.OnStart()` —
+        // which reaches `ApplyRODefaults()` — and THEN `ApplyTune()`, so the tune was the LAST
+        // WRITER before the conductor. Every value in that 9 KB file that is not one of our named
+        // writes beat the RO default underneath it.
+        if (File.Exists(partCfg))
+        {
+            string cfgTxt = File.ReadAllText(partCfg);
+            string tuneLine = null;
+            foreach (string raw in File.ReadAllLines(partCfg))
+            {
+                string t = raw.Trim();
+                int slash = t.IndexOf("//", StringComparison.Ordinal);
+                if (slash == 0) continue;                       // a comment mentioning the field
+                if (t.StartsWith("tuneFile", StringComparison.Ordinal)) tuneLine = t;
+            }
+            Check("S251/BOB-56: the shipped cfg still HAS a tuneFile field (the check has a subject)",
+                  tuneLine != null, "no tuneFile line outside the comments");
+            if (tuneLine != null)
+            {
+                int eq = tuneLine.IndexOf('=');
+                string val = eq < 0 ? "(no =)" : tuneLine.Substring(eq + 1).Trim();
+                Check("S251/BOB-56: ⛔ ...and its value is EMPTY, so ApplyTune loads nothing",
+                      val.Length == 0, "tuneFile = [" + val + "]");
+            }
+            // ⛔ AND THE FILE ITSELF STAYS SHIPPED — present and never loaded is the intent.
+            // §B5's TUNING TARGET; the owner wants it back once T22 has real figures.
+            Check("S251: ...and the tune FILE is still shipped, present and unloaded",
+                  File.Exists(Repo("plugin", "GameData", "DragonScreen", "PluginData",
+                                   MechProfile.TuneFileName)), "");
+            // ⚠ The comment that gave this instruction two months ago is KEPT (C1.16), with the
+            // owner's ruling recorded beside it rather than replacing it.
+            Check("S251: the cfg keeps the paragraph that asked for this, and records who decided",
+                  cfgTxt.Contains("Blank this field to load nothing")
+                  && cfgTxt.Contains("yes empty it, fold"), "");
+        }
+
+        // ---- (3c) ⭐⭐ S251 §3 — "APPLY RO DEFAULTS TICKED OR TRUE" -----------------
+        // 🟢 OWNER: "apply ro defaults ticked or true."
+        // `MechJebModuleAscentSettings.ForceResetROSettings` is a `[Persistent]` field defaulting to
+        // TRUE (`:26`); `:309` runs `ApplyRODefaults()` when it is set and `:312` clears it. It is a
+        // ONE-SHOT LATCH, and the only thing that can make the clear STICK across loads is something
+        // persisting it to a settings file.
+        // ⛔ SO THE PROPERTY IS: NOTHING WE SHIP WRITES MECHJEB'S SETTINGS FILES. `OnSave`
+        // refuses MechJeb's own "save my global/type cfg now" call, which is the only path in
+        // `MechJebCore.OnSave` that touches a file. That refusal is what keeps the latch armed.
+        // ⚠ ONE OBSERVATION IS NOT A PROPERTY: the deleted file staying away for one flight is
+        // evidence, not proof, and the owner is asked to re-check after his next launch.
+        {
+            string host = File.ReadAllText(Repo("plugin", "src", "MechHost.cs"));
+            Check("S251/§3: our core still refuses MechJeb's own settings-file save",
+                  host.Contains("if (node == null) return;"), "the OnSave guard is gone");
+            Check("S251/§3: ...and the reason is still recorded beside it",
+                  host.Contains("it is not ours to take"), "");
+            // Nothing we ship may carry the cleared latch as a shipped value, either.
+            string[] shippedCfgs = Directory.GetFiles(
+                Repo("plugin", "GameData", "DragonScreen"), "*.cfg", SearchOption.AllDirectories);
+            int carrying = 0;
+            for (int i = 0; i < shippedCfgs.Length; i++)
+                if (File.ReadAllText(shippedCfgs[i]).IndexOf("ForceResetROSettings",
+                        StringComparison.OrdinalIgnoreCase) >= 0) carrying++;
+            Check("S251/§3: ⛔ no shipped cfg carries ForceResetROSettings at all",
+                  carrying == 0, carrying + " of " + shippedCfgs.Length + " shipped cfg(s) mention it");
+        }
+
         // ---- (4) the tune ships inside the mod, intact ----------------------------------
         string shipped = Repo("plugin", "GameData", "DragonScreen", "PluginData", MechProfile.TuneFileName);
         string source = Repo("docs", "reference", MechProfile.TuneFileName);
