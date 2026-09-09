@@ -152,6 +152,16 @@ public static class TestMain
         // direction, and that the surface and the whole border are command-for-command IDENTICAL to
         // the proved page - which is what calling one expression of the border buys.
         bad += Suite(BasePageIconTest.Run);
+        // ⭐⭐ S248. The rebuilt VEHICLE OVERVIEW: `SPEC_GAUGES.md`'s eight-dial family, and the page
+        // that places it on the ICON base screen. ⛔ Still a RENDERER — no `UiPage` value, no
+        // routing, `PageCount` unchanged.
+        // ⛔ THE LOAD-BEARING CHECK IS `OneSeveritySourceReachesBothTheDialAndTheRow`: SPEC_GAUGES §7
+        // says to prove the dial and the row that read the same channel move TOGETHER by DRIVING a
+        // channel into caution — never both against a constant. A row reading nominal while its dial
+        // reads caution is the failure the whole one-severity-source rule exists to prevent, and
+        // nothing else in this suite would see it.
+        bad += Suite(DialGaugeTest.Run);
+        bad += Suite(VehicleOverviewContentTest.Run);
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)

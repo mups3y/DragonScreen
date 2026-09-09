@@ -29032,3 +29032,154 @@ the same shape as [[S246]]'s stale-test-binary trap.
 intended, or does it want scoping? **Both are behaviour changes and neither belongs in a merge.**
 
 **Commit:** `2174e63`. **No `git push`.**
+
+---
+
+### S248 [O] The VEHICLE OVERVIEW — the eight-dial family and the page, built from the specs alone — **DONE 2026-09-09 — ALL SUITES PASSED (368 new checks), 57/57 device probes, 18/18 mutants killed, previewdiff 0 of 134 existing pages changed. ⚠ SEVEN raises, one of them a straight collision between two owner-locked specs** — [overseer `PROMPT_VEHICLE_OVERVIEW_BUILD.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+- ⭐ **NEW:** `plugin/src/pure/DialGauge.cs` (`SPEC_GAUGES.md`, the whole family) ·
+  `plugin/src/pure/VehicleOverviewContent.cs` (`SPEC_OVERVIEW_STATUS_ROWS.md`, the page) ·
+  `plugin/test/DialGaugeTest.cs` (102 checks) · `plugin/test/VehicleOverviewContentTest.cs` (266).
+- ⭐ **CHANGED, minimally:** `PreviewMain.cs` (six renders + `--overviewcheck`) · `build.py` (that check
+  becomes a gate in `test`) · `Typography.cs` (**added** `CapHeightOfSize` + `SizeForInk`) ·
+  `TestMain.cs` (two registrations) · `VehicleSubsystemPage.cs` — **ONE KEYWORD**, `static` →
+  `internal static` on `SevWord`, so §7.3's ruling ("the state words are ALREADY IN THE FLYING CODE")
+  can be obeyed instead of restated. ⛔ No line of any body moved; `PageCount` is still 36 and the page
+  has no `UiPage` value, no routing and no hit map.
+
+#### ⛔⛔ THE TWO OWNER-LOCKED SPECS DISAGREE ABOUT THE TOP GAUGE ROW BY 14.3 px — `BOB-51`
+
+`SPEC_GAUGES.md` §5.5 (LOCKED: *"These are the numbers… must not be re-derived"*) says **top row
+y 212.0**. `SPEC_OVERVIEW_STATUS_ROWS.md` says **226.3** — twice: written out in §8.1's title
+derivation `(21.5 + (226.3 - 91.1)) / 2 - 23.67 / 2`, and again in §8.5 as *"gauge row 1 bottom
+317.40"*. ⭐ **MEASURED ON THE PAGE THE OWNER APPROVED** (`overview_v2.png`): CO2's dotted ring spans
+y 133..318 → **centre 225.5, R 92.5** including the dot. Its x lands at 1312.5 against §5.5's 1312.4
+and the second row at 428.5/72.5 against 429.0/71.8, ⭐ **so only the top row's y is in dispute and
+every other number in §5.5 is confirmed.** Built to **226.3**. ⚠ §5.5's clearances go with it: its
+69.4 / 31.4 become §8.5's **91.9 / 17.10**.
+
+#### ⛔ THE APPROVED MOCK-UP AND THE GAUGE SPEC DISAGREE ABOUT THREE MORE THINGS — `BOB-52`
+
+Measured on the same render, as fractions of R, against `SPEC_GAUGES.md` §2.2:
+
+| line | §2.2 says | the approved render draws | ours |
+|---|---|---|---|
+| dial title | 0.125 R at **−0.432 R** | 0.121 R at **−0.344 R** | 0.132 R at −0.426 R |
+| dial value | 0.314 R at −0.033 R | 0.307 R at −0.009 R | 0.329 R at −0.031 R |
+| dial unit | 0.188 R at **+0.532 R** | 0.154 R at **+0.364 R** | at +0.53 R |
+
+⭐ §2.2 was measured on the REFERENCE SHEET; the mock was drawn separately. ⛔ **Built to the spec**, so
+our title sits 8.0 design px lower and our unit 15.3 px lower than the picture the owner approved.
+⚠ **Two more of the same kind, both spec-over-mock:** the mock's arcs all start at TWELVE O'CLOCK
+(§1 starts them at t=0, bottom-left, and §5a runs the strip from there — the mock draws NET PWR 1 with
+a 180° arc at 0.00 W, so its arcs are decorative), and the mock prints `22.4 · 26.5 · 20.0` where §5.7
+rules **two decimal places on every channel** *"including the trailing zeros"*.
+
+#### ⭐ THE LOAD-BEARING TEST, WHICH IS THE POINT OF THE COMMIT
+
+`SPEC_GAUGES.md` §7: *"Test by driving one channel into caution and asserting BOTH change — never both
+against a constant."* `OneSeveritySourceReachesBothTheDialAndTheRow` drives PPO2 to 2.69 → 2.2 → 1.5
+and reads, in the same frame: PPO2's arc **#298BFE → #FFD733 → #E73030** and CABIN LIFE SUPPORT's
+marker **#40C110 → #EA7B15 → `DragonPalette.Alarm`**, with the row's WORD moving too. ⛔ They cannot
+disagree because there is ONE classifier — `Alarms` — and `DialGauge.Colour` is a LOOKUP, not a second
+one. ⚠ **`SPEC_BASE_SCREENS.md` §7's tab strip still colours NOTHING** (`BasePageIcon` hardcodes
+`BaseBar.Ink` and §7 rules "NO DIMMING. NONE"), so the tab half of that sentence is satisfied by the
+OLD `VehicleTabBar`, not by the rebuilt shell. **`BOB-32` stands.**
+
+#### ⚠ FOUR NUMBERS THE SPECS DO NOT CARRY. MEASURED, STATED, RAISED — never chosen
+
+1. **The tick WIDTH** (`BOB-33`, open since 2026-09-09). §2 gives both ticks a length and says the
+   length is *"the ONLY dimension that differs"*, so there is one width and it is nowhere. Measured
+   across all four threshold lines on §0's own source at four radii: **1.0–2.2 px at R 111.57, i.e.
+   0.009–0.020 R**, centred on 0.0134 R — the DOT DIAMETER (0.0137 R) inside the noise. Drawn as
+   `TickWidth = DotDiameter`, one constant.
+2. **The track GREY.** §2.1's table says *"grey, or the state colour when escalated"* and never gives
+   it. Measured on PPO2's BARE track (φ 20°..148°, the sector its arc does not cover): the dots
+   saturate at **rgb(150,155,196)** = `#9499C3`, which this design already names twice.
+3. **The marker's TICK GLYPH** (`BOB-43`). §8.2 gives the disc a diameter and stops. Measured off the
+   owner's own `rail_icons_3x.png`: `(-0.159,+0.042) → (-0.024,+0.164) → (+0.222,-0.075)` of the
+   diameter, stroke 0.085 D, knocked out in the page ground (measured rgb(21,21,51) against the
+   ground's rgb(26,31,53) on a 1.4 px stroke).
+4. **The ink of the `CONNECTIONS` header/labels and the panel labels** (`BOB-44`). Not specified
+   anywhere; all three measure the same `#9499C3` as §8.2's rail titles, so they are drawn from ONE
+   constant rather than three.
+
+#### ⛔ §2's RING SEAM, AND WHY 135 WINS — `BOB-36` closed by arithmetic
+
+§2 states BOTH *"2.66 deg"* and *"135 dots per full circle"*. **135 × 2.66 = 359.1** — a 0.9° seam,
+**1.43 px of gap** at the top row's radius, on a ring §4.1 makes CLOSED. The COUNT is authoritative:
+`360/135 = 2.6667` is 0.25 % from the measured pitch and closes exactly. ⭐ Both halves are asserted —
+the even pitch, the wrap-around gap, and the 0.9 that the literal reading would have left.
+
+#### ⚠ THE VEHICLE — the prompt's "geometry is identical either way" IS NOT TRUE OF THESE TWO FILES
+
+⭐ **MEASURED:** `dragon_crew_hi_771x1232.png` carries non-zero alpha at every edge, so its opaque box
+IS the whole file — **771×1232, aspect 0.6258**. `dragon_turn_000.png` is **512×1024 with the capsule
+at x 24..487, y 113..910 — 464×798, aspect 0.5815**. ⛔ So width-fitting the ARTWORK to the locked
+292.0 runs it **502.18 tall against crew_hi's 466.59**: the capsule ends at **836.68** instead of
+801.10 and the shelf clearance falls **91.9 → 56.3**. ⭐ Nothing collides, and the locked **0.8 / 1.0**
+side gaps are EXACT, because it is the width that is bound (§8.6). The alternative — fitting the FILE
+instead of the artwork — holds the height but shrinks the capsule to 264.6 wide and opens the side gaps
+to 14.5, which is the one thing §8.6's width-fit rule exists to prevent. **`BOB-49`**; the swap to
+`crew_hi` when C7.1 is ruled is four constants.
+
+#### ⛔⛔ THE PREVIEW HAS BEEN DRAWING IN THE WRONG FONT — `BOB-45`, AND IT IS `S75`'s SHAPE
+
+⛔ **PROVED, NOT SUSPECTED.** Rendering the ENTIRE preview with `PreviewMain.FontFamily` set to
+`"Microsoft Sans Serif"` produces a **BYTE-IDENTICAL PNG** (md5 `b57ba0ba…`) to the one it produces
+asking for `"D-DIN"`. GDI+ in this build environment cannot see the per-user D-DIN family at all —
+`FontFamily.Families` lists none of the eight faces, and every request resolves to `Microsoft Sans
+Serif` — although they ARE registered in `HKCU\…\Fonts`.
+⭐ **AND THE GAME IS FINE:** `KSP.log` records *"font requested 'D-DIN', resolved 'D-DIN'"* on all
+three screens. So the two renderers disagree TODAY, silently, which is exactly what the shipped cfg's
+own rule forbids: *"If this and `PreviewMain.FontFamily` ever disagree, the preview is lying about the
+real page."*
+⛔ **SO §8.7's D-DINExp-Bold RULING WAS NOT APPLIED, DELIBERATELY.** §6.5.4 says: if the bold face
+cannot be reached, do not fake it — report and STOP. Changing the family here would have rendered
+**Microsoft Sans Serif Bold** and called it D-DINExp-Bold, moved all 134 preview PNGs, and left the cfg
+either wrong or unshipped. ⭐ The candidate strings are READ OUT OF THE FILE, not guessed: family
+`D-DIN Exp` · subfamily **`DINExp-Bold`** (⚠ NOT one of Windows' four standard styles, which is why a
+family+Bold request need not find it) · full name `D-DIN Exp Bold` · PostScript `D-DINExp-Bold`.
+⭐ **A ZERO-COST EXPERIMENT EXISTS:** the cfg carries THREE `fontName` fields, one per screen, and
+`EnsureFont` already logs what Unity actually resolved — so one launch can test three candidate
+strings at once. ⛔ Not done: it is a cfg change and an install, which is an owner gate.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED** — `DialGaugeTest` **102**, `VehicleOverviewContentTest` **266**, 0 failed |
+| `--overviewcheck` (new gate in `test`) | **57 ok, 0 FAIL**, at BOTH shipped sizes, all four control states |
+| its falsification pass | content deleted → **4 of 4 probes report faults** |
+| mutation | **18 raised, 18 KILLED, 0 survived** |
+| `previewdiff HEAD` | **0 existing changed**, 6 new, 0 removed, **134 unchanged** — the flown pages did not move |
+| `harnesscheck` | ok, fault named, exit 1 |
+| command cost | content **1340**, of which **1184 is the eight dials and 1080 is §4.1's dotted track** — 2.8× `Pages.Commands` (480) |
+
+⭐ **THREE OF THOSE PROBES FAILED ON THEIR FIRST RUN AND THE PAGE WAS RIGHT EACH TIME** — the margin
+probe landed on §5's white border, the value-ink window clipped its own subject at y 215, and the
+"seam" probe ran straight through `CABIN`'s glyphs. ⚠ **A fourth failure was the falsification pass
+catching ITSELF:** its control probe looked for DARK ink, which on a shell-only render is the whole
+page ground, so it could not fail. All four are recorded in place.
+
+#### ⚠ WHAT WAS FOUND AND NOT FIXED
+
+- ⛔ **`assets/kenney_ui_scifi` IS EMPTY** and is not tracked by git (mtime **2026-09-06 12:49**, three
+  days before this session). `previewdiff` warns about it on every run. ⚠ **NOT MINE and NOT FIXED**
+  (C1.1) — but nothing in the repo can restore it, so it wants the owner's backups. **`BOB-53`.**
+- ⚠ **The whole rebuild sits below the R-01 legibility floor by design.** This page's smallest text is
+  12.24 design px = **16.3 device px** against `Typography.MinFor(2560)` = **32**. The census does not
+  see it because the page has no `UiPage` value — ⛔ **it will the moment the page is routed.**
+
+#### ⚠ QUESTIONS RAISED — `BOB-43` … `BOB-53`
+
+`BOB-43` the marker's tick glyph · `BOB-44` three unspecified ink colours · `BOB-45` the preview's font
+substitution + §8.7 not applied · `BOB-46` what makes a rail row "checked" (`SPEC_CHECKLIST_ROWS.md` §6
+is open, so it is an INPUT) · `BOB-47` **one page, two dash glyphs** — §5.7's `--` on the dials and
+§9.3.3's `—` in the panel, which is S148's own defect · `BOB-48` §8.3 wants a width src/pure cannot
+compute (typed; independently measured 253.16 vs the spec's 253.23; the collision property is asserted
+in device space instead) · `BOB-49` the vehicle asset's geometry · `BOB-50` `Unscheduled` is built as
+the ORDER half only — the phase-expectation table is still open · `BOB-51` 212.0 vs 226.3 ·
+`BOB-52` the approved mock vs §2.2/§1/§5.7 · `BOB-53` the empty asset folder.
+⛔ `BOB-32` (the ICON shell's tab strip colours nothing) and `BOB-34`/`BOB-35` from `S247`'s raise are
+**answered by the new specs** — §2.1/§2.2 supplied the colours and the lettering, §8.6 the crop rule.

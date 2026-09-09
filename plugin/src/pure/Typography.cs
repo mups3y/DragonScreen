@@ -266,6 +266,45 @@ namespace DragonScreen
         public const float CapCentreOfTop = 0.553f;
 
         /// <summary>
+        /// How tall a line of CAPS or DIGITS actually inks, as a fraction of the size handed to
+        /// <see cref="DisplayList.Text"/> — the number you need when a spec states an INK HEIGHT and
+        /// the primitive takes a PIXEL SIZE.
+        ///
+        /// ⭐ IT EXISTS BECAUSE THE REBUILD'S SPECS ARE WRITTEN IN INK. `SPEC_GAUGES.md` §2.2 and
+        /// `SPEC_OVERVIEW_STATUS_ROWS.md` §8 give every line an ink height and say, in as many words,
+        /// "ASSERT INK HEIGHT, NEVER FONT SIZE — font metrics differ between the two renderers".
+        /// A page that types a pixel size has thrown that measurement away; a page that divides by
+        /// this has not, and <see cref="SizeForInk"/> is the one place the division happens.
+        ///
+        /// ⛔ MEASURED OFF A RENDER, NOT DERIVED — the same rule as <see cref="CapCentreOfTop"/>
+        /// above. Measured 2026-09-09 through `PreviewMain.DrawText`'s exact call (GenericTypographic,
+        /// AntiAliasGridFit) at six sizes from 16.0 to 44.4 device px: 0.690–0.766, mean 0.727. The
+        /// spread is hinting, not disagreement — at 16 px a whole pixel is 6 % of the ink.
+        ///
+        /// ⚠⚠ AND THE FACE IT WAS MEASURED ON IS NOT THE FACE THE GAME DRAWS. On 2026-09-09 the
+        /// preview was found to be resolving `Microsoft Sans Serif` for every D-DIN request in this
+        /// build environment — proved by rendering the whole preview with `FontFamily` set to
+        /// `"Microsoft Sans Serif"` and getting a BYTE-IDENTICAL PNG — while `KSP.log` records the
+        /// game resolving `'D-DIN'` correctly on all three screens. The two faces' cap ratios differ
+        /// by 3.5 % (D-DIN 0.710, Microsoft Sans Serif 0.735 by direct glyph measurement), so a line
+        /// sized through this constant inks about 3.5 % shorter on the glass than in the preview.
+        /// ⛔ DO NOT "CORRECT" THIS TO 0.710 UNTIL THE PREVIEW ACTUALLY REACHES D-DIN. The constant
+        /// must describe the renderer that is measuring, or every ink assertion in the suite starts
+        /// failing against a font nobody can see. See REGISTER.md S248 and `BOB-45`.
+        /// </summary>
+        public const float CapHeightOfSize = 0.727f;
+
+        /// <summary>
+        /// The pixel size that inks <paramref name="ink"/> px tall. The inverse of
+        /// <see cref="CapHeightOfSize"/>, named so no page writes the division itself — the same
+        /// reason <see cref="MinDesignFor"/> exists.
+        /// </summary>
+        public static float SizeForInk(float ink)
+        {
+            return ink <= 0f ? 0f : ink / CapHeightOfSize;
+        }
+
+        /// <summary>
         /// THE BOTTOM BAR'S OWN FLOOR, in DESIGN pixels - owner-selected 2026-09-06. See the header.
         ///
         /// ⛔ THIS ONE COMPONENT ONLY. 29 design px is 19.31 panel px at the shipped 2560x1406,

@@ -28,6 +28,7 @@
  * actually exists - including the centre screen being ~1% narrower than the outer two.
  */
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -280,6 +281,10 @@ public static class PreviewMain
         // is which ROW the border lands on at the shipped size. It renders through `Paint`, the
         // real loop, and it is made to fail on purpose before it is trusted.
         if (args.Length > 0 && args[0] == "--basecheck") return BaseCheck();
+        // ⭐⭐ S248: the VEHICLE OVERVIEW's device half, for the same reason and by the same route —
+        // ink heights, §8.3's label/value collision, the four control states, and the colour the
+        // base page ACTUALLY paints under it. Made to fail on purpose before it is trusted.
+        if (args.Length > 0 && args[0] == "--overviewcheck") return OverviewCheck();
 
         string outDir = (args.Length > 0)
             ? args[0]
@@ -1001,6 +1006,54 @@ public static class PreviewMain
                 Console.WriteLine("  " + ipath + "   " + sc.W + "x" + sc.H + "   " + idl.Count
                                   + " commands   (§6's notch + §7's nine tabs)");
             }
+        }
+
+        // ---- ⭐⭐ S248: THE REBUILT VEHICLE OVERVIEW, on the ICON base screen -------------------
+        // ⛔ Still a RENDERER (prompt §7): no `UiPage` value, no routing, `PageCount` unchanged.
+        // ⛔ ALL FOUR CONTROL STATES ARE RENDERED, not one. §8.4.1's label-split defect — `CABIN`
+        // clipped to `N` — is visible in exactly ONE of the four, so a single render is a check that
+        // agrees with three quarters of a bug.
+        // ⚠ THE COLOURS ARE COMPUTED, so they will NOT match the approved mock-up everywhere: that
+        // page was drawn with guessed severities (its PPO2 arc is yellow at 2.69 psia, which
+        // `CabinLimits` bands as NOMINAL, and its NET PWR dials draw a 180° arc at 0.00 W). The mock
+        // is authoritative for layout and type; the code is authoritative for what the numbers say.
+        {
+            PageState ov = OverviewFixture();
+            foreach (ScreenSpec sc in new[] { Screens[0], Screens[1] })
+            {
+                for (int st = 0; st < 4; st++)
+                {
+                    bool cabin = (st & 1) != 0, more = (st & 2) != 0;
+                    if (sc.Index != 1 && st != 0) continue;      // all four on screen 1 only
+                    DisplayList odl = new DisplayList(
+                        VehicleOverviewContent.Commands + BasePageIcon.Commands + 8);
+                    VehicleOverviewContent.Draw(odl, sc.W, sc.H, ov,
+                                                OverviewUi(cabin, more, true));
+                    if (odl.Overflowed) Console.WriteLine("  WARNING overview OVERFLOWED");
+                    string name = "ui_overview_screen" + sc.Index
+                                + (st == 0 ? "" : (cabin ? "_cabin" : "_systems")
+                                                + (more ? "_more" : ""));
+                    string path = Path.Combine(outDir, name + ".png");
+                    Render(odl, sc.W, sc.H, path);
+                    Console.WriteLine("  " + path + "   " + sc.W + "x" + sc.H + "   " + odl.Count
+                                      + " commands   (" + (cabin ? "CABIN" : "SYSTEMS")
+                                      + " selected, MORE " + (more ? "on" : "off") + ")");
+                }
+            }
+            // ⚠ AND THE DEAD FEED, because §5.7 says an arc of length zero and an arc that is ABSENT
+            // must not look the same — the one state a picture settles faster than a paragraph.
+            PageState dead = OverviewFixture(); dead.Valid = false;
+            dead.PowerUnit1Text = null; dead.PowerUnit2Text = null;
+            dead.DeorbitFuelText = null; dead.DeorbitOxText = null;
+            DisplayList ddl = new DisplayList(
+                VehicleOverviewContent.Commands + BasePageIcon.Commands + 8);
+            VehicleOverviewContent.Draw(ddl, Screens[0].W, Screens[0].H, dead,
+                                        OverviewUi(false, false, false));
+            string dpath = Path.Combine(outDir, "ui_overview_nofeed.png");
+            Render(ddl, Screens[0].W, Screens[0].H, dpath);
+            Console.WriteLine("  " + dpath + "   " + Screens[0].W + "x" + Screens[0].H + "   "
+                              + ddl.Count + " commands   no feed: every dial dashes and draws no arc, "
+                              + "every marker is grey, every panel row dashes");
         }
 
         // ---- Figma UI navigation: dispatcher + placeholder + shared back chevron ----
@@ -2901,6 +2954,349 @@ public static class PreviewMain
         return fail == 0 ? 0 : 1;
     }
 
+    // ============================================================================================
+    //  ⭐⭐ S248 — THE VEHICLE OVERVIEW'S DEVICE-SPACE PROOF, and it holds three things no
+    //  design-space suite can reach.
+    //
+    //  (1) THE INK. `SPEC_OVERVIEW_STATUS_ROWS.md` §8.7: "ASSERT INK HEIGHT, NEVER FONT SIZE — font
+    //      metrics differ between the two renderers." `VehicleOverviewContentTest` can only assert
+    //      the ARITHMETIC that turns an ink height into a pixel size; whether the glyphs then ink
+    //      that tall is a question about a rasteriser, and this is the only place that can ask it.
+    //  (2) §8.3's REAL PROPERTY. The spec wants `CONNECTIONS`' block width computed from the live
+    //      font, which `src/pure` cannot do. What it is FOR is that the labels never collide with
+    //      the values — "overlapped by 6.1 px", twice. That is measurable HERE, in ink, and it is
+    //      measured for all four rows.
+    //  (3) THE BASE PAGE UNDERNEATH. The prompt's §8: an image cannot tell you whether the SHIPPED
+    //      base page is wrong or merely older than the fix — "drive `BasePageIcon` and read the
+    //      actual pixels". So the tab band and the margin are READ OFF THIS RENDER and printed.
+    //
+    //  ⚠ AND EVERY PROBE IS MADE TO FAIL ON PURPOSE (`OverviewFalsifies`), because the bar S245 set
+    //  is that a check that cannot be shown to fail is decorative.
+    // ============================================================================================
+
+    static PageState OverviewFixture()
+    {
+        // The approved page's own readings, so the render can be compared with it directly. ⛔ Built
+        // by hand: `new PageState()` zeroes the cabin, and a cabin at 0.0 psia alarms on three
+        // channels at once.
+        PageState s = new PageState();
+        s.Valid = true;
+        s.Cabin.Ppo2Psia = 2.69; s.Cabin.Ppo201 = 2.69 / 5.0;
+        s.Cabin.CabinTempC = 22.4; s.Cabin.CabinTemp01 = 22.4 / 40.0;
+        s.Cabin.PressPsia = 14.0; s.Cabin.Press01 = 14.0 / 20.0;
+        s.Cabin.Co2MmHg = 0.07; s.Cabin.Co201 = 0.07 / 8.0;
+        s.Cabin.LoopAC = 26.5; s.Cabin.LoopA01 = 26.5 / 80.0;
+        s.Cabin.LoopBC = 20.0; s.Cabin.LoopB01 = 20.0 / 80.0;
+        s.Power01 = 0.92; s.DragonProp01 = 0.64;
+        s.DragonFuel01 = 1.0; s.DragonOx01 = 1.0;
+        s.PowerUnit1Text = "92 %"; s.PowerUnit2Text = "92 %";
+        s.DeorbitFuelText = "693.0 kg"; s.DeorbitOxText = "538.2 kg";
+        s.Docked = true; s.SBandLinked = true;
+        return s;
+    }
+
+    static OverviewInputs OverviewUi(bool cabin, bool more, bool complete)
+    {
+        OverviewInputs u = new OverviewInputs();
+        u.CabinSelected = cabin; u.MoreActive = more; u.ChecksComplete = complete;
+        return u;
+    }
+
+    static Bitmap RenderOverview(int w, int h, PageState s, OverviewInputs u, bool contentOnly)
+    {
+        DisplayList dl = new DisplayList(
+            VehicleOverviewContent.Commands + BasePageIcon.Commands + 8);
+        if (contentOnly) VehicleOverviewContent.Content(dl, w, h, s, u);
+        else VehicleOverviewContent.Draw(dl, w, h, s, u);
+        Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+        using (Graphics g = Graphics.FromImage(bmp)) g.Clear(Color.Magenta);
+        Paint(bmp, dl);
+        return bmp;
+    }
+
+    /// <summary>The bbox of everything in a device-space window that is not the page ground.
+    /// ⛔ It knows nothing about what it is supposed to find — the expectation lives in the caller.
+    /// Returns false when the window is empty, which is what makes falsification possible.</summary>
+    static bool OvInk(Bitmap bmp, int x0, int y0, int x1, int y1,
+                      out int l, out int t, out int r, out int b)
+    {
+        l = t = int.MaxValue; r = b = -1;
+        if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
+        if (x1 > bmp.Width) x1 = bmp.Width;
+        if (y1 > bmp.Height) y1 = bmp.Height;
+        for (int y = y0; y < y1; y++)
+            for (int x = x0; x < x1; x++)
+            {
+                Color c = bmp.GetPixel(x, y);
+                int dev = Math.Max(Math.Abs(c.R - 26), Math.Max(Math.Abs(c.G - 31), Math.Abs(c.B - 53)));
+                if (dev <= 30) continue;
+                if (x < l) l = x; if (x > r) r = x;
+                if (y < t) t = y; if (y > b) b = y;
+            }
+        return r >= 0;
+    }
+
+    /// <summary>
+    /// The x-runs of ink across one row band — how a label is told from its value.
+    ///
+    /// ⚠ `mode` EXISTS BECAUSE "DIFFERS FROM THE GROUND" IS THE WRONG QUESTION INSIDE THE CONTROLS.
+    /// The white pill differs from the ground by more than any glyph does, so mode 0 reads the whole
+    /// pill as one enormous run and a clipped label would hide inside it. Mode 1 finds DARK ink on
+    /// the pill and mode 2 finds BRIGHT ink on the `#070810` infill, which is how the two labels are
+    /// actually drawn — and mode 2 finding the unselected label in the OTHER half is the direct
+    /// proof that it is not centred underneath the pill. ⛔ Found by this check failing on its first
+    /// run, which is what making it fail on purpose is for.
+    /// </summary>
+    static List<int[]> OvRuns(Bitmap bmp, int x0, int y0, int x1, int y1, int gap, int mode)
+    {
+        var cols = new bool[x1 - x0];
+        for (int x = x0; x < x1; x++)
+            for (int y = y0; y < y1; y++)
+            {
+                Color c = bmp.GetPixel(x, y);
+                bool ink;
+                if (mode == 1) ink = (c.R + c.G + c.B) < 170 * 3;        // dark ink on the pill
+                else if (mode == 2) ink = (c.R + c.G + c.B) > 140 * 3;   // bright ink on #070810
+                else
+                {
+                    int dev = Math.Max(Math.Abs(c.R - 26),
+                                       Math.Max(Math.Abs(c.G - 31), Math.Abs(c.B - 53)));
+                    ink = dev > 30;
+                }
+                if (ink) { cols[x - x0] = true; break; }
+            }
+        var runs = new List<int[]>();
+        int s = -1, blank = 0;
+        for (int i = 0; i < cols.Length; i++)
+        {
+            if (cols[i]) { if (s < 0) s = i; blank = 0; }
+            else if (s >= 0 && ++blank >= gap) { runs.Add(new[] { s + x0, i - blank + x0 }); s = -1; }
+        }
+        if (s >= 0) runs.Add(new[] { s + x0, x1 - 1 });
+        return runs;
+    }
+
+    static int OverviewCheckAt(int w, int h)
+    {
+        int fail = 0;
+        BaseFit f = BaseFit.For(w, h);
+        Console.WriteLine("  [OVERVIEW] " + w + "x" + h + "   k = " + f.K.ToString("F5")
+                          + "   x-offset " + f.OffX.ToString("F2"));
+        PageState ps = OverviewFixture();
+
+        using (Bitmap bmp = RenderOverview(w, h, ps, OverviewUi(false, false, true), false))
+        {
+            // ---- (3) THE BASE PAGE UNDERNEATH, READ RATHER THAN ASSUMED --------------------------
+            // ⛔ `approved_evidence/page_tabs.png` still paints #14152C, which §2.1 marks SUPERSEDED.
+            // An IMAGE cannot say whether the shipped page is wrong or merely older than the fix.
+            // ⚠ design y 10, not 2: at y 2 the probe lands ON §5's white border, which is what the
+            // first run of this check reported. The margin field is between the border and the
+            // window, and that is where it is read.
+            Color band = bmp.GetPixel(w / 2, (int)f.Y(940f));
+            Color margin = bmp.GetPixel(w / 2, (int)f.Y(10f));
+            Console.WriteLine("    read off the render: tab band rgb(" + band.R + "," + band.G + ","
+                              + band.B + ")   margin rgb(" + margin.R + "," + margin.G + ","
+                              + margin.B + ")");
+            fail += Say2("the tab band under this page is #070810, not the superseded #14152C",
+                         PxMargin(band), "");
+            fail += Say2("and so is the margin", PxMargin(margin), "");
+
+            // ---- (1) THE INK ---------------------------------------------------------------------
+            // ⚠ THE TOLERANCE IS ±3 DEVICE PX AND THAT IS MEASURED, NOT GENEROUS. GDI+ hints glyphs
+            // to whole pixels, so the ink/size ratio for one string wanders 0.690..0.766 across the
+            // sizes on this page — `Typography.CapHeightOfSize` is the mean, and no single constant
+            // can do better against a hinting rasteriser. ⛔ The MEASURED design ink is printed on
+            // every line so the report carries the real number rather than a verdict.
+            int l, t, r, b;
+            if (!OvInk(bmp, (int)f.X(700f), (int)f.Y(55f), (int)f.X(1220f), (int)f.Y(100f),
+                       out l, out t, out r, out b))
+                fail += Say2("the page title inks", false, "nothing found");
+            else
+            {
+                fail += SayAt("the page title's ink HEIGHT", b - t + 1, 23.67 * f.K, 3.0,
+                              "design " + ((b - t + 1) / f.K).ToString("F2"));
+                fail += SayAt("the page title's ink TOP", t, f.Y(66.52f), 2.0, "");
+                fail += SayAt("the page title's ink CENTRE x", (l + r) / 2, f.X(960f), 3.0, "");
+            }
+            if (OvInk(bmp, (int)f.X(112f), (int)f.Y(120f), (int)f.X(400f), (int)f.Y(145f),
+                      out l, out t, out r, out b))
+            {
+                fail += SayAt("rail row 1's title ink HEIGHT", b - t + 1, 13.06 * f.K, 3.0,
+                              "design " + ((b - t + 1) / f.K).ToString("F2"));
+                fail += SayAt("rail row 1's title ink TOP", t, f.Y(125.28f), 2.0, "");
+            }
+            else fail += Say2("rail row 1's title inks", false, "nothing found");
+            if (OvInk(bmp, (int)f.X(112f), (int)f.Y(150f), (int)f.X(400f), (int)f.Y(175f),
+                      out l, out t, out r, out b))
+                fail += SayAt("rail row 1's status ink TOP", t, f.Y(154.66f), 2.0, "");
+            else fail += Say2("rail row 1's status inks", false, "nothing found");
+
+            // ⚠ THE WINDOW REACHES 205, NOT 215. §2.2 puts the value's ink CENTRE at -0.033 R and
+            // its height at 0.314 R, so at R 91.1 the ink runs 209.0..237.6 — a window starting at
+            // 215 clips its top and reports a short number. The first run of this check did exactly
+            // that and read 24.01 design against 28.61.
+            if (OvInk(bmp, (int)f.X(560f), (int)f.Y(205f), (int)f.X(655f), (int)f.Y(245f),
+                      out l, out t, out r, out b))
+                fail += SayAt("PPO2's VALUE ink height is 0.314 R", b - t + 1, 0.314 * 91.1 * f.K, 3.0,
+                              "design " + ((b - t + 1) / f.K).ToString("F2"));
+            else fail += Say2("PPO2's value inks", false, "nothing found");
+
+            // ---- (2) §8.3's REAL PROPERTY: no label ever reaches its value ------------------------
+            int worstGap = 9999;
+            for (int i = 0; i < 4; i++)
+            {
+                float top = 596.10f + i * 31.40f;
+                var runs = OvRuns(bmp, (int)f.X(505f), (int)f.Y(top - 2f), (int)f.X(790f),
+                                  (int)f.Y(top + 14f), 8, 0);
+                if (runs.Count < 2) { fail += Say2("CONNECTIONS row " + i + " has a label AND a value",
+                                                   false, runs.Count + " ink run(s)"); continue; }
+                int gap = runs[runs.Count - 1][0] - runs[0][1];
+                if (gap < worstGap) worstGap = gap;
+            }
+            fail += Say2("no CONNECTIONS label reaches its value (§8.3's actual requirement)",
+                         worstGap > 0, "tightest gap " + worstGap + " device px = "
+                         + (worstGap / f.K).ToString("F2") + " design");
+
+            // ---- §9.5's ANTIALIASING TRAP: the control infill must be ONE flat field --------------
+            {
+                // ⚠ ABOVE THE LABELS, INSIDE THE BOX. The first window (x 250..280, y 840..875) ran
+                // straight through `CABIN`'s own white glyphs and reported a 248/255 "seam" that was
+                // a letter. The infill field is clean between the stroke and the label ink.
+                int bad = 0, worst = 0;
+                for (int y = (int)f.Y(828f); y < (int)f.Y(838f); y++)
+                    for (int x = (int)f.X(240f); x < (int)f.X(360f); x++)
+                    {
+                        Color c = bmp.GetPixel(x, y);
+                        int dev = Math.Max(Math.Abs(c.R - 7), Math.Max(Math.Abs(c.G - 8),
+                                                                       Math.Abs(c.B - 16)));
+                        if (dev > 2) { bad++; if (dev > worst) worst = dev; }
+                    }
+                fail += Say2("the toggle's infill is one flat #070810 field, no same-colour seam",
+                             bad == 0, bad == 0 ? "" : bad + " px, worst " + worst + "/255");
+            }
+        }
+
+        // ---- §4.1's FULL CIRCLE, COUNTED IN PIXELS -----------------------------------------------
+        // ⛔ On a DEAD feed, so no arc covers the track and the dots can actually be counted. That
+        // doubles as §5.7's proof: an invalid channel draws NO arc.
+        PageState dead = OverviewFixture(); dead.Valid = false;
+        using (Bitmap bmp = RenderOverview(w, h, dead, OverviewUi(false, false, true), false))
+        {
+            double cx = f.X(606.9f), cy = f.Y(226.3f), rr = f.S(91.1f);
+            int runs = 0; bool prev = false, first = false;
+            for (int i = 0; i < 3600; i++)
+            {
+                double a = i * Math.PI / 1800.0;
+                int x = (int)Math.Round(cx + rr * Math.Sin(a));
+                int y = (int)Math.Round(cy - rr * Math.Cos(a));
+                Color c = bmp.GetPixel(x, y);
+                int dev = Math.Max(Math.Abs(c.R - 26), Math.Max(Math.Abs(c.G - 31),
+                                                                Math.Abs(c.B - 53)));
+                bool ink = dev > 12;
+                if (i == 0) first = ink;
+                if (ink && !prev) runs++;
+                prev = ink;
+            }
+            if (first && prev) runs--;      // the run that wraps the seam is one dot, not two
+            fail += Say2("§4.1's track is 135 separate dots all the way round",
+                         runs == 135, "counted " + runs);
+        }
+
+        // ---- ALL FOUR CONTROL STATES. §3.2 is invisible in three of them -------------------------
+        for (int st = 0; st < 4; st++)
+        {
+            bool cabin = (st & 1) != 0, more = (st & 2) != 0;
+            using (Bitmap bmp = RenderOverview(w, h, ps, OverviewUi(cabin, more, true), false))
+            {
+                // ⛔ THE SPLIT IS THE PILL'S INNER EDGE. Splitting at its START centres the
+                // unselected label UNDER the pill, where it is drawn white on white and vanishes:
+                // `CABIN` renders as `N`. So the two labels are looked for SEPARATELY — the selected
+                // one as DARK ink inside the pill, the unselected one as BRIGHT ink in the other
+                // half. Finding the unselected label outside the pill IS the proof.
+                float pillX = cabin ? 68.56f + 302.79f - 164.05f : 68.56f;
+                float split = cabin ? pillX : pillX + 164.05f;
+                int y0 = (int)f.Y(845f), y1 = (int)f.Y(872f);
+                var sel = OvRuns(bmp, (int)f.X(pillX + 6f), y0, (int)f.X(pillX + 164.05f - 6f),
+                                 y1, 10, 1);
+                var unsel = cabin
+                    ? OvRuns(bmp, (int)f.X(68.56f + 6f), y0, (int)f.X(split - 6f), y1, 10, 2)
+                    : OvRuns(bmp, (int)f.X(split + 6f), y0, (int)f.X(68.56f + 302.79f - 6f), y1, 10, 2);
+                string tag = "state " + st + " (" + (cabin ? "CABIN" : "SYSTEMS") + " selected, MORE "
+                             + (more ? "on" : "off") + ")";
+                bool ok = sel.Count == 1 && unsel.Count == 1
+                          && sel[0][1] - sel[0][0] > 40 && unsel[0][1] - unsel[0][0] > 40;
+                fail += Say2(tag + ": both labels ink in their OWN half, neither clipped", ok,
+                             "selected run(s) " + sel.Count + " unselected run(s) " + unsel.Count
+                             + (ok ? "   widths " + (sel[0][1] - sel[0][0]) + " / "
+                                     + (unsel[0][1] - unsel[0][0]) : ""));
+                if (ok)
+                {
+                    fail += SayAt(tag + ": the SELECTED label centres on the pill",
+                                  (sel[0][0] + sel[0][1]) / 2,
+                                  f.X(cabin ? (split + 68.56f + 302.79f) * 0.5f
+                                            : (68.56f + split) * 0.5f), 8.0, "");
+                    fail += SayAt(tag + ": the UNSELECTED label centres on what is left of the box",
+                                  (unsel[0][0] + unsel[0][1]) / 2,
+                                  f.X(cabin ? (68.56f + split) * 0.5f
+                                            : (split + 68.56f + 302.79f) * 0.5f), 8.0, "");
+                }
+                // MORE follows its own state, in its own ink, in the same band.
+                var mr = OvRuns(bmp, (int)f.X(1713.51f + 6f), y0, (int)f.X(1713.51f + 137.93f - 6f),
+                                y1, 10, more ? 1 : 2);
+                fail += Say2(tag + ": MORE inks in the colour its state calls for",
+                             mr.Count == 1 && mr[0][1] - mr[0][0] > 30,
+                             mr.Count + " run(s)");
+            }
+        }
+        return fail;
+    }
+
+    /// <summary>⚠ THE PROBES, RUN AGAINST A PAGE WITH ITS CONTENT REMOVED. They must report faults.
+    /// A check that has never failed has never been tested.</summary>
+    static int OverviewFalsifies(int w, int h)
+    {
+        Console.WriteLine("  [falsification, OVERVIEW] the same probes over the SHELL ALONE");
+        BaseFit f = BaseFit.For(w, h);
+        int faults = 0, l, t, r, b;
+        DisplayList dl = new DisplayList(BasePageIcon.Commands + 8);
+        BasePageIcon.Draw(dl, w, h);
+        using (Bitmap bmp = new Bitmap(w, h, PixelFormat.Format32bppArgb))
+        {
+            using (Graphics g = Graphics.FromImage(bmp)) g.Clear(Color.Magenta);
+            Paint(bmp, dl);
+            if (!OvInk(bmp, (int)f.X(700f), (int)f.Y(55f), (int)f.X(1220f), (int)f.Y(100f),
+                       out l, out t, out r, out b)) faults++;
+            if (!OvInk(bmp, (int)f.X(112f), (int)f.Y(120f), (int)f.X(400f), (int)f.Y(145f),
+                       out l, out t, out r, out b)) faults++;
+            var runs = OvRuns(bmp, (int)f.X(505f), (int)f.Y(594f), (int)f.X(790f), (int)f.Y(610f), 8, 0);
+            if (runs.Count < 2) faults++;
+            // ⚠ MODE 2, NOT MODE 1. On the shell alone the control band is page ground, which mode 1
+            // reads as "dark ink" everywhere and reports one enormous run — a probe that cannot fail
+            // is exactly what this pass exists to catch, and it caught itself. Mode 2 looks for
+            // BRIGHT ink (the pill and the white label); the shell has none.
+            var ctrl = OvRuns(bmp, (int)f.X(74f), (int)f.Y(845f), (int)f.X(368f), (int)f.Y(872f), 10, 2);
+            if (ctrl.Count < 1) faults++;
+        }
+        Console.WriteLine("    erased: the content. title ink, rail ink, CONNECTIONS runs and the "
+                          + "control labels all report absent");
+        return Say2("deleting the input makes every probe report a fault (4 of 4)", faults == 4,
+                    faults + " fault(s)");
+    }
+
+    static int OverviewCheck()
+    {
+        int fail = 0;
+        Console.WriteLine("--- the VEHICLE OVERVIEW: ink, §8.3's collision property, the four control "
+                          + "states, and the base page's own pixels");
+        fail += OverviewCheckAt(2560, 1405);
+        fail += OverviewCheckAt(2560, 1419);
+        fail += OverviewFalsifies(2560, 1405);
+        Console.WriteLine(fail == 0
+            ? "--- ok: the ink is the spec's, no label reaches its value, all four states draw, "
+              + "the base page is #070810, and every probe is provably able to fail"
+            : "!! " + fail + " overview device check(s) FAILED");
+        return fail == 0 ? 0 : 1;
+    }
 
     static double LitFraction(Bitmap bmp, int w, int h)
     {

@@ -359,7 +359,15 @@ namespace DragonScreen
         /// <summary>A severity in this column's idiom. `Alarms.Word` shouts in caps for the ALERTS banner;
         /// the checklist is title-case ("Nominal"), so the two are spelled differently on purpose and both
         /// come from the SAME `Severity` — they cannot disagree about the state, only about typography.</summary>
-        static string SevWord(Severity v)
+        /// <remarks>
+        /// ⚠ `internal` SINCE S248, AND THAT IS THE WHOLE CHANGE — no line of the body moved.
+        /// `SPEC_OVERVIEW_STATUS_ROWS.md` §7.3 rules that the rebuilt VEHICLE OVERVIEW's rail reads
+        /// THESE words: "Picking anything else would create a SECOND VOCABULARY FOR ONE `Severity`",
+        /// which is exactly what the one-severity-source rule forbids. A private method would have
+        /// forced the new page to restate them, so the visibility is widened by one keyword instead.
+        /// ⛔ Same assembly only, and no behaviour changes with it.
+        /// </remarks>
+        internal static string SevWord(Severity v)
         {
             return v == Severity.Alarm ? "Alarm" : v == Severity.Caution ? "Caution" : "Nominal";
         }

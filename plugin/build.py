@@ -443,6 +443,8 @@ def tool_tests():
     preview_diff_selftest()   # S168: the before/after harness's own classifier + render gate
     tri_raster_check()        # S241 (BOB-13): the Tri primitive's only pixel-level evidence
     base_page_check()         # S245: the NON-ICON base page's device-space table (spec section 11)
+    overview_check()          # S248: the VEHICLE OVERVIEW's ink, its label/value collision
+                              #       property, its four control states and the base page's pixels
 
     tool = os.path.join(HERE, 'tools', 'assess_flight.py')
     if not os.path.exists(tool):
@@ -832,6 +834,41 @@ def base_page_check():
             print('    ' + line.strip() if not line.startswith('    ') else line)
     if p.returncode != 0:
         sys.exit('BASE PAGE CHECK FAILED (exit %d)' % p.returncode)
+
+
+def overview_check():
+    """
+    S248: run the VEHICLE OVERVIEW's DEVICE-SPACE proof as part of `test`.
+
+    SAME ARGUMENT AS `base_page_check` ABOVE, and it holds three things the headless suite cannot.
+    `build.py test` compiles `src/pure` + `test` only, so no rasteriser is reachable from it:
+    `VehicleOverviewContentTest` can prove the arithmetic that turns an INK HEIGHT into a pixel size,
+    but whether the glyphs then ink that tall is a question about a rasteriser.
+
+    THE THREE THINGS:
+      1. INK HEIGHTS, which the spec states everywhere and says to assert instead of font sizes.
+      2. SECTION 8.3's REAL PROPERTY. The spec wants CONNECTIONS' block width computed from the live
+         font, which src/pure cannot do; what the rule is FOR is that no label ever reaches its
+         value, and that is measurable here, in ink, on all four rows.
+      3. THE BASE PAGE UNDERNEATH. An image cannot say whether the shipped base page is wrong or
+         merely older than the #070810 ruling. This drives BasePageIcon and reads the pixels.
+
+    IT BUILDS THE PREVIEW FIRST, for the same reason the other two do: a stale exe reports on code
+    that is no longer there, which is the S130 shape. It renders at both shipped sizes, runs all four
+    control states, and ends by running every probe over a page with its CONTENT REMOVED - which must
+    report faults, or the probes are decorative.
+    """
+    print("--- vehicle overview device check (S248: ink, the collision property, four states)")
+    exe = compile_preview()
+    if not exe or not os.path.exists(exe):
+        sys.exit('OVERVIEW CHECK: the preview binary was not built')
+    p = subprocess.run([exe, '--overviewcheck'], capture_output=True, text=True)
+    out = (p.stdout or '') + (p.stderr or '')
+    for line in out.splitlines():
+        if line.strip():
+            print('    ' + line.strip() if not line.startswith('    ') else line)
+    if p.returncode != 0:
+        sys.exit('OVERVIEW CHECK FAILED (exit %d)' % p.returncode)
 
 
 def preview_diff_selftest():
