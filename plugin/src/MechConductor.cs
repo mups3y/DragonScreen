@@ -147,7 +147,7 @@ namespace DragonScreen
         /// MechJeb's own autopilot on the owner's `OVERRIDE` of 2026-09-07; `pure/RendezvousOps.cs`'s
         /// `RendezvousDrive` carries his words and what each mode costs. ⛔ The conductor's own
         /// node-composing path is intact and one assignment away.</summary>
-        static RendezvousDrive rendezvousMode = RendezvousDrive.MechJebAutopilot;
+        static RendezvousDrive rendezvousMode = RendezvousDrives.Default;
 
         /// <summary>S219: MechJeb's rendezvous autopilot currently holds the vehicle through us.</summary>
         static bool rendezvousEngaged;
@@ -258,7 +258,15 @@ namespace DragonScreen
             stationTargetTried = false;
             countdownArmed = false; terminalCountTaken = false;   // S219
             configScrub = false; reassertCount = 0;               // S228
-            rendezvousEngaged = false; rendezvousMode = RendezvousDrive.Conductor;   // S219
+            // ⛔⛔ S252 — ~~`rendezvousMode = RendezvousDrive.Conductor`~~ THIS ONE WORD IS WHY THE
+            // RENDEZVOUS HAS NEVER FLOWN. `Reset()` runs from `FlightDriver.Start` on EVERY flight
+            // scene, so it overwrote the field initialiser above (`MechJebAutopilot`) before any
+            // launch, `Engage`'s fork never took its branch, and `RunRendezvousAutopilot` was
+            // unreachable code on every flight. Nothing calls `SelectRendezvousDrive` either, so
+            // nothing could put it back. ⭐ Both sites now read ONE expression —
+            // `RendezvousOps.RendezvousDrives.Default` — because a default written twice is how the
+            // two copies came to disagree. The full account is on that constant.
+            rendezvousEngaged = false; rendezvousMode = RendezvousDrives.Default;   // S219 / S252
             note = "idle";
             ResetLeg();
             leg = RendezvousLeg.None;
@@ -2315,8 +2323,32 @@ namespace DragonScreen
                 //     for the next mission phase that wants a warp.
                 try { if (core.Node != null && rangeM > 1000.0) core.Node.Autowarp = true; } catch { }
 
+                // ---- ⛔⛔ S252 — THE GATE, AND IT IS PURE ------------------------------------------
+                // `MechJebModuleRendezvousAutopilot.OnModuleEnabled` calls
+                // `Vessel.RemoveAllManeuverNodes()`, so engaging it while the conductor's own Node
+                // Executor is flying a burn DELETES THE NODE OUT FROM UNDER THE BURN. ⭐ §3's rule is
+                // that the conductor's chain STANDS DOWN FIRST — so this tick aborts it and the next
+                // tick engages, rather than the two of them having one hand each on the controls.
+                // ⚠ IT CANNOT SIMPLY REFUSE AND WAIT: with the drive switched to the autopilot,
+                // `BurnNode` never runs again, so `nodeExecuting` would never clear on its own and the
+                // refusal would be permanent. Standing the executor down is what makes it a state
+                // MACHINE rather than a deadlock.
+                AutopilotGate gate = AutopilotGating.For(true, nodeExecuting, rendezvousEngaged,
+                                                         !ap.Enabled, rangeM, relSpeedMps);
+                if (gate == AutopilotGate.HoldNodeLive)
+                {
+                    try { if (core.Node != null) core.Node.Abort(); } catch { }
+                    nodeExecuting = false;
+                    Debug.Log("[DragonScreen] conductor: ⛔ HOLDING the rendezvous autopilot for one "
+                              + "tick — the Node Executor was flying a burn, and enabling the autopilot "
+                              + "removes every maneuver node. The conductor's own chain is stood down "
+                              + "first; the autopilot engages on the next tick. (S252)");
+                    approachNote = "RNDZ hold - standing the node executor down";
+                    return;
+                }
+
                 // ---- ⭐ THEN ENGAGE ---------------------------------------------------------------
-                if (!rendezvousEngaged)
+                if (gate == AutopilotGate.Engage)
                 {
                     ClearNodes(v);          // §8: `OnModuleEnabled` removes them anyway; do it visibly
                     ap.Users.Add(Owner);
@@ -2332,10 +2364,11 @@ namespace DragonScreen
 
                 // ---- THE HAND-OFF. §8 branch 2: within `desiredDistance` with relvel < 1 is DONE, and
                 // ---- the module clears its own users when it gets there. Either signal ends the leg.
+                // ⭐ S252: the same PURE gate decides it, so the test drives the transition rather than
+                // re-deriving the comparison. `moduleFinished` is read FIRST and is the autopilot's own
+                // report — ⛔ never inferred from range, which §3 says explicitly.
                 bool moduleFinished = !ap.Enabled;
-                bool arrived = rangeM <= RendezvousOps.AutopilotHandoffRangeM
-                               && relSpeedMps < 1.0;
-                if (moduleFinished || arrived)
+                if (gate == AutopilotGate.Complete)
                 {
                     ReleaseRendezvous(moduleFinished ? "the autopilot reported done"
                                                      : "arrived at the Keep-Out Sphere");

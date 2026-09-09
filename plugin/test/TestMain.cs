@@ -162,6 +162,12 @@ public static class TestMain
         // nothing else in this suite would see it.
         bad += Suite(DialGaugeTest.Run);
         bad += Suite(VehicleOverviewContentTest.Run);
+        // ⭐⭐ S252. The chain the owner named — lock ISS, launch to rendezvous, plane, engage — walked
+        // as a STATE MACHINE rather than asserted at. ⛔ It exists because the rendezvous autopilot was
+        // unreachable code on every flight (a default written twice, and the two copies disagreed)
+        // while a source-text check reported the path "selectable, not orphaned" — it was reading the
+        // method's DEFINITION, not a caller. The decisions moved into `src/pure` so they can be driven.
+        bad += Suite(LaunchToRendezvousTest.Run);
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)

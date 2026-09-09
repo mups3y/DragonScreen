@@ -721,8 +721,53 @@ public static class ConductorEngageTest
         // complicated, mission accurate fidelity way"*.
         Check("S222b/C1.16: the conductor's own node-composing rendezvous path is still here",
               src.Contains("static void PlanOperation") && src.Contains("static void Replan"), "");
-        Check("S222b/C1.16: ...and still selectable, so it is superseded-for-now and not orphaned",
-              src.Contains("RendezvousDrive.Conductor"), "");
+        // ⛔⛔ S252 — THIS CHECK WAS READING THE DEFECT. It searched `MechConductor.cs`
+        // for the string `RendezvousDrive.Conductor`, and the ONLY occurrence was `Reset()` forcing the
+        // mode back to `Conductor` on every flight scene — the one line that made
+        // `RunRendezvousAutopilot` unreachable. So "the conductor path is still selectable" was green
+        // BECAUSE the autopilot was disabled. ⚠ Removing the defect broke the check, which is how
+        // it was found.
+        // ⭐ THE PROPERTY IT MEANT TO ASSERT: the switch takes ANY drive from its caller, so both
+        // are reachable, and the enum value with its superseded-for-now reasoning still exists in pure.
+        Check("S252/C1.16: the drive switch assigns whatever it is handed — both drives reachable",
+              Body(src, "SelectRendezvousDrive").Contains("rendezvousMode = drive"), "");
+        Check("S252/C1.16: ...and the conductor path keeps its enum value and its reasoning, in pure",
+              File.ReadAllText(Repo("plugin", "src", "pure", "RendezvousOps.cs"))
+                  .Contains("Conductor = 0"), "");
+
+        // =================================================================================
+        // ⛔⛔ S252 — THE DEFAULT DRIVE IS ONE EXPRESSION, AND THE AUTOPILOT IS REACHABLE
+        // =================================================================================
+        // The rendezvous autopilot never flew because the default was written TWICE and the copies
+        // disagreed: the field initialiser said `MechJebAutopilot`, `Reset()` said `Conductor`, and
+        // `Reset()` runs on every flight scene. ⭐ Both sites now read one pure constant.
+        Check("S252: ⛔ NEITHER site types a drive literal — that is how the two copies drifted",
+              !src.Contains("rendezvousMode = RendezvousDrive.MechJebAutopilot")
+              && !src.Contains("rendezvousMode = RendezvousDrive.Conductor"), "");
+        Check("S252: the field initialiser reads the pure default",
+              src.Contains("static RendezvousDrive rendezvousMode = RendezvousDrives.Default"), "");
+        Check("S252: ⭐⭐ ...and so does Reset(), which is the line that made it unreachable",
+              Body(src, "Reset").Contains("rendezvousMode = RendezvousDrives.Default"), "");
+        // ⛔ AND THE GATE IS WIRED, not merely defined. `HoldNodeLive` must stand the Node
+        // Executor down and `Engage` must be what adds the user — both inside the runner.
+        string rz = Body(src, "RunRendezvousAutopilot");
+        Check("S252: the runner asks the PURE gate rather than re-deriving the rule",
+              rz.Contains("AutopilotGating.For("), "");
+        Check("S252: ⛔⛔ a live node burn HOLDS the engage and stands the executor down",
+              rz.Contains("AutopilotGate.HoldNodeLive") && rz.Contains("core.Node.Abort()")
+              && rz.Contains("nodeExecuting = false"), "");
+        Check("S252: ...and the engage happens on the Engage verdict, not unconditionally",
+              rz.Contains("if (gate == AutopilotGate.Engage)")
+              && rz.IndexOf("ap.Users.Add(Owner)", StringComparison.Ordinal)
+                 > rz.IndexOf("if (gate == AutopilotGate.Engage)", StringComparison.Ordinal), "");
+        Check("S252: ...and the completion is the gate's verdict too, module report first",
+              rz.Contains("if (gate == AutopilotGate.Complete)")
+              && rz.Contains("bool moduleFinished = !ap.Enabled"), "");
+        // ⚠ The hand-off range and the arrival speed are the published constants, never typed.
+        Check("S252: the hand-off range is still RendezvousOps.AutopilotHandoffRangeM",
+              rz.Contains("RendezvousOps.AutopilotHandoffRangeM"), "");
+        Check("S252: ⛔ and no bare 1.0 m/s arrival test survives in the runner",
+              !rz.Contains("relSpeedMps < 1.0"), "");
     }
 
 }

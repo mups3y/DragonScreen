@@ -29642,3 +29642,111 @@ its three siblings?
 ⭐ `BOB-55` **SETTLED** by the overseer (all four back) · `BOB-56` **AUTHORISED and DONE** ·
 `BOB-57` **ANSWERED** — `docs/reference/` is the home, and refreshing it whenever the owner re-saves the
 craft is now a standing rule.
+
+---
+
+### S252 [O] Make launch-to-rendezvous actually fly — **DONE 2026-09-09 — ⛔⛔ THE RENDEZVOUS AUTOPILOT WAS UNREACHABLE CODE ON EVERY FLIGHT, AND ONE WORD IN `Reset()` IS WHY. ALL SUITES PASSED (24,799 checks), 7/7 mutants killed, previewdiff 0 of 140, installed, both cfg md5s unchanged at S251's value** — [overseer `PROMPT_LAUNCH_TO_RENDEZVOUS.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim:** *"LOCK ISS AS TARGET! USE ACCENT GUIDANCE LAUNCH TO RENDEZVOUS! SET IT TO THE
+LAUNCH INTO PLANE OF TARGET! CLICK ENGAGE AUTOPILOT!"* · *"The conductor's job is to press button15"* ·
+*"make it work"*.
+
+#### ⛔⛔ THE FINDING — A DEFAULT WRITTEN TWICE, AND THE TWO COPIES DISAGREED
+
+```
+MechConductor.cs:150   static RendezvousDrive rendezvousMode = RendezvousDrive.MechJebAutopilot;
+MechConductor.cs:261   Reset() … rendezvousMode = RendezvousDrive.Conductor;      ⛔ THIS ONE
+```
+`Reset()` runs from **`FlightDriver.Start` on every flight scene**, so the field initialiser never
+survived to a launch. The fork in `Engage` — `rendezvousMode == MechJebAutopilot && NeedsTarget(op)` —
+therefore **never took its branch**, and `RunRendezvousAutopilot` — a complete, configured, hand-off-
+aware 100-line runner — was **UNREACHABLE CODE ON EVERY FLIGHT**. ⛔ Nothing calls
+`SelectRendezvousDrive` anywhere in the repo either, so nothing could put it back.
+
+⚠⚠ **AND THE TEST THAT SHOULD HAVE CAUGHT IT PASSED — TWICE OVER.**
+`ConductorEngageTest` asserted the path was *"selectable, not orphaned"* by searching the source for
+the string `SelectRendezvousDrive` — which is present because the **METHOD IS DEFINED**, whether or not
+anyone calls it. ⛔ **A name-presence check cannot see a caller-less method.**
+⭐ And a second check, *"the conductor's own path is still selectable"*, searched for
+`RendezvousDrive.Conductor` — whose **only occurrence was the defect line itself**. So it was green
+BECAUSE the autopilot was disabled, and **removing the defect is what broke it**. That is how this was
+found. Both are restated as properties.
+
+#### ⭐ THE FIX — ONE EXPRESSION, IN PURE, NOT A CORRECTED SECOND COPY
+
+`RendezvousOps.RendezvousDrives.Default = MechJebAutopilot`, read by **both** sites. ⛔ Neither may type
+a literal, and the suite asserts that. 🟢 It is the autopilot because that is the owner's standing
+choice, recorded in `RendezvousDrive`'s own docstrings since 2026-09-07.
+⭐ **The conductor's own chain is NOT retired** (C1.16): it keeps its enum value and
+`SelectRendezvousDrive` still hands it back.
+
+#### ⛔⛔ THE NODE-DELETION HAZARD IS NOW A PROPERTY, AND IT COULD NOT HAVE BEEN A REFUSAL
+
+`MechJebModuleRendezvousAutopilot.OnModuleEnabled` calls **`Vessel.RemoveAllManeuverNodes()`** — so
+engaging it while the conductor's Node Executor is flying a burn deletes the node out from under the
+burn. ⭐ `AutopilotGating.For(...)` returns **`HoldNodeLive`**, and the glue then **stands the Node
+Executor down** (`core.Node.Abort()`, `nodeExecuting = false`) and engages on the next tick.
+
+⚠ **A BARE REFUSAL WOULD HAVE DEADLOCKED, AND THAT IS WHY IT ABORTS RATHER THAN WAITS.** With the drive
+on the autopilot, `BurnNode` never runs again — so `nodeExecuting` would never clear on its own and the
+refusal would be permanent. §3's *"the conductor's own approach chain must stand down while it runs"* is
+implemented rather than assumed.
+⚠ **AND THE HAZARD IS REACHABLE:** `SelectRendezvousDrive` stands the outgoing *autopilot* down but not
+the *node executor*, so a mid-burn drive switch is the path in. ⛔ Not changed — the guard makes it
+safe from this side. **`BOB-60`.**
+
+#### ⭐ THE DECISIONS MOVED TO `src/pure` SO THE CHAIN CAN BE **DRIVEN**
+
+⛔ §6 asks for a state machine, *"drive the transitions; never assert against a constant"* — and the
+glue is unreachable from `build.py test`, which compiles `src/pure` + `test` only. So the rule moved:
+`AutopilotGate` { `NoTarget` · `HoldNodeLive` · `Engage` · `Running` · `Complete` } and
+`AutopilotGating.For(hasTarget, nodeLive, engaged, moduleDone, rangeM, relSpeedMps)`.
+⭐ **`LaunchToRendezvousTest` walks it one input at a time**, (a)…(j): no target → target locked →
+engaged far out → **at the KOS but still closing at 3 m/s, which is RUNNING, not complete** → velocity
+killed → COMPLETE → inside the KOS the docking AP engages → `ManualDockingRequested` stands it down →
+clearing it hands it back. **20 checks.**
+⛔ **THE MODULE'S OWN REPORT IS READ FIRST AND IS INDEPENDENT OF RANGE** (§3: *"read that, do not infer
+it from range"*) — a `moduleDone` at 40 km completes the leg; the identical state without it does not.
+⭐ `HandoffRelativeSpeedMps = 1.0` is **MechJeb's own** final-branch test, deliberately NOT §B11's
+0.2 m/s *nulled* criterion — a tighter number there would leave the leg unfinished at the sphere.
+
+#### ⭐ WHAT WAS **NOT** TOUCHED, AS INSTRUCTED
+
+⛔ **Job A: nothing.** `MechConductor.cs:1547` already presses button 15 once, in the menu's own order.
+⛔ **No ascent number moved** — S250/S251's thirteen writes are untouched. ⛔ No cfg, no craft, no
+blacklist, no Vehicle Overview, no black-box columns. ⛔ `desiredDistance` still comes from
+`RendezvousOps.AutopilotHandoffRangeM`; `maxPhasingOrbits` and `maxClosingSpeed` are untouched at
+MechJeb's own; none of the docking autopilot's four settings is written.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,799** checks (S251 left 24,769 — it rose) |
+| `LaunchToRendezvousTest` | **20 checks, 0 failed** |
+| mutation | **7 raised, 7 KILLED, 0 survived** — incl. M1 the defect restored, M2 the hazard removed, M3 completion inferred from range alone, M7 the hold made a deadlock |
+| `previewdiff HEAD` | **0 of 140 changed**, ⛔ **not vacuous** — it named `plugin/src/pure/RendezvousOps.cs` as its changed input and rendered both trees |
+| repo + live `DragonScreen.cfg` | **`7297bda3ecaf269f04289c24ea4df036`** — identical to each other **and unchanged from S251**, as a task that changes no cfg requires |
+| PluginData | unchanged; neither deleted settings file has returned |
+| ⛔ `LocalFixes/frost_mod_b9partswitch_fix.cfg` | still present, 3122 bytes, mtime 2026-08-04 |
+
+#### ⛔ WHAT THE OWNER WILL SEE — AND WHAT THIS DOES NOT PROMISE
+
+1. Ascent **byte-for-byte the same decisions as S251** — button 15 once, same window, same plane,
+   max-Q throttle-down near T+50 s.
+2. ⭐⭐ **After insertion the vehicle keeps flying.** The log line to look for is
+   `⭐ RENDEZVOUS AUTOPILOT ENGAGED`. ⛔ **It has never appeared in a flight log before this commit.**
+3. It should plot and burn its own phasing nodes toward the station and report **"Successful
+   rendezvous"**; the docking autopilot takes it at the 200 m Keep-Out Sphere.
+4. ⚠ **WHAT THIS TASK PROVES IS THE DECISIONS, NOT THE FLIGHT.** Whether MechJeb's tree actually
+   reaches 416.6 × 423.4 km from 215 km inside `maxPhasingOrbits = 5` is a flight question. ⛔ **If it
+   stops after insertion, say at which step — that is a finding, not a partial success.**
+
+#### ⚠ QUESTIONS RAISED — `BOB-60`, `BOB-61`
+
+`BOB-60` `SelectRendezvousDrive` stands the outgoing autopilot down but not the Node Executor, so a
+mid-burn drive switch is the way into the node-deletion hazard the new gate now catches from the other
+side — should the switch abort the executor itself? ·
+`BOB-61` ⛔ **`maxPhasingOrbits` is MechJeb's 5 and is untouched, as instructed** — but the transfer is
+215 km → ~420 km, and if five revolutions is not enough the autopilot gives up rather than failing
+loudly. **A finding for the first flight, and a number only the owner may set.**

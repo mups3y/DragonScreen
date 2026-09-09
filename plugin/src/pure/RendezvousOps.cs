@@ -62,6 +62,87 @@ namespace DragonScreen
         MechJebAutopilot = 1
     }
 
+    /// <summary>
+    /// ⭐⭐ S252 — WHICH DRIVER A FRESH FLIGHT SCENE STARTS ON, IN **ONE** PLACE.
+    ///
+    /// ⛔⛔ **THE DEFECT THIS EXISTS FOR, AND IT IS WHY THE RENDEZVOUS HAS NEVER FLOWN.** The default
+    /// was written TWICE in the glue and the two copies disagreed:
+    /// <code>
+    ///   MechConductor.cs:150   static RendezvousDrive rendezvousMode = RendezvousDrive.MechJebAutopilot;
+    ///   MechConductor.cs:261   Reset() ... rendezvousMode = RendezvousDrive.Conductor;
+    /// </code>
+    /// `Reset()` runs from `FlightDriver.Start` on **every flight scene**, so the field initialiser
+    /// never survived to a flight and the mode was `Conductor` on every launch. The fork in `Engage`
+    /// (`rendezvousMode == MechJebAutopilot && NeedsTarget(op)`) therefore never took its branch, and
+    /// `RunRendezvousAutopilot` — a complete, tested, 100-line runner — was **UNREACHABLE CODE ON
+    /// EVERY FLIGHT**. Nothing calls `SelectRendezvousDrive` either, so nothing could put it back.
+    ///
+    /// ⚠ **AND THE TEST THAT WAS SUPPOSED TO CATCH IT PASSED.** `ConductorEngageTest` asserted the
+    /// path was *"selectable, not orphaned"* by searching the source for the string
+    /// `SelectRendezvousDrive` — which is present because the METHOD is defined, whether or not anyone
+    /// calls it. A name-presence check cannot see a caller-less method. That is the same shape as
+    /// S220's surviving mutants, one layer up.
+    ///
+    /// ⭐ **SO THE FIX IS ONE EXPRESSION, NOT A CORRECTED SECOND COPY.** Both sites read this constant.
+    /// 🟢 It is `MechJebAutopilot` because that is the OWNER's standing choice — `RendezvousDrive`'s own
+    /// docstrings above record it, and 2026-09-09: *"USE ACCENT GUIDANCE LAUNCH TO RENDEZVOUS! ... make
+    /// it work"*. ⛔ The conductor's own chain is SUPERSEDED-FOR-NOW, not retired, and
+    /// `SelectRendezvousDrive` still switches to it.
+    /// </summary>
+    public static class RendezvousDrives
+    {
+        /// <summary>The driver a fresh flight scene starts on. ⛔ Read by BOTH the field initialiser
+        /// and `Reset()`; neither may type a literal.</summary>
+        public const RendezvousDrive Default = RendezvousDrive.MechJebAutopilot;
+    }
+
+    /// <summary>
+    /// ⛔⛔ S252 — WHETHER MECHJEB'S RENDEZVOUS AUTOPILOT MAY BE ENGAGED **THIS TICK**.
+    ///
+    /// ⭐ IT IS PURE BECAUSE THE HAZARD IS DECIDABLE WITHOUT THE GAME, and because a rule that only
+    /// exists inside a `try` block in the glue cannot be driven as a state machine by a headless test.
+    /// </summary>
+    public enum AutopilotGate : byte
+    {
+        /// <summary>No target — the autopilot has nothing to fly to. Stand down.</summary>
+        NoTarget = 0,
+        /// <summary>⛔⛔ THE NODE-DELETION HAZARD. `MechJebModuleRendezvousAutopilot.OnModuleEnabled`
+        /// calls `Vessel.RemoveAllManeuverNodes()` — so engaging it while the conductor's Node Executor
+        /// is flying a burn deletes the node out from under the burn. ⭐ The conductor's own chain must
+        /// STAND DOWN FIRST; this tick aborts it, and the next tick engages.</summary>
+        HoldNodeLive,
+        /// <summary>Not engaged, nothing in the way: engage it.</summary>
+        Engage,
+        /// <summary>Engaged and still flying.</summary>
+        Running,
+        /// <summary>Arrived, or the module reported done. Release and advance the plan.</summary>
+        Complete
+    }
+
+    /// <summary>The gate itself. ⛔ `moduleDone` is the AUTOPILOT'S OWN report (`!ap.Enabled` — it
+    /// clears its users when it finishes), never a range comparison standing in for one.</summary>
+    public static class AutopilotGating
+    {
+        public static AutopilotGate For(bool hasTarget, bool nodeLive, bool engaged,
+                                        bool moduleDone, double rangeM, double relSpeedMps)
+        {
+            if (!hasTarget) return AutopilotGate.NoTarget;
+            if (engaged)
+            {
+                // ⭐ EITHER SIGNAL ENDS THE LEG, and the module's own is checked FIRST: "draws nothing"
+                // and "is not connected" produce the same range reading, but only one of them clears
+                // the module's users.
+                if (moduleDone) return AutopilotGate.Complete;
+                if (rangeM <= RendezvousOps.AutopilotHandoffRangeM
+                    && relSpeedMps < RendezvousOps.HandoffRelativeSpeedMps)
+                    return AutopilotGate.Complete;
+                return AutopilotGate.Running;
+            }
+            if (nodeLive) return AutopilotGate.HoldNodeLive;
+            return AutopilotGate.Engage;
+        }
+    }
+
     /// <summary>Which on-orbit leg the conductor is flying, identified by the gate it ends at.</summary>
     public enum RendezvousLeg : byte
     {
@@ -111,6 +192,17 @@ namespace DragonScreen
         /// converges it against a flown approach; the caller can override it meanwhile.
         /// </summary>
         public const double NulledRelativeSpeedMps = 0.2;
+
+        /// <summary>
+        /// S252 — the relative speed at or below which arriving at the hand-off range counts as
+        /// ARRIVED rather than as flying past. ⭐ **1 m/s is MECHJEB'S OWN NUMBER, not a chosen one**:
+        /// `MechJebModuleRendezvousAutopilot`'s final branch stops when it is inside `desiredDistance`
+        /// with relative velocity under 1 m/s, and this is the same test read from our side so the two
+        /// cannot disagree about whether the leg finished.
+        /// ⚠ Deliberately NOT <see cref="NulledRelativeSpeedMps"/> (0.2): that is §B11's *nulled*
+        /// criterion for a station-keeping hold, a tighter thing than "the autopilot has stopped".
+        /// </summary>
+        public const double HandoffRelativeSpeedMps = 1.0;
 
         /// <summary>
         /// §B10.1's Node-Executor cutoff: *"MechJeb stock default **0.1** … Target: ~0.1 for big burns"*.
