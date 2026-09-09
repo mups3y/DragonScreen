@@ -29854,3 +29854,166 @@ mtime 2026-09-06 12:49, three days before this task — and the directory is `.g
 (`.gitignore:79`), never tracked, so **git cannot restore it**. It is REFERENCE art under C7.1
 ("look, don't ship"), so nothing shipped depends on it and no page changed. Flagged rather than
 touched; the owner's backups are the only route.
+
+---
+
+### S254 [O] The craft dump captures everything the part tree can tell us — **DONE 2026-09-09 — THE PART ROW IS GENERIC AT LAST: 4 HAND-WRITTEN VALUES → 308 REFLECTED MEMBERS + NINE STRUCTURED ROWS. ALL SUITES PASSED (24,900 checks, up from 24,810), 16/16 mutants killed, previewdiff 0 of 140, installed, both cfg md5s unchanged at S251's value** — [overseer `PROMPT_CRAFTDUMP_TOTAL.md`, 2026-09-09; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim, 2026-09-09:** *"add literally everything the part dump could possibly capture for
+us. Look up every single thing we could possibly capture with it and make sure we get it"*, following
+*"next flight we want a new craft dump to run so we can capture this event/setting and control it
+directly"*.
+
+#### ⛔⛔ CAPTURE ONLY — AND THAT IS ASSERTED, NOT PROMISED
+
+S254 adds **no assignment** to any field, resource, event or action. In particular `res.flowState` is
+READ and never written. ⭐ Its whole purpose is to tell the owner what *could* be controlled, so that
+the control stays his decision and is not a side effect of measuring.
+
+#### ⭐⭐ THE GAP THAT WAS CLOSED — AND WHY IT WAS A GAP
+
+⛔ **The MODULE side was already generic** (it walks `pm.Fields` / `pm.Events` / `pm.Actions`, so it
+picks up every `KSPField` any mod defines without knowing the mod exists). ⛔⛔ **The PART row was
+four hand-written values against a type that exposes 308 public instance members** — 262 fields + 46
+properties, counted off `Assembly-CSharp.dll` rather than guessed. It is now walked the same way,
+plus **nine structured rows** for what reflection cannot flatten usefully.
+
+#### ⛔⛔ THE RULES MOVED TO `src/pure`, AND THAT IS THE ONLY REASON §5 IS ANSWERABLE
+
+`src/CraftDump.cs` is glue — it needs KSP to compile and `build.py test` compiles `src/pure` + `test`
+only, so **every rule that lived in it was a rule no test could reach.** §5 asks for *"a test per new
+row kind, driven from a fixture"* and for proof that *"a throwing property does not lose the part"*;
+neither is possible against a `Part`. So `pure/CraftDumpRows.cs` now holds the decisions and the glue
+reads live fields and hands them over. **`CraftDumpRowsTest`: 90 checks, 0 failed.**
+
+⛔ **THE TWO CHECKS THE PROMPT NAMED ARE BOTH *DRIVEN*, NOT OBSERVED:**
+- ⚠ **The `locked` resource path has never once run.** `docs/reference/craftdump.csv` has 21 RESOURCE
+  rows and **21 of them say `flowing`** — counted, not remembered. It is driven with
+  `flowState = false` here rather than waited for.
+- ⛔ **A throwing property costs ONE ROW, not one part.** `ThrowingFixture` has a property that always
+  throws; the check is that the members either side still arrive, that the throwing one is *still
+  emitted and marked*, and that its message survives so the owner can see WHICH member is unreadable.
+
+#### ⚠⚠ THREE OF §3's NAMED MEMBERS DO NOT EXIST — CHECKED, NOT TRUSTED
+
+Every one of the prompt's ~58 members was verified against `Assembly-CSharp.dll` before being written,
+and then a second time by the compiler. ⛔ **Three do not survive that check**, and all three would
+have been silent holes:
+
+| §3 says | the source says | where it went |
+|---|---|---|
+| `Part.stagingEnabled` | ⛔ **does not exist on `Part` at all** — `stagingEnabled` is a **`PartModule`** field | STAGING carries `Part`'s real ones (`stagingOn`, `stageOffset`, `childStageOffset`, `originalStage`, `inStageIndex`, `inverseStageCarryover`); the MODULE row carries the `PartModule` one |
+| `Part.crewCapacity` | ⛔ **`CrewCapacity`** — capital C | CREW row, correct casing |
+| `AvailablePart.techRequired` | ⛔ **`TechRequired`** — capital T | INFO row, correct casing |
+| `Vessel.launchID` / `missionID` (§3.6) | ⛔ **neither exists on `Vessel`** — both are `Part` fields | taken off the **ROOT PART** and named `rootLaunchID` / `rootMissionID`, so nobody reads them as vessel-level facts |
+
+⭐ `temperatureMultiplier` — the prompt already said it does not exist, and it does not.
+
+#### ⭐ WHAT EACH NEW ROW CARRIES
+
+| kind | ⭐ the question it answers |
+|---|---|
+| **`THERMAL`** | ⛔⛔ **the ascent-heating question, and the dump's ONE computed verdict.** Both temperatures against both limits, **as percentages**, plus `worst=SKIN\|INTERNAL`. NTSB found the trunk's SKIN crossing its limit while internal was fine, and MechJeb's overheat limiter reads `temperature` only — so "how close, and on WHICH" is the question, and a row of four raw numbers would leave the owner doing that arithmetic 20 times a dump. ⚠ A non-positive limit is `n/a`, **never 0%** — no limit is not infinite margin. |
+| **`TREE`** | ⭐ **the assembly graph.** Nothing in the dump has ever said what is bolted to what; the staging analysis has been inferring it. Parent by index AND name, children, `attachMode`, every attach node with size/type/crossfeed — and ⛔ **an EMPTY node says `EMPTY`**, which is the case worth seeing. |
+| **`PROP`** | all 308 `Part` members, each with its **declared type**, each read individually. |
+| `STRUCT` · `AERO` · `MASS` · `STAGING` · `IDS` · `CREW` · `INFO` | what breaks and at what load · the drag model incl. drag cubes and `ShieldedFromAirstream` · dry/resource/total mass and the three offsets · what `StagingFloor.For` reads · ⚠ `launchID`, the `S147b` counter ruling, **observed for the first time** · per-part crew for TAC-LS · the catalogue entry |
+| **`VESSEL`** | one header row, which did not exist at all. |
+| **`MODINFO`** | `PartModule.GetInfo()` — the VAB tooltip, on its own row. |
+
+⭐ **RESOURCE** gains `flowMode` · `isTweakable` · `hideFlow` · `isVisible` · and six `info.*` fields.
+⛔⛔ **`flowMode` is the one that says whether the idea works at all** — whether locking ONE tank
+actually stops the engines drawing. `SimVesselUpdater.cs:91` skips any resource with `!flowState` and
+counts it as `DisabledResourcesMass`: **mass carried, zero ΔV**. ⚠ **There is no `KSPEvent` for this** —
+checked against the vendored source AND against the last dump, and recorded in the file so nobody
+hunts for one. Control would be a bare assignment. ⛔ **Not made.**
+
+⭐ **MODULE** gains ⛔ **the module INDEX** — a ModuleManager `MODULE { }` node is addressed by index
+and the dump never emitted it — plus `moduleIsEnabled`, `stagingEnabled`, `upgradesApplied`.
+⭐ **FIELD** gains ⛔ **`FieldInfo.FieldType`** (without the type you cannot write the value back),
+`isPersistant`, `guiUnits`, `guiFormat`, the PAW group, **and BOTH `uiControlFlight` AND
+`uiControlEditor`** — ⛔ the old code collapsed them to whichever was non-null first, so *a field
+editable in the VAB and locked in flight looked identical to one that was neither.* Four more control
+types are handled (`UI_MinMaxRange`, `UI_Cycle`, `UI_ScaleEdit`, `UI_Label`, plus `UI_FloatEdit` and
+`UI_ProgressBar`), and ⛔ **an unhandled type now emits its NAME instead of `-`** — "a control I do not
+recognise" and "no control" were the same answer before.
+⭐ **EVENT** gains `guiActiveEditor` · `externalToEVAOnly` · `requireFullControl` · `group`.
+⭐ **ACTION** gains ⛔ **`actionGroup` and `defaultActionGroup`** — which group fires it, previously
+invisible, on a vehicle the conductor drives by action group.
+
+#### ⛔ §2's SIZE PROBLEM — SOLVED DELIBERATELY, AND IT IS BOTH HALVES
+
+The measured baseline is **1,092,773 bytes over 7,134 rows for 20 parts**. S254 roughly doubles the
+rows, so the truncation rule is a decision made here rather than something the owner discovers:
+1. ⭐ **`extra` gets a wider cap (2000) and it is the ONLY wide column.** ⛔ Not for `GetInfo()`'s sake
+   — for the rows that are *useless* truncated at 160: TREE's attach-node list, AERO's drag cubes,
+   INFO's description, a `UI_ChooseOption` with thirty options.
+2. ⭐ **`GetInfo()` still gets its own `MODINFO` row.** It is a different *thing* — the VAB tooltip,
+   not a property of the module — and at ~2 KB it would bury the module's own flags in the one cell a
+   reader scans for them. A separate row is also droppable with one filter; a buried cell is not.
+⛔ **Truncation is MARKED** (`...`), and a row with the wrong number of cells is **refused, not written
+short** — silently emitting eleven cells would shift every later value under the wrong heading and the
+file would still open and still look plausible.
+
+#### ⚠⚠ THE SIZE AND ROW COUNTS ARE AN **ESTIMATE**, NOT A MEASUREMENT — AND THAT IS SAID PLAINLY
+
+⛔ **The dump has not run. It runs on the pad, in the game, on the owner's next flight** — so a
+measured file size is not something this task can produce, and reporting one as if it were measured
+would be exactly the failure this project keeps catching. What is measured is the BASELINE; what
+follows is derived from it:
+
+| | measured baseline | ⚠ ESTIMATE after S254 |
+|---|---|---|
+| rows | **7,134** | **~13,740** (+6,160 PROP, +180 structured, +265 MODINFO, +1 VESSEL) |
+| bytes | **1,092,773** (1.04 MB) | **~2.5 MB** — ⛔ well under the ~10 MB the prompt set as the raise threshold |
+| `TE.19.F9.S1.Tank` | **209** rows | **~536** (+308 PROP, +9 structured, +10 MODINFO) |
+
+⭐ **AND THE DUMP NOW REPORTS BOTH NUMBERS ITSELF** — the row count and the byte count go into the
+`CRAFT DUMP` log line beside the path, so the real figures land in `KSP.log` on the next flight instead
+of having to be estimated again. **`BOB-64`.**
+
+#### ⭐ C1.16 — TWO HEADINGS RESTORED THAT HAD STOOD OVER NOTHING
+
+`CraftDump.cs`'s `---- WHY THIS EXISTS ----` and `---- IT RUNS ITSELF, ONCE, ON THE PAD ----` have had
+**empty bodies since `158eb2a`** — the exact defect C1.16's 2026-09-06 extension was written about, in
+the exact shape it describes: *"a heading left over an empty body is worse than either."* Both bodies
+were recovered verbatim from `0d6423d` and restored, unedited. ⚠ Possible only because git still had
+them; nothing guaranteed that.
+
+#### ⭐ AND ONE EXISTING CHECK BROKE, WHICH IS WHAT IT IS FOR
+
+`PartLossTest`'s S227 join check read the CSV header out of `CraftDump.cs` **by regex on the call
+site**. Moving the header into `CraftDumpRows.Header` broke it. ⛔ It was not weakened: it now reads
+the **constant the glue actually writes**, which is strictly stronger — a header that changes *value*
+can no longer pass a regex that still *matches* — and the glue is separately checked for using it.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,900** checks (S253 left 24,810 — it rose by 90) |
+| `CraftDumpRowsTest` | **90 checks, 0 failed** |
+| ⭐ the glue | **compiles** — which is what verifies all ~58 member names, `MaxAcceleration`-style: a wrong name is a `CS1061`, not a silent hole |
+| mutation | **16 raised, 16 KILLED, 0 survived** — incl. M4 the thermal verdict made a constant, M6 the blanket UnityEngine skip that would eat `CoMOffset`, M7 a throw looking like an empty read, M8 the two UI controls collapsed again, M10 every resource reported flowing, M12 the module index dropped |
+| `previewdiff HEAD` | **0 of 140 changed**, ⛔ **not vacuous** — it named `plugin/src/pure/CraftDumpRows.cs` as its changed input and rendered both trees |
+| install | wrote **exactly one file**, `DragonScreen.dll` (830,976 B); all **170** files then md5-identical repo↔live |
+| repo + live `DragonScreen.cfg` | **`7297bda3ecaf269f04289c24ea4df036`** — identical to each other **and unchanged from S251/S252/S253**, as a task that changes no cfg requires |
+
+#### ⭐ WHAT WAS **NOT** TOUCHED
+
+⛔ **Read-only** — no assignment to any field, resource, event or action on any part. ⛔ No MechJeb
+setting: S253's `LimitAcceleration`/`MaxAcceleration` and every ascent number are exactly as S253 left
+them. ⛔ No rendezvous or docking work, no `.cfg`, no craft, no Vehicle Overview, no black-box columns.
+⛔ **When the dump runs is unchanged** — once, on the pad, in `PRELAUNCH`.
+
+#### ⚠ QUESTIONS RAISED — `BOB-63`, `BOB-64`, `BOB-65`
+
+`BOB-63` **FACT** — three of §3's named members do not exist on the type named (`Part.stagingEnabled`,
+`Part.crewCapacity` → `CrewCapacity`, `AvailablePart.techRequired` → `TechRequired`), and
+`Vessel.launchID`/`missionID` do not exist either. All four handled and recorded in place; **none
+silently dropped**. Raised so the overseer's member list is corrected at its source. ·
+`BOB-64` **FACT** — the row count and file size above are **ESTIMATES** derived from the measured
+previous dump; the dump has not run. It now logs both itself, so the real numbers arrive in `KSP.log`
+on the next flight. ·
+`BOB-65` **GATE** — locking a tank is `res.flowState = false`, a bare assignment with **no `KSPEvent`
+behind it**, and `flowMode` (now captured) is what decides whether locking one tank actually stops the
+engines drawing. ⛔ **Captured, not acted on** — whether we ever write it is the owner's call.

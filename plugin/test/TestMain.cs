@@ -168,6 +168,12 @@ public static class TestMain
         // while a source-text check reported the path "selectable, not orphaned" — it was reading the
         // method's DEFINITION, not a caller. The decisions moved into `src/pure` so they can be driven.
         bad += Suite(LaunchToRendezvousTest.Run);
+        // ⭐⭐ S254. The craft dump's row rules. ⛔ It exists because `src/CraftDump.cs` is glue and
+        // nothing headless can call it, so every rule that lived there was a rule no test could reach
+        // — and the two the owner asked for are exactly the two that need DRIVING rather than
+        // observing: the `locked` resource path (the last dump had all 21 resources `flowing`, so it
+        // has never once run) and a THROWING property costing one row rather than one part.
+        bad += Suite(CraftDumpRowsTest.Run);
         bad += Suite(LayoutSweepTest.Run);
         bad += Suite(PageTest.Run);
         bad += Suite(ComponentsTest.Run);       // Phase 6: pure display widgets (NumericReadout/StatusIndicator/TargetReticle)

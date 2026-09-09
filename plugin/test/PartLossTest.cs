@@ -433,17 +433,25 @@ public static class PartLossTest
     // ============================================================================================
     static void PayloadJoinsToCraftDump()
     {
-        // ⭐ Read the key names out of `CraftDump.cs`'s ACTUAL header string, so a rename on either
-        // side breaks the build instead of quietly making the two files unjoinable.
+        // ⭐ Read the key names out of the dump's ACTUAL header string, so a rename on either side
+        // breaks the build instead of quietly making the two files unjoinable.
+        // ⚠⚠ S254 — ~~`Match hdr = Regex.Match(dump, "sb\\.Append\\(\"(part_idx[^\"]*)\"")`, matched
+        // against `src/CraftDump.cs`~~ SUPERSEDED IN PLACE (C1.16). The header moved into
+        // `pure/CraftDumpRows.Header` when S254 made the row rules headless-testable, and this check
+        // BROKE — which is exactly what it is for, and is why it is not being weakened here.
+        // ⭐ IT IS NOW STRICTLY STRONGER: it reads the CONSTANT the glue actually writes rather than
+        // text-matching a call site, so a header that changes value can no longer pass a regex that
+        // still matches. ⛔ The glue is still checked — separately, below — for actually using it.
         string dump = Live(File.ReadAllText(Repo("plugin", "src", "CraftDump.cs")));
-        Match hdr = Regex.Match(dump, "sb\\.Append\\(\"(part_idx[^\"]*)\"");
-        Check("S227 craftdump's own header line was found", hdr.Success, "");
+        string header = CraftDumpRows.Header;
+        Check("S254 craftdump's own header is the shared constant, and the glue writes THAT",
+              header.StartsWith("part_idx") && dump.Contains("CraftDumpRows.Header"), header);
         string watch = Live(File.ReadAllText(Repo("plugin", "src", "PartLossWatch.cs")));
         string[] mustJoin = { "part_idx", "part_name", "part_title", "persistent_id", "stage" };
         int missing = 0; string firstMissing = null;
         for (int i = 0; i < mustJoin.Length; i++)
         {
-            bool inDump = hdr.Success && ("," + hdr.Groups[1].Value + ",").Contains("," + mustJoin[i] + ",");
+            bool inDump = ("," + header + ",").Contains("," + mustJoin[i] + ",");
             bool inEvent = watch.Contains("\"" + mustJoin[i] + "\"");
             if (!inDump || !inEvent) { missing++; if (firstMissing == null) firstMissing = mustJoin[i]; }
         }
