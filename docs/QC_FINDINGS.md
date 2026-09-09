@@ -2680,6 +2680,43 @@ not been asked which he wants there.** Queued as `Q: QC-1`. It is a **TASTE** ca
 states are defensible — a bar that reaches the glass with a seam above it, or a bar that stops with the art
 — and he has already ruled for the first. This records the cost of that ruling so he can revisit it having
 seen it, not so it can be quietly undone.
+
+### ⚠ CORRECTED 2026-09-08 (by the [[S173]] spec, `377332a`) · RE-VERIFIED AT HEAD `b2eaa46` ON 2026-09-10 — IT IS **TWO** PAGES, NOT THREE
+
+⛔ **Everything above stands as written and is NOT edited** (C1.16 / G12). One number in it is wrong: the
+heading, the evidence line and the table all count **three** baked-frame pages. **There are two.**
+
+`frame59.png` is drawn by **no page**. [[S110]] pointed `UiPage.Procedure` at `VrioTestPage`, and
+`FigmaUI.cs:259` records the decision in its own words — *"`frame59` stays ON DISK"* — because *"a flat PNG
+can never track a step, take a touch, or be tinted."* It survives as the **tier-2 reference `VrioTestPage`
+is measured against** (`VrioTestPage.cs:364`). The only thing that renders it is the preview **fixture**.
+
+⭐ **The pixel measurement was not wrong — the inventory was.** `frame59.png` genuinely does fill its
+letterbox column 1114/1114, exactly as the table says. But that was measured on a **fixture render of a raw
+export**, not on a shipped page, so it cannot produce an artefact on the glass. The scan counted a preview
+PNG as a page. Anyone scanning the render directory the same way reaches the same false count, which is why
+this is recorded rather than quietly amended.
+
+**What the correction does and does not move:**
+
+| | before | after |
+|---|---|---|
+| pages showing the doubled corner **on the glass** | 3 | **2** — `ui_hud` (frame58), `ui_cabin` (frame66) |
+| letterboxed pages measured **clean** | 9 | 9 — **unchanged** |
+| rasters [[S173]] must edit | 3 | **2** — ⛔ `frame59.png` must stay **byte-identical** |
+
+⛔ **And the "obvious-looking fix is forbidden" bullet above gets SHARPER, not weaker.** It names
+`frame58` / `frame59` / `frame66`. Because `frame59` is un-extended and shares `FigmaFramePage.Build`'s draw
+box with `frame66`, widening that box to `w` for the extended rasters would draw un-extended `frame59`
+(2048×1263) into a 2560-wide box — a **12.3 % horizontal stretch of a glyph-bearing raster**, which is QC
+**C-04**, in the very fix meant to honour it. **The draw must become per-asset.** The full spec is in
+`REGISTER.md` under *"S173 clause (1)"*.
+
+✅ **RE-VERIFIED AT HEAD `b2eaa46` (2026-09-10), because [[S244]] reset the shell in between** — traced,
+not assumed: `frame58.png` 898,256 B, `frame59.png` 143,168 B, `frame66.png` 2,022,133 B all still on disk;
+`Frame58Hud.cs:34` still draws `frame58`; `FigmaUI.cs:268` still draws `frame66`; **no source line anywhere
+in `plugin/src` draws `frame59`**; and `FigmaFramePage.cs` still reads `float dw = RefW * sc` — the C-04
+trap is intact and unfixed. The spec is still actionable exactly as written.
 ---
 
 ## Open questions for the owner — HUD (Q5)
@@ -6686,3 +6723,75 @@ grid — *"the one source of truth Build, HitTest and the headless nav test all 
 - **The S75 inert-tint hoist** (SC-02, DK-02, RZ-01, and A-02/F-03 behind Q6) — five pages, one shared tint,
   no gate on three of them. **A good batch 4**, and small.
 - Everything gated on **Q1** (the Figma export), **Q2** (glass), **Q3**, **Q4**, **Q6**.
+
+---
+
+# 🧭 HANDOVER — 2026-09-10 · written at branch `rebuild/base-screens`, HEAD `b2eaa46` (S260), tree clean
+
+⛔ **READ THIS BEFORE ACTING ON ANY MEASUREMENT IN THIS FILE.** Most of this document was measured on
+2026-09-05..08. Since then the branch moved and **[[S244]] — *"clear the shell work — the page rebuild is
+reset to a clean base"* — landed**, followed by S245 (the NON-ICON base page) and S246 (the ICON base page),
+each rebuilt **"from the spec alone"**. A finding measured before `4c59146` may describe a page that no
+longer exists in that form.
+
+## The rule this file operates under, restated
+
+⭐ **Render fresh, at HEAD, every iteration, and cite the commit.** A finding is evidence only if its
+render post-dates the code it describes. This file already carries four instruments that lied — [[S75]]
+(tint ignored: **every render before 2026-09-04 is inadmissible**), **H-01** (the preview was rendering at
+2× the shipped width), [[S130]] (a silent false green: `previewdiff` is not evidence for a change with no
+render input), [[S167]] (a kill must come from the suite under test). **Add S244 to that list**: a
+pre-S244 measurement on this branch is suspect until re-rendered.
+
+## What I re-verified at HEAD `b2eaa46` today, and what I did not
+
+| | status |
+|---|---|
+| S236's edge-to-edge bar (`BottomBar.cs:289`, *"THE GROUND IS THE PANEL, ON EVERY PAGE"*) | ✅ **survived S244** — present, with its superseded-in-place notes at `:95` and `:317` |
+| S173's three rasters on disk, at the byte sizes specced | ✅ **unchanged** |
+| `frame58` drawn by `Frame58Hud.cs:34`; `frame66` by `FigmaUI.cs:268`; **`frame59` by nothing** | ✅ **holds** |
+| The C-04 trap — `FigmaFramePage.Build`'s `float dw = RefW * sc` | ✅ **still there, still unfixed** |
+| ⚠ The **page inventory** — which `UiPage` values still render, and the `BarFit` fit each takes | ⛔ **NOT re-verified.** S245/S246 rebuilt the base pages from the spec alone |
+| ⚠ The **124-of-124 edge-to-edge sweep** and the 35-render `previewdiff` from S236 | ⛔ **NOT re-run at HEAD** |
+| ⚠ Every finding measured 2026-09-05..08 that is not named above | ⛔ **NOT re-verified** |
+
+⭐ **The good news is narrow and worth stating plainly: the [[S173]] clause (1) spec is still actionable
+exactly as written.** Its premises were traced at HEAD today, not assumed.
+
+## The six queued questions — status
+
+| id | kind | subject | status |
+|---|---|---|---|
+| **QC-1** | TASTE | H-10: bar to the glass vs. art to the frame | ✅ **ANSWERED** — owner, 2026-09-08: **"option 1"** → move the art to match. Specced as [[S173]] clause (1). **Not built.** |
+| **QC-2** | GATE | [[S177]] — the full-frame border | ⛔ **OPEN.** Blocked by **§14.2a**. Researched: only 3 frame exports exist; `A-Settings-*.svg` are full-frame **fills with no stroke**; **even `Frame 67.svg` has no stroked full-frame element.** There is no source to take it from |
+| **QC-3** | — | [[S190]] — the capsule/trunk line art | ✅ **half discharged.** Owner ruled the library location safe; the file is **byte-identical** in `Downloads` and `X_LIBRARY` (md5 `8dbdf364800eea15fcb3d70f41fbeb1b`, 442,731 B). The **drawing** half remains and is **unscheduled** |
+| **QC-4** | TASTE | [[S187]] — the gauge ring, 3 divergences × 7 page-views | ⛔ **OPEN.** ⚠ Its stated gate, *"S185 Q3"*, **does not exist** — searched, no hits; S185 has no Q3. Recommendation on record: **option 2** (take the two that are pure geometry, defer the dotted track, which needs a new `DisplayList` capability in **both** renderers) |
+| **QC-5** | TASTE | [[S188]] — the capsule slot stretches a glyph-bearing PNG 22.2 % | ⛔ **OPEN.** ⚠ The two sources **disagree**, so conforming to the reference selects a *worse* distortion. Recommendation: **option 1**, letterbox at the art's own aspect (the `Images.FitHeight` / `BarFit` pattern already in the build), applied to **both** call sites |
+| **QC-6** | FACT | [[S173]] — per-asset draw for `FigmaFramePage.Build` | ⛔ **OPEN, and it blocks S173.** `Images.Size` exists but keys off `ImageId`, not asset keys, so it does not answer this as-is |
+
+## Work briefed but not done
+
+- **[[S173]] clause (1)** — owner-ruled, fully specced in `REGISTER.md`, **not started**. Blocked on **QC-6**.
+  Target: both rasters 2048×1263 → **2300×1263** (+126 columns each side); background just inside every edge
+  is plain `(2, 7, 56, 255)` on both, verified by sampling. ⚠ **The two frames are built differently and need
+  different edits** — `frame58` has a complete 1 px border on all four sides, `frame66` has **only** a bottom
+  border. Follow the `component_48` precedent in `docs/COVER_PAGE_ASSETS.md`: a table row per edit, exact
+  rectangles, byte-identical verification, **"none outside the box"**, and the re-export warning
+- **JOB B** — the camera views page (`SettingsVideoPage.cs`, `UiPage.AudioVideo = 18`), repaired against
+  `C:\Users\User\Desktop\DragonScreen-Stock` (**READ ONLY** reference)
+- **JOB C** — the docking camera **only** from the old build; **our new layout stays**
+- **JOB E** — survey and propose, **change nothing**
+
+## Blocked, and why — so the blocks cannot accumulate unseen
+
+**S187**, **S188** (owner design calls — QC-4, QC-5) · **S177** (§14.2a — QC-2) · **S173** (QC-6) ·
+**S153a/b/c/d/e**, **S154d**.
+
+## The standing constraints that did not lapse
+
+⛔ **NEVER `git push`** (C1.5) · ⛔ **`install` is NOT permitted** without a separate, explicit owner go,
+per session (C1.12) · ⛔ **Never edit `docs/BUILD_PLAN.md`** (guarded, G10) · ⛔ **Never touch
+`MechConductor.cs`, `plugin/mech/`, or any flight parameter** · ⛔ **Never delete — mark superseded IN
+PLACE** (C1.16 / G12) · ⛔ **§14.2a:** an element **absent** from the export **stays exactly as it is**;
+absence bounds what may be **ADDED** and says nothing about what must be **REMOVED** · ⛔ **Never write the
+bare word "stock"** · ⛔ **BOB-8 is BOB's line — do not touch the recorder.**
