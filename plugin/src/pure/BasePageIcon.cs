@@ -55,8 +55,13 @@ namespace DragonScreen
 
         /// <summary>§6 — the raised floor over the tab block.</summary>
         public const float Shelf = 893f;
-        /// <summary>§6 — the shelf's ends. ⭐ Sized off the tab LABELS (554.1..1366.8 + 20 pad), not
-        /// the icons: the labels are wider and were being clipped when sized off the icons.</summary>
+        /// <summary>§6 — the shelf's ends. ⭐ Sized off the tab LABELS (~~554.1..1366.8 + 20 pad~~ →
+        /// S256: **553.65..1366.35 + 19.65 pad**), not the icons: the labels are wider and were being
+        /// clipped when sized off the icons.
+        /// ⛔⛔ THE SHELF DID NOT MOVE AND MUST NOT BE RE-DERIVED FROM THE NEW LABELS. Its ends are
+        /// 534/1386, centred on 960.0, and they were always correct — S256 moved the tab STRIP onto
+        /// that centre, so the derivation's numbers changed while its result did not. The old numbers
+        /// are struck rather than deleted (C1.16) because they are what the ends were sized off.</summary>
         public const float ShelfLeft = 534f;
         public const float ShelfRight = 1386f;
 
@@ -76,7 +81,19 @@ namespace DragonScreen
         // ==========================================================================================
         public const int TabCount = 9;
         public const float TabPitch = 90.3f;
-        public const float TabCx0 = 599.3f;
+        /// <summary>
+        /// ⭐⭐ S256 — ~~`599.3`~~ SUPERSEDED IN PLACE (C1.16). **THE STRIP LEANED 0.5 px RIGHT, and it
+        /// was in the spec, not in the render.** 🟢 Owner, 2026-09-10: *"Make sure to even it out if it
+        /// isnt that will make my brain hurt if it look uneven left to right"*.
+        /// At `599.3` the nine cells spanned **554.15 .. 1366.85**, centre **960.50** — against a shelf
+        /// centred on 960.00 and a frame centred on 960.00 — so the pads to the shelf ends were
+        /// **20.15 left / 19.15 right**, a 1.00 px difference.
+        /// ⭐ `598.8 = 960.0 − 4 × 90.3` puts the MIDDLE tab's centre on the frame's centre by
+        /// construction: cells **553.65 .. 1366.35**, centre **960.00**, pads **19.65 both sides**.
+        /// ⛔ THE SHELF DOES NOT MOVE — it was already centred on 960.0 and was always right; it was
+        /// the tab strip that was off. See `ShelfLeft`'s note, whose numbers this changes.
+        /// </summary>
+        public const float TabCx0 = 598.8f;
         public const float IconSize = 37f;
         public const float LabelPx = 12.3f;
         /// <summary>
@@ -100,16 +117,58 @@ namespace DragonScreen
 
         // ---- §7's DERIVED STACK. ⛔ Do NOT type these as literals — derive from `Shelf`, so moving
         // the shelf moves the whole block with it. ----
-        private const float IconPad = 5.1f;        // shelf -> icon top
-        private const float IconLabelGap = 4f;     // icon bottom -> label top
-        private const float LabelSelectorGap = 16f;// label bottom -> selector top
-        private const float SelectorPad = 5.3f;    // selector bottom -> the border's inner face
+        // ⭐⭐ S256 — THE ICON+LABEL BLOCK IS CENTRED BETWEEN THE TWO LINES, AND THE SELECTOR HELD.
+        // 🟢 OWNER, 2026-09-10, verbatim: *"I would like the tab icons to be brought down a little to
+        // sit exactly middle between the line above and below. BUT! I only want this if it is possible
+        // to leave the selector line that runs underneath the tabs stays at it's current height."*
+        //
+        // ⭐ HIS CONDITION IS MET EXACTLY, AND THAT IS WHY THIS IS ONLY TWO NUMBERS: `IconPad` and
+        // `LabelSelectorGap` TRADE 8.6 px between them (+8.6 / −8.6), so everything below the label
+        // is untouched — `SelectorTop` is still 967.4 and `StackBottom` is still 977.5. ⛔ If either
+        // of those two moves, something has been changed that should not have been.
+        //     was: 893 + 5.1  + 37 + 4 + 12.3 + 16  + 4.8 + 5.3 = 977.5
+        //     now: 893 + 13.7 + 37 + 4 + 12.3 + 7.4 + 4.8 + 5.3 = 977.5    ⭐ same total
+        //
+        // ⛔⛔ CENTRING THE ICON ALONE IS IMPOSSIBLE, AND MUST NOT BE ATTEMPTED. A 37 px icon centred
+        // in the 894.5–978.0 band sits at 917.8, which drives the labels to 958.8–971.1 — straight
+        // THROUGH the selector at 967.4. The block that can be centred against a stationary selector is
+        // `icon + gap + label = 53.3`, and that is what is centred here.
+        //
+        // ⚠⚠ THE 13.7 IS MEASURED FROM `Shelf = 893.0`, BUT THE GAP THE EYE SEES IS 12.2 — BOTH ARE
+        // RIGHT, AND THEY MEASURE DIFFERENT THINGS. ⛔ Do not "correct" 13.7 to 12.2.
+        // The two edges the owner's eye reads are DRAWN INK, not spec constants, and they were read off
+        // `plugin/build/preview/ui_baseicon_screen1.png` by luminance scan rather than reasoned:
+        //     shelf line   lit at design y 892.25 / 893.0 / 894.75, dark below -> visible lower edge 894.50
+        //     selector bar 967.4 .. 972.2, drawn solid #FFFFFF          -> visible lower edge 972.20
+        // The shelf line carries ~1.5 px of stroke BELOW 893.0, which is the whole 13.7-vs-12.2 gap.
+        //     block top    = 906.7,  gap above = 906.7 − 894.5 = 12.2
+        //     block bottom = 960.0,  gap below = 972.2 − 960.0 = 12.2     ✅ EVEN
+        // ⚠ The lower bound is the SELECTOR'S BOTTOM (972.2), not §5's border line at 978.0. Centring
+        // to 978.0 would give icon top 909.6 and leave 4.5 px under the labels; 906.7 is 0.3 px from
+        // the owner's own eyeballed 906.4 — i.e. it is what he picked, made exact.
+        // ⛔⛔ AND ONE COLLISION, RECORDED RATHER THAN BURIED (C1.16). §7 says the selector's height,
+        // width AND standoff are all scaled from the real NASA sheet's own line — "measured, not
+        // chosen". The scale is `90.3 / 113 = 0.799`, and all three came out of it:
+        //     6 tall  -> 4.8   ✅ SelectorHeight, still the sheet's
+        //     102 wide -> 81.5 ✅ SelectorWidth,  still the sheet's
+        //     20 below -> 15.98 ≈ 16              ⛔ THE STANDOFF, and it is no longer the sheet's.
+        // Holding the selector at 967.4 while centring the block forces that third term to 7.4. ⭐ The
+        // owner's instruction outranks the derivation — he was shown the block and ruled on where it
+        // should sit — but the label now sits closer above the selector than the reference sheet's
+        // proportion. ⛔ Nobody should later "restore" 16 without knowing it would move the selector he
+        // asked to keep still. `BOB-66`.
+        private const float IconPad = 13.7f;         // shelf -> icon top        (S256: was 5.1)
+        private const float IconLabelGap = 4f;       // icon bottom -> label top
+        private const float LabelSelectorGap = 7.4f; // label bottom -> selector top (S256: was 16)
+        private const float SelectorPad = 5.3f;      // selector bottom -> the border's inner face
 
         public static float IconTop { get { return Shelf + IconPad; } }
         public static float LabelTop { get { return IconTop + IconSize + IconLabelGap; } }
         public static float SelectorTop { get { return LabelTop + LabelLineHeight + LabelSelectorGap; } }
         /// <summary>
-        /// §7: `893 + 5.1 + 37 + 4 + 12.3 + 16 + 4.8 + 5.3 = 977.5` — and 977.5 is the OUTER BORDER's
+        /// §7: ~~`893 + 5.1 + 37 + 4 + 12.3 + 16 + 4.8 + 5.3 = 977.5`~~ → S256:
+        /// `893 + 13.7 + 37 + 4 + 12.3 + 7.4 + 4.8 + 5.3 = 977.5` (C1.16 — the old sum is struck, not
+        /// deleted; two terms traded 8.6 px and the total is unchanged) — and 977.5 is the OUTER BORDER's
         /// own inner face (§5's 979 less half its 3px stroke). ⭐ That the tab stack and the border
         /// arrive at the same number from opposite directions is the cross-check the suite asserts.
         /// </summary>
@@ -128,7 +187,8 @@ namespace DragonScreen
 
         public static string Label(int i) { return TabLabel[i]; }
         public static string IconKey(int i) { return TabIcon[i]; }
-        /// <summary>The centre of tab <paramref name="i"/>: `599.3 + i * 90.3`.</summary>
+        /// <summary>The centre of tab <paramref name="i"/>: `598.8 + i * 90.3`. ⭐ S256 — ~~`599.3`~~
+        /// superseded in place (C1.16); see `TabCx0` for the 0.5 px lean this took out.</summary>
         public static float TabCentre(int i) { return TabCx0 + i * TabPitch; }
 
         public static void Draw(DisplayList dl, int w, int h)

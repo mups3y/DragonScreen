@@ -3092,7 +3092,16 @@ public static class PreviewMain
             // ⚠ design y 10, not 2: at y 2 the probe lands ON §5's white border, which is what the
             // first run of this check reported. The margin field is between the border and the
             // window, and that is where it is read.
-            Color band = bmp.GetPixel(w / 2, (int)f.Y(940f));
+            // ⚠⚠ S256 — ~~`f.Y(940f)`~~ SUPERSEDED IN PLACE (C1.16), AND IT IS THE PROBE THAT WAS
+            // WRONG, NOT THE PAGE. Design y 940 was clear background only because the icons ended at
+            // 935.1; S256 moved the icon+label block down 8.6 px (icons now 906.7..943.7) so y 940
+            // lands ON TAB 4's ICON — and tab 4 is now centred on 960.0, which is exactly this probe's
+            // own column. The check went red reading white icon ink and calling it the band's colour.
+            // ⛔ SAME CLASS AS THE FIVE S248 PROBE BUGS: the probe moved onto its own subject.
+            // ⭐ IT IS NOW DERIVED, so it cannot land on ink again: halfway between the shelf and the
+            // icon top, a strip that is background by construction whatever the stack does above it.
+            Color band = bmp.GetPixel(w / 2,
+                                      (int)f.Y((BasePageIcon.Shelf + BasePageIcon.IconTop) * 0.5f));
             Color margin = bmp.GetPixel(w / 2, (int)f.Y(10f));
             Console.WriteLine("    read off the render: tab band rgb(" + band.R + "," + band.G + ","
                               + band.B + ")   margin rgb(" + margin.R + "," + margin.G + ","

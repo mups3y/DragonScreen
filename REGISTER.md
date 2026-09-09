@@ -30017,3 +30017,172 @@ on the next flight. ·
 `BOB-65` **GATE** — locking a tank is `res.flowState = false`, a bare assignment with **no `KSPEvent`
 behind it**, and `flowMode` (now captured) is what decides whether locking one tank actually stops the
 engines drawing. ⛔ **Captured, not acted on** — whether we ever write it is the owner's call.
+
+---
+
+### S256 [O] Centre the tab block vertically, and take the 0.5 px lean out of the strip — **DONE 2026-09-10 — THE SELECTOR DID NOT MOVE BY ONE DEVICE PIXEL, MEASURED ON THE RENDER. ALL SUITES PASSED (24,905 checks, up from 24,900), 9/9 mutants killed, previewdiff 8 of 140 changed and NONE of them flown. ⛔ NOT INSTALLED** — [overseer `PROMPT_TAB_STRIP_CENTRE.md`, 2026-09-10; branch `rebuild/base-screens`]
+
+🟢 **OWNER, verbatim, 2026-09-10:** *"I would like the tab icons to be brought down a little to sit
+exactly middle between the line above and below. BUT! I only want this if it is possible to leave the
+selector line that runs underneath the tabs stays at it's current height."* · *"Make sure to even it out
+if it isnt that will make my brain hurt if it look uneven left to right or icins not centred above
+selector line"*
+
+#### ⭐ THE FOUR WRITES — `plugin/src/pure/BasePageIcon.cs`, and nothing else
+
+| const | from | to |
+|---|---|---|
+| `TabCx0` | `599.3` | **`598.8`** (`= 960.0 − 4 × 90.3`) |
+| `IconPad` | `5.1` | **`13.7`** |
+| `LabelSelectorGap` | `16` | **`7.4`** |
+| the `599.3 + i * 90.3` doc comment | | restated as **`598.8`** |
+
+⛔ `IconLabelGap` (4) and `SelectorPad` (5.3) unchanged. ⛔ `TabPitch`, `IconSize`, `LabelPx`,
+`LabelLineHeight`, `SelectorHeight`, `SelectorWidth`, `ActiveTab`, `Shelf`, `ShelfLeft`, `ShelfRight` —
+all unchanged.
+
+#### ⭐⭐ AS BUILT, MEASURED — NOT AS INTENDED
+
+| | as built | |
+|---|---|---|
+| `IconTop` | **906.7** | was 898.1 |
+| `LabelTop` | **947.7** | was 939.1 |
+| `SelectorTop` | **967.4** | ⭐⭐ **IDENTICAL — the owner's condition, held** |
+| `StackBottom` | **977.5** | ⭐ **IDENTICAL — §7's cross-check against §5's border, untouched** |
+| left shelf pad | **19.65** | was 20.15 |
+| right shelf pad | **19.65** | was 19.15 |
+
+⭐ The whole vertical move is **two gaps trading 8.6 px** (`IconPad` +8.6, `LabelSelectorGap` −8.6), so
+nothing below the label moved at all.
+⭐⭐ **AND THE SELECTOR IS PROVED UNMOVED ON THE RENDER, NOT ONLY IN THE ARITHMETIC.** Luminance scan
+down tab 0's centre column, `plugin/build/preview/ui_baseicon_screen1.png` (2560×1406), before and after:
+**device rows 1290 (partial) · 1291–1296 solid · 1297 (partial) — row for row identical.** It did not
+move by one device pixel.
+
+#### ⭐ THE HORIZONTAL — a real 0.5 px lean, and it was in the spec, not the render
+
+At `599.3` the nine cells spanned **554.15 .. 1366.85**, centre **960.50**, against a shelf and a frame
+both centred on **960.00** — pads of **20.15 / 19.15**, a 1.00 px difference. At `598.8`: cells
+**553.65 .. 1366.35**, centre **960.00**, pads **19.65 both sides**.
+⛔ **The shelf did NOT move** — it was already centred on 960.0 and was always right; the STRIP moved
+onto it. §6's derivation note is updated in place (C1.16), not re-derived.
+⭐ **His other worry cannot happen:** icon (`cx−18.5`+37), label box (`cx−45.15`+90.3) and selector
+(`cx−40.75`+81.5) all centre on the same `cx`. *"Icons not centred above selector line"* is
+geometrically impossible. ⛔ None of those three offsets was touched.
+
+#### ⛔⛔ A CHECK THAT ASSERTED THE DEFECT, AND CALLED IT A DECISION
+
+The suite carried, verbatim: *"⚠ AND THE PAD IS NOT 20 ON BOTH SIDES - MEASURED, AND IT IS NOT A DEFECT
+TO 'FIX'. … a deliberate half-pixel in the approved design, pinned here so a later session does not
+align one to the other and call it a tidy-up"*, with `Near("§6 the left pad is 20.1", …)` and
+`Near("§7 the TAB BLOCK is centred half a pixel off it, on tab 4 (960.5)", …)`.
+⚠⚠ **A check that pins a defect is indistinguishable from one that pins a decision — the only thing
+separating them is whether the owner has looked.** He has now, and it was not a half-pixel of taste: it
+is a **1.00 px difference between the two pads**. The old block is **superseded in place, kept in full**
+(C1.16), because that lesson is worth more than the numbers were.
+⭐ **The replacement asserts the EQUALITY, not the literal** — "even left to right" is the requirement;
+19.65 is only today's value of it.
+
+#### ⛔⛔ CENTRING THE ICONS ALONE IS IMPOSSIBLE — AND THAT IS NOW PINNED
+
+A 37 px icon centred in the 894.5–978.0 band sits at **917.8**, driving the labels to **958.8–971.1 —
+straight through the selector at 967.4.** The block that *can* be centred against a stationary selector
+is `icon + gap + label = 53.3`. Both halves are asserted: that the icon-only arrangement collides, and
+that the block actually built clears it.
+
+#### ⭐ WHY 906.7 AND NOT 906.4 — the edges are DRAWN INK, and they were read, not reasoned
+
+Measured by luminance scan off the render rather than taken from the prompt:
+```
+shelf line   lit at design y 892.25 (L=123) / 893.0 (L=149) / 893.75 (L=144), dark below
+             -> visible lower edge 894.50        ⭐ matches the prompt's measurement exactly
+selector bar 967.4 .. 972.2 solid #FFFFFF        -> visible lower edge 972.20
+gap above block = 906.7 − 894.5 = 12.2
+gap below block = 972.2 − 960.0 = 12.2           ✅ EVEN
+```
+⚠ **`IconPad` is 13.7 from `Shelf = 893.0` while the gap the eye sees is 12.2 — both right, different
+things.** The shelf line carries ~1.5 px of stroke below 893.0. Said in the code so nobody "corrects" it.
+
+#### ⚠⚠ TWO FINDINGS THE PROMPT DID NOT ANTICIPATE
+
+**1. `BOB-66` — the 16 px standoff was NASA-sheet-derived, and 7.4 is not.** §7's own last line says the
+selector's height, width **and standoff** are scaled from the reference sheet's line — *"measured, not
+chosen"*. The scale is `90.3 / 113 = 0.799`: `6 → 4.8` ✅ height, `102 → 81.5` ✅ width,
+`20 → 15.98 ≈ 16` ⛔ **the standoff**. Holding the selector at 967.4 while centring the block forces that
+third term to 7.4 — so two of the three are still the sheet's and one is not. ⭐ The owner's instruction
+outranks the derivation, but the collision is **recorded in the spec AND in the code** rather than
+buried, so nobody later "restores" 16 without knowing it would move the selector he asked to keep still.
+
+**2. `BOB-67` — the design-space centring is exact; the RENDERED INK is 1.8 px low.** Measured on the
+same render, robust across luminance thresholds 20–128:
+```
+icon ink   908.75 .. 941.75   (box 906.7..943.7 — the art is centred in its box, ±0.1)
+label ink  950.75 .. 959.75   (box 947.7..960.0 — "All" has no descender, so its ink reaches the bottom)
+gap above (shelf ink -> icon ink)   = 14.25
+gap below (label ink -> selector ink bottom) = 12.45
+```
+⚠ The **boxes** are centred to 12.2/12.2 exactly, as instructed. The **ink** is not, by ~1.8 px, because
+the icon PNG carries ~2.05 px of transparent margin at its top while the label ink runs to its line
+box's floor. ⛔ **Not changed** — the prompt fixed 906.7 and said *"Do not substitute 909.6. If he wants
+that, he will say so."* Evening the INK would need `IconPad ≈ 12.8`. **His call, and he should have the
+number.**
+
+#### ⭐ ONE DEVICE PROBE RE-POINTED — the probe was wrong, not the page
+
+`--overviewcheck` went red: *"the tab band under this page is #070810"*. Design y 940 was clear
+background only because the icons ended at 935.1; the block moved down 8.6 px (icons now 906.7..943.7)
+so y 940 lands **on tab 4's icon** — and tab 4 is now centred on 960.0, which is that probe's own column.
+⛔ **Same class as S248's five probe bugs: the probe moved onto its own subject.** It is now **derived** —
+halfway between the shelf and the icon top — so it cannot land on ink again.
+
+#### ⭐ VERIFIED
+
+| instrument | result |
+|---|---|
+| `build.py test` | **ALL SUITES PASSED**, **24,905** checks (S254 left 24,900 — it rose by 5) |
+| `BasePageIconTest` | **114 checks, 0 failed** (was 110) |
+| `--basecheck` / `--overviewcheck` | both green after the probe was re-pointed |
+| mutation | **9 raised, 9 KILLED, 0 survived** — incl. M3 the selector allowed to move (the owner's forbidden case), M5 the trade made uneven by 0.6, M8 `SelectorPad` absorbing the move instead |
+| ⛔ M9 | added **because M6 shadowed the check the owner actually asked for** — it leans the strip via the SHELF, touching no tab number, and the pad-equality check fires on its own: `got 19.6500 want 20.6500` |
+| `previewdiff HEAD` | **8 of 140 changed** — expected, and ⛔ **none of them flown** (below) |
+| install | ⛔ **NOT DONE** — §8 forbids it; the owner is flight-testing and installing is his call |
+
+#### ⛔ THE EIGHT CHANGED PAGES, AND WHY NONE IS FLOWN
+
+`ui_baseicon_screen1/2` · `ui_overview_screen1/2` · `ui_overview_screen1_cabin` ·
+`ui_overview_screen1_cabin_more` · `ui_overview_screen1_systems_more` · `ui_overview_nofeed`.
+⭐ **Every one is a rebuild page on this branch.** `grep` across `plugin/src/` shows `BasePageIcon` and
+`VehicleOverviewContent` are referenced **only from `plugin/preview/` and `plugin/test/`** — no glue
+draws them and there is no `UiPage` routing (S248 shipped the overview as a RENDERER, `PageCount`
+unchanged). ⛔ **The 132 unchanged pages include every screen the owner currently flies.**
+
+#### ⚠⚠ THE BUILD WAS BLOCKED BEFORE THIS TASK COULD START — `BOB-68`
+
+`build.py test` AND `preview` both failed with `CS0579: Duplicate TargetFrameworkAttribute` from
+`plugin/mech/{alglib,MechJebLib,MechJebLibTest}/obj/Debug/net48/.NETFramework,Version=v4.8.AssemblyAttributes.cs`
+— three MSBuild-autogenerated files, all stamped `// <autogenerated />`, all created **2026-09-09 23:19**,
+i.e. after S254's commit and before this session. They are `.gitignore`d and were never tracked, so
+nothing in the repo changed; `build.py`'s `sources()` sweeps the whole project tree and picks them up.
+⛔ **Not deleted.** Moved into this session's scratchpad, reversible, and the build recovered immediately.
+⚠ Something ran an IDE/MSBuild build over the vendored tree — worth knowing, because it will happen again.
+
+#### ⛔ WHAT WAS **NOT** TOUCHED
+
+⛔ No change to the selector's y, height, width or x offset. ⛔ No change to the shelf, the bevels, the
+frame or §5's border. ⛔ No `IconLabelGap`, no `SelectorPad`. ⛔ No dimming or tint — §7's *"NO DIMMING.
+NONE."* stands. ⛔ No letter-spacing work (`BOB-30`: "drop 30"). ⛔ No Overview content, gauges, MechJeb,
+craft dump, cfg or craft edit. ⛔ No docking-cam work — `S255` stays tabled.
+
+#### ⚠ QUESTIONS RAISED — `BOB-66`, `BOB-67`, `BOB-68`, `BOB-69`
+
+`BOB-66` **FACT** — the 16 px label→selector standoff was scaled from the NASA sheet (`20 × 0.799`); 7.4
+is not, so the selector's height and width are still the sheet's and its standoff no longer is. Recorded
+in spec and code; the owner's ruling outranks the derivation. ·
+`BOB-67` **TASTE** — the boxes are centred to 12.2/12.2 exactly, but the rendered INK is 14.25 above /
+12.45 below, because the icon art carries ~2 px of transparent top margin while the label ink reaches
+its line box's floor. Evening the ink needs `IconPad ≈ 12.8`. **Not changed; his call.** ·
+`BOB-68` **FACT** — three MSBuild `obj/` autogenerated files broke the whole build; moved aside, not
+deleted, and the build recovered. `build.py` sweeping `obj/` is the underlying exposure. ·
+`BOB-69` **FACT** — `SPEC_BASE_SCREENS.md` is the authority for this page and lives at
+`C:\Users\User\Desktop\BOB\`, **outside the repo and outside version control**, so §7's edit is not in
+this commit and C7's "the only source of truth is the repo" does not cover it.
